@@ -16,9 +16,10 @@ import {
   Hash,
   ShieldAlert,
 } from "lucide-react";
-import { LicenseSession, ADMIN_MASTER_EMAIL } from "../types/auth";
+import { LicenseSession, ADMIN_MASTER_EMAIL, INITIAL_DEFAULT_SESSIONS } from "../types/auth";
 import { auth, googleProvider, isUserAdmin } from "../lib/firebase";
 import { signInWithPopup } from "firebase/auth";
+import { verifyLicenseKeyFromCloud, fetchFirebaseLicenses } from "../services/firebaseSync";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [licenseKeyInput, setLicenseKeyInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
 
   // Form for requesting license from Admin
   const [reqName, setReqName] = useState("");
@@ -54,7 +56,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      const userEmail = user.email || "";
+      const userEmail = (user.email || "").trim().toLowerCase();
 
       // 1. Check if user is the Master Admin
       if (isUserAdmin(userEmail)) {
@@ -62,7 +64,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           id: `admin-${user.uid}`,
           userId: user.uid,
           userName: user.displayName || "Administrador Principal",
-          userEmail: userEmail,
+          userEmail: user.email || ADMIN_MASTER_EMAIL,
           companyName: "ORGANISMO SUPERVISOR / ADMIN MASTER",
           ruc: "20100000001",
           licenseKey: "ADMIN-OSCE-MASTER-2026",
@@ -80,10 +82,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // 2. Check if there is an existing authorized license for this email
-      const matched = availableSessions.find(
-        (s) => s.userEmail.toLowerCase() === userEmail.toLowerCase()
+      // 2. Check if there is an existing authorized license in local state
+      let matched = availableSessions.find(
+        (s) => s.userEmail && s.userEmail.trim().toLowerCase() === userEmail
       );
+
+      // If not in local state, fetch from Cloud Firestore
+      if (!matched) {
+        const cloudLicenses = await fetchFirebaseLicenses();
+        matched = cloudLicenses.find(
+          (s) => s.userEmail && s.userEmail.trim().toLowerCase() === userEmail
+        );
+      }
 
       if (matched) {
         if (matched.status === "suspended") {
@@ -94,7 +104,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           setErrorMsg("Su licencia ha expirado. El Administrador debe renovar su vigencia.");
           return;
         }
-        onLogin({ ...matched, userId: user.uid });
+        onLogin({ ...matched, userId: user.uid, firebaseSynced: true });
       } else {
         // REJECT ACCESS: User is not authorized/created by the admin!
         setErrorMsg(
@@ -109,7 +119,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -120,30 +130,65 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Match session by license key
-    const foundSession = availableSessions.find(
-      (s) => s.licenseKey.toLowerCase() === trimmedKey.toLowerCase()
-    );
+    setIsValidatingKey(true);
 
-    if (!foundSession) {
-      setErrorMsg(
-        "Clave de licencia no encontrada o inválida. Solo los usuarios creados por el Administrador tienen acceso."
+    try {
+      // 1. Check Master Admin Key
+      if (
+        trimmedKey.toUpperCase() === "ADMIN-OSCE-MASTER-2026" ||
+        trimmedKey.toUpperCase() === "ADMIN-OSCE-2026"
+      ) {
+        const adminSession = INITIAL_DEFAULT_SESSIONS[0];
+        onLogin(adminSession);
+        return;
+      }
+
+      // 2. Match session by license key in local availableSessions
+      let foundSession = availableSessions.find(
+        (s) => s.licenseKey && s.licenseKey.trim().toUpperCase() === trimmedKey.toUpperCase()
       );
-      return;
-    }
 
-    if (foundSession.status === "suspended") {
-      setErrorMsg("Esta licencia ha sido suspendida por el Administrador. Comuníquese para su reactivación.");
-      return;
-    }
+      // 3. If not found locally, query Cloud Firestore
+      if (!foundSession) {
+        foundSession = await verifyLicenseKeyFromCloud(trimmedKey);
+      }
 
-    if (foundSession.status === "expired") {
-      setErrorMsg("Esta licencia ha expirado. El Administrador debe renovar el periodo de vigencia.");
-      return;
-    }
+      // 4. Fallback: fetch all cloud licenses in case of partial match
+      if (!foundSession) {
+        const allCloud = await fetchFirebaseLicenses();
+        foundSession =
+          allCloud.find(
+            (s) =>
+              s.licenseKey &&
+              s.licenseKey.trim().toUpperCase() === trimmedKey.toUpperCase()
+          ) || null;
+      }
 
-    // Success login
-    onLogin(foundSession);
+      if (!foundSession) {
+        setErrorMsg(
+          "Clave de licencia no encontrada o inválida. Verifique que la clave coincida exactamente con la emitida en el Panel de Administrador."
+        );
+        return;
+      }
+
+      if (foundSession.status === "suspended") {
+        setErrorMsg("Esta licencia ha sido suspendida por el Administrador. Comuníquese para su reactivación.");
+        return;
+      }
+
+      if (foundSession.status === "expired") {
+        setErrorMsg("Esta licencia ha expirado. El Administrador debe renovar el periodo de vigencia.");
+        return;
+      }
+
+      // Success login
+      onLogin(foundSession);
+    } catch (err: any) {
+      console.error("License validation error:", err);
+      setErrorMsg("Error al conectar con el servidor para validar la licencia.");
+    } finally {
+      setIsValidatingKey(false);
+    }
   };
 
   const handleSendRequest = (e: React.FormEvent) => {
@@ -300,10 +345,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
+                  disabled={isValidatingKey}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
                 >
-                  <Lock className="w-4 h-4" />
-                  <span>Validar Licencia e Ingresar</span>
+                  {isValidatingKey ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Verificando Licencia con el Servidor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Validar Licencia e Ingresar</span>
+                    </>
+                  )}
                 </button>
               </form>
 

@@ -81,6 +81,11 @@ import {
 import { auth, isUserAdmin } from "./lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
+  subscribeToFirebaseLicenses,
+  createFirebaseUserLicense,
+  fetchFirebaseLicenses,
+} from "./services/firebaseSync";
+import {
   loadUserOffers,
   saveUserOffers,
   loadUserObras,
@@ -473,6 +478,51 @@ export default function App() {
     }
   }, [currentUser]);
 
+  // Real-time synchronization of licenses with Firebase Cloud Firestore
+  useEffect(() => {
+    // 1. Initial fetch & backup of any local licenses to Firestore
+    fetchFirebaseLicenses()
+      .then((cloudLicenses) => {
+        if (cloudLicenses && cloudLicenses.length > 0) {
+          setSessions((prev) => {
+            const map = new Map<string, LicenseSession>();
+            INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+            prev.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+            cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+            return Array.from(map.values());
+          });
+        }
+      })
+      .catch((err) => console.warn("Initial license fetch error:", err));
+
+    // 2. Real-time subscription to cloud changes
+    const unsubscribeLicenses = subscribeToFirebaseLicenses((cloudLicenses) => {
+      if (cloudLicenses && cloudLicenses.length > 0) {
+        setSessions((prev) => {
+          const map = new Map<string, LicenseSession>();
+          INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+          prev.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+          cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeLicenses();
+    };
+  }, []);
+
+  // Sync any local licenses that are not yet in Firestore to Firestore
+  useEffect(() => {
+    const customSessions = sessions.filter(
+      (s) => s.licenseKey !== "ADMIN-OSCE-MASTER-2026" && s.licenseKey !== "ADMIN-OSCE-2026"
+    );
+    customSessions.forEach((s) => {
+      createFirebaseUserLicense(s).catch(() => {});
+    });
+  }, [sessions]);
+
   // Optional: Listen to Firebase auth if user signs in with Google, but without recurring DB listeners
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -496,8 +546,8 @@ export default function App() {
             maxTenders: 99999,
             currentTendersCount: 0,
             issuedBy: "Master Auth",
-            notes: "Sesión activa como Administrador Principal (Modo Local Gratuito).",
-            firebaseSynced: false,
+            notes: "Sesión activa como Administrador Principal.",
+            firebaseSynced: true,
           };
           setCurrentUser(adminSession);
         }

@@ -46,6 +46,54 @@ export function subscribeToFirebaseLicenses(
 }
 
 /**
+ * Fetch all licenses directly from Firebase Firestore once
+ */
+export async function fetchFirebaseLicenses(): Promise<LicenseSession[]> {
+  try {
+    const colRef = collection(db, LICENSES_COLLECTION);
+    const snapshot = await getDocs(colRef);
+    const list: LicenseSession[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as LicenseSession;
+      list.push({ ...data, id: docSnap.id, firebaseSynced: true });
+    });
+    return list;
+  } catch (error) {
+    console.warn("Error fetching licenses from Firestore:", error);
+    return [];
+  }
+}
+
+/**
+ * Verify a license key directly from Firebase Cloud Firestore
+ */
+export async function verifyLicenseKeyFromCloud(rawKey: string): Promise<LicenseSession | null> {
+  const cleanKey = rawKey.trim().toUpperCase();
+  if (!cleanKey) return null;
+
+  try {
+    const colRef = collection(db, LICENSES_COLLECTION);
+    const snapshot = await getDocs(colRef);
+    let found: LicenseSession | null = null;
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as LicenseSession;
+      if (
+        data.licenseKey &&
+        data.licenseKey.trim().toUpperCase() === cleanKey
+      ) {
+        found = { ...data, id: docSnap.id, firebaseSynced: true };
+      }
+    });
+
+    return found;
+  } catch (error) {
+    console.warn("Error verifying license from cloud:", error);
+    return null;
+  }
+}
+
+/**
  * Register a new user / license in Firebase Firestore
  */
 export async function createFirebaseUserLicense(session: LicenseSession): Promise<void> {

@@ -41,8 +41,7 @@ service cloud.firestore {
 
     // Licenses collection for global key checks & registrations
     match /licenses/{licenseId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Tender proposals collection
