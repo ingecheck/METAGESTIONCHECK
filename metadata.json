@@ -1,0 +1,6 @@
+{
+  "name": "METAGESTIONCHECK",
+  "description": "Suite integral e independiente de Licitaciones SEACE (Ofertador de Contrataciones) y Control de Obras Públicas (Curva S, Valorizaciones, Cuaderno Digital, Adicionales y Liquidación Técnica-Financiera) bajo la normativa de contrataciones del Estado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
