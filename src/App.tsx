@@ -53,18 +53,11 @@ import {
 import {
   EMPTY_TENDER,
   EMPTY_COMPANY,
-  INITIAL_OFFERS_LIST,
 } from "./data/sampleTenders";
 import {
-  SAMPLE_OBRA,
-  SAMPLE_VALORIZACIONES,
-  SAMPLE_ASIENTOS,
-  SAMPLE_MODIFICACIONES,
-  SAMPLE_LIQUIDACION,
-  INITIAL_OBRAS_LIST,
+  EMPTY_OBRA,
+  EMPTY_LIQUIDACION,
 } from "./data/sampleObras";
-import { SAMPLE_PARTIDAS_OBRA } from "./data/samplePartidas";
-import { SAMPLE_AUDITORIA_DATA } from "./data/sampleIncongruencias";
 import { WorksItemsExecutedTable } from "./components/works/WorksItemsExecutedTable";
 import { WorksValuationAuditor } from "./components/works/WorksValuationAuditor";
 import {
@@ -107,7 +100,12 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, LicenseSession>();
+          INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+          parsed.forEach((s: LicenseSession) => map.set(s.licenseKey.toUpperCase(), s));
+          return Array.from(map.values());
+        }
       } catch (e) {
         // fallback
       }
@@ -291,13 +289,13 @@ export default function App() {
 
   const activeObraPkg = obrasList.find((o) => o.id === activeObraId) || obrasList[0];
 
-  const [obra, setObra] = useState<ObraProyecto>(() => activeObraPkg?.obra || SAMPLE_OBRA);
-  const [valorizaciones, setValorizaciones] = useState<ValorizacionMensual[]>(() => activeObraPkg?.valorizaciones || SAMPLE_VALORIZACIONES);
-  const [asientos, setAsientos] = useState<AsientoCuadernoObra[]>(() => activeObraPkg?.asientos || SAMPLE_ASIENTOS);
-  const [modificaciones, setModificaciones] = useState<ModificacionObra[]>(() => activeObraPkg?.modificaciones || SAMPLE_MODIFICACIONES);
-  const [liquidacion, setLiquidacion] = useState<LiquidacionResumen>(() => activeObraPkg?.liquidacion || SAMPLE_LIQUIDACION);
-  const [partidas, setPartidas] = useState<PartidaEjecutada[]>(() => activeObraPkg?.partidas || SAMPLE_PARTIDAS_OBRA);
-  const [auditoria, setAuditoria] = useState<AuditoriaValorizacion | undefined>(() => activeObraPkg?.auditorias?.[0] || SAMPLE_AUDITORIA_DATA);
+  const [obra, setObra] = useState<ObraProyecto>(() => activeObraPkg?.obra || EMPTY_OBRA);
+  const [valorizaciones, setValorizaciones] = useState<ValorizacionMensual[]>(() => activeObraPkg?.valorizaciones || []);
+  const [asientos, setAsientos] = useState<AsientoCuadernoObra[]>(() => activeObraPkg?.asientos || []);
+  const [modificaciones, setModificaciones] = useState<ModificacionObra[]>(() => activeObraPkg?.modificaciones || []);
+  const [liquidacion, setLiquidacion] = useState<LiquidacionResumen>(() => activeObraPkg?.liquidacion || EMPTY_LIQUIDACION);
+  const [partidas, setPartidas] = useState<PartidaEjecutada[]>(() => activeObraPkg?.partidas || []);
+  const [auditoria, setAuditoria] = useState<AuditoriaValorizacion | undefined>(() => activeObraPkg?.auditorias?.[0]);
 
   // Save obras list to user-isolated localStorage
   useEffect(() => {
@@ -332,13 +330,13 @@ export default function App() {
     setObrasList(userObras.obras);
     setActiveObraId(userObras.activeId);
     const activeOb = userObras.obras.find((o) => o.id === userObras.activeId) || userObras.obras[0];
-    setObra(activeOb?.obra || SAMPLE_OBRA);
+    setObra(activeOb?.obra || EMPTY_OBRA);
     setValorizaciones(activeOb?.valorizaciones || []);
     setAsientos(activeOb?.asientos || []);
     setModificaciones(activeOb?.modificaciones || []);
-    setLiquidacion(activeOb?.liquidacion || SAMPLE_LIQUIDACION);
-    setPartidas(activeOb?.partidas && activeOb.partidas.length > 0 ? activeOb.partidas : SAMPLE_PARTIDAS_OBRA);
-    setAuditoria(activeOb?.auditorias && activeOb.auditorias.length > 0 ? activeOb.auditorias[0] : SAMPLE_AUDITORIA_DATA);
+    setLiquidacion(activeOb?.liquidacion || EMPTY_LIQUIDACION);
+    setPartidas(activeOb?.partidas || []);
+    setAuditoria(activeOb?.auditorias?.[0]);
 
     // Admin security check
     if (currentUser.role !== "admin" && currentUser.userEmail !== ADMIN_MASTER_EMAIL) {
@@ -381,13 +379,13 @@ export default function App() {
     if (!target) return;
 
     setActiveObraId(obraId);
-    setObra(target.obra || SAMPLE_OBRA);
+    setObra(target.obra || EMPTY_OBRA);
     setValorizaciones(target.valorizaciones || []);
     setAsientos(target.asientos || []);
     setModificaciones(target.modificaciones || []);
-    setLiquidacion(target.liquidacion || SAMPLE_LIQUIDACION);
-    setPartidas(target.partidas && target.partidas.length > 0 ? target.partidas : SAMPLE_PARTIDAS_OBRA);
-    setAuditoria(target.auditorias && target.auditorias.length > 0 ? target.auditorias[0] : SAMPLE_AUDITORIA_DATA);
+    setLiquidacion(target.liquidacion || EMPTY_LIQUIDACION);
+    setPartidas(target.partidas || []);
+    setAuditoria(target.auditorias?.[0]);
   };
 
   const handleSaveObra = (obraPkg: UserObraPackage) => {
@@ -405,9 +403,9 @@ export default function App() {
     setValorizaciones(obraPkg.valorizaciones || []);
     setAsientos(obraPkg.asientos || []);
     setModificaciones(obraPkg.modificaciones || []);
-    setLiquidacion(obraPkg.liquidacion || SAMPLE_LIQUIDACION);
-    setPartidas(obraPkg.partidas && obraPkg.partidas.length > 0 ? obraPkg.partidas : SAMPLE_PARTIDAS_OBRA);
-    setAuditoria(obraPkg.auditorias && obraPkg.auditorias.length > 0 ? obraPkg.auditorias[0] : SAMPLE_AUDITORIA_DATA);
+    setLiquidacion(obraPkg.liquidacion || EMPTY_LIQUIDACION);
+    setPartidas(obraPkg.partidas || []);
+    setAuditoria(obraPkg.auditorias?.[0]);
   };
 
   const handleDeleteObra = (obraId: string) => {
@@ -416,11 +414,11 @@ export default function App() {
 
     if (remaining.length === 0) {
       setActiveObraId("");
-      setObra(SAMPLE_OBRA);
+      setObra(EMPTY_OBRA);
       setValorizaciones([]);
       setAsientos([]);
       setModificaciones([]);
-      setLiquidacion(SAMPLE_LIQUIDACION);
+      setLiquidacion(EMPTY_LIQUIDACION);
       setPartidas([]);
       setAuditoria(undefined);
     } else if (activeObraId === obraId) {
@@ -513,16 +511,6 @@ export default function App() {
     };
   }, []);
 
-  // Sync any local licenses that are not yet in Firestore to Firestore
-  useEffect(() => {
-    const customSessions = sessions.filter(
-      (s) => s.licenseKey !== "ADMIN-OSCE-MASTER-2026" && s.licenseKey !== "ADMIN-OSCE-2026"
-    );
-    customSessions.forEach((s) => {
-      createFirebaseUserLicense(s).catch(() => {});
-    });
-  }, [sessions]);
-
   // Optional: Listen to Firebase auth if user signs in with Google, but without recurring DB listeners
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -579,11 +567,11 @@ export default function App() {
     // 2. Reset Control de Obras
     setObrasList([]);
     setActiveObraId("");
-    setObra(SAMPLE_OBRA);
+    setObra(EMPTY_OBRA);
     setValorizaciones([]);
     setAsientos([]);
     setModificaciones([]);
-    setLiquidacion(SAMPLE_LIQUIDACION);
+    setLiquidacion(EMPTY_LIQUIDACION);
     setPartidas([]);
     setAuditoria(undefined);
 
@@ -612,7 +600,13 @@ export default function App() {
   };
 
   const handleAddSession = (newSession: LicenseSession) => {
-    setSessions((prev) => [newSession, ...prev]);
+    setSessions((prev) => {
+      const updated = [newSession, ...prev.filter((s) => s.licenseKey !== newSession.licenseKey)];
+      try {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const handleUpdateSessionStatus = (sessionId: string, status: "active" | "suspended" | "expired") => {

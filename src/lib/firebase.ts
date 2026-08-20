@@ -43,11 +43,24 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function isFirestoreQuotaError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes("resource-exhausted") ||
+    msg.includes("Quota limit exceeded") ||
+    msg.includes("Quota exceeded") ||
+    msg.includes("Free daily write units") ||
+    msg.includes("Free daily read units")
+  );
+}
+
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
 ) {
+  const isQuota = isFirestoreQuotaError(error);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -59,6 +72,12 @@ export function handleFirestoreError(
     operationType,
     path,
   };
+
+  if (isQuota) {
+    console.warn("Firestore Quota Limit Exceeded. Operating in graceful local storage mode.", JSON.stringify(errInfo));
+    return;
+  }
+
   console.error("Firestore Error: ", JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }

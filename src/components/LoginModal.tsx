@@ -14,18 +14,32 @@ import {
   Mail,
   User,
   Hash,
+  Phone,
+  HelpCircle,
+  FileText,
   ShieldAlert,
 } from "lucide-react";
 import { LicenseSession, ADMIN_MASTER_EMAIL, INITIAL_DEFAULT_SESSIONS } from "../types/auth";
 import { auth, googleProvider, isUserAdmin } from "../lib/firebase";
 import { signInWithPopup } from "firebase/auth";
-import { verifyLicenseKeyFromCloud, fetchFirebaseLicenses } from "../services/firebaseSync";
+import {
+  verifyLicenseKeyFromCloud,
+  fetchFirebaseLicenses,
+  submitLicenseRequest,
+} from "../services/firebaseSync";
 
 interface LoginModalProps {
   isOpen: boolean;
   onLogin: (session: LicenseSession) => void;
   availableSessions: LicenseSession[];
-  onRequestLicense: (details: { name: string; email: string; company: string; ruc: string }) => void;
+  onRequestLicense?: (details: {
+    userName: string;
+    userEmail: string;
+    companyName: string;
+    ruc: string;
+    intendedUse?: string;
+    phone?: string;
+  }) => void;
   onClose?: () => void;
 }
 
@@ -40,12 +54,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [isSubmittingReq, setIsSubmittingReq] = useState(false);
 
   // Form for requesting license from Admin
   const [reqName, setReqName] = useState("");
   const [reqEmail, setReqEmail] = useState("");
   const [reqCompany, setReqCompany] = useState("");
   const [reqRuc, setReqRuc] = useState("");
+  const [reqPhone, setReqPhone] = useState("");
+  const [reqIntendedUse, setReqIntendedUse] = useState("Formulación y Armado de Ofertas Técnicas OSCE");
   const [reqSuccess, setReqSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -97,18 +114,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       if (matched) {
         if (matched.status === "suspended") {
-          setErrorMsg("Su cuenta se encuentra suspendida. Contacte al Administrador.");
+          setErrorMsg("Su cuenta se encuentra suspendida. Contacte al Administrador para su reactivación.");
           return;
         }
         if (matched.status === "expired") {
-          setErrorMsg("Su licencia ha expirado. El Administrador debe renovar su vigencia.");
+          setErrorMsg("Su licencia ha expirado. El Administrador debe renovar su periodo de vigencia.");
           return;
         }
         onLogin({ ...matched, userId: user.uid, firebaseSynced: true });
       } else {
         // REJECT ACCESS: User is not authorized/created by the admin!
         setErrorMsg(
-          `Acceso denegado: El correo "${userEmail}" no cuenta con una licencia registrada por el Administrador. Solicite su registro en la pestaña "Solicitar Licencia".`
+          `Acceso denegado: El correo "${userEmail}" no cuenta con una licencia autorizada por el Administrador. Solicite su registro en la pestaña "Solicitar Licencia".`
         );
       }
     } catch (err: any) {
@@ -123,9 +140,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    const trimmedKey = licenseKeyInput.trim();
+    // Normalize license key: remove extra spaces, uppercase
+    const rawKey = licenseKeyInput.trim();
+    const cleanKey = rawKey.replace(/\s+/g, "").toUpperCase();
 
-    if (!trimmedKey) {
+    if (!cleanKey) {
       setErrorMsg("Por favor ingrese su Clave de Licencia otorgada por el Administrador.");
       return;
     }
@@ -135,8 +154,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     try {
       // 1. Check Master Admin Key
       if (
-        trimmedKey.toUpperCase() === "ADMIN-OSCE-MASTER-2026" ||
-        trimmedKey.toUpperCase() === "ADMIN-OSCE-2026"
+        cleanKey === "ADMIN-OSCE-MASTER-2026" ||
+        cleanKey === "ADMIN-OSCE-2026" ||
+        cleanKey === "ADMINOSCEMASTER2026"
       ) {
         const adminSession = INITIAL_DEFAULT_SESSIONS[0];
         onLogin(adminSession);
@@ -144,29 +164,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       }
 
       // 2. Match session by license key in local availableSessions
-      let foundSession = availableSessions.find(
-        (s) => s.licenseKey && s.licenseKey.trim().toUpperCase() === trimmedKey.toUpperCase()
-      );
+      let foundSession = availableSessions.find((s) => {
+        if (!s.licenseKey) return false;
+        const targetClean = s.licenseKey.replace(/\s+/g, "").toUpperCase();
+        return targetClean === cleanKey;
+      });
 
       // 3. If not found locally, query Cloud Firestore
       if (!foundSession) {
-        foundSession = await verifyLicenseKeyFromCloud(trimmedKey);
+        foundSession = await verifyLicenseKeyFromCloud(rawKey);
       }
 
-      // 4. Fallback: fetch all cloud licenses in case of partial match
+      // 4. Fallback: fetch all cloud licenses in case of formatting variations
       if (!foundSession) {
         const allCloud = await fetchFirebaseLicenses();
         foundSession =
-          allCloud.find(
-            (s) =>
-              s.licenseKey &&
-              s.licenseKey.trim().toUpperCase() === trimmedKey.toUpperCase()
-          ) || null;
+          allCloud.find((s) => {
+            if (!s.licenseKey) return false;
+            const targetClean = s.licenseKey.replace(/\s+/g, "").toUpperCase();
+            return targetClean === cleanKey;
+          }) || null;
       }
 
       if (!foundSession) {
         setErrorMsg(
-          "Clave de licencia no encontrada o inválida. Verifique que la clave coincida exactamente con la emitida en el Panel de Administrador."
+          "Clave de licencia no encontrada o inválida. Verifique que coincida exactamente con la clave que le proporcionó el Administrador o solicite una nueva en la pestaña 'Solicitar Licencia'."
         );
         return;
       }
@@ -181,7 +203,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // Success login
+      // Success login into user's isolated workspace
       onLogin(foundSession);
     } catch (err: any) {
       console.error("License validation error:", err);
@@ -191,23 +213,61 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  const handleSendRequest = (e: React.FormEvent) => {
+  const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reqName || !reqEmail || !reqCompany || !reqRuc) {
-      setErrorMsg("Por favor complete todos los campos de solicitud.");
+    setErrorMsg(null);
+
+    if (!reqName.trim() || !reqEmail.trim() || !reqCompany.trim() || !reqRuc.trim()) {
+      setErrorMsg("Por favor complete todos los campos obligatorios de la solicitud.");
       return;
     }
-    onRequestLicense({
-      name: reqName,
-      email: reqEmail,
-      company: reqCompany,
-      ruc: reqRuc,
-    });
-    setReqSuccess(true);
-    setTimeout(() => {
-      setReqSuccess(false);
-      setActiveTab("login");
-    }, 2800);
+
+    if (reqRuc.trim().length !== 11) {
+      setErrorMsg("El número de RUC debe tener exactamente 11 dígitos numéricos.");
+      return;
+    }
+
+    setIsSubmittingReq(true);
+    try {
+      // 1. Submit to Firebase Cloud Firestore
+      await submitLicenseRequest({
+        userName: reqName.trim(),
+        userEmail: reqEmail.trim().toLowerCase(),
+        companyName: reqCompany.trim(),
+        ruc: reqRuc.trim(),
+        phone: reqPhone.trim(),
+        intendedUse: reqIntendedUse.trim(),
+      });
+
+      // 2. Call optional parent hook
+      if (onRequestLicense) {
+        onRequestLicense({
+          userName: reqName.trim(),
+          userEmail: reqEmail.trim().toLowerCase(),
+          companyName: reqCompany.trim(),
+          ruc: reqRuc.trim(),
+          phone: reqPhone.trim(),
+          intendedUse: reqIntendedUse.trim(),
+        });
+      }
+
+      setReqSuccess(true);
+    } catch (err: any) {
+      console.error("Error submitting license request:", err);
+      setErrorMsg("Ocurrió un inconveniente al enviar la solicitud. Por favor intente nuevamente.");
+    } finally {
+      setIsSubmittingReq(false);
+    }
+  };
+
+  const handleResetRequestForm = () => {
+    setReqSuccess(false);
+    setReqName("");
+    setReqEmail("");
+    setReqCompany("");
+    setReqRuc("");
+    setReqPhone("");
+    setActiveTab("login");
   };
 
   return (
@@ -308,7 +368,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </svg>
                   <span>
                     {isLoadingGoogle
-                      ? "Verificando cuenta..."
+                      ? "Verificando cuenta con Google..."
                       : "Iniciar Sesión con Google"}
                   </span>
                 </button>
@@ -375,6 +435,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </p>
               </div>
             </div>
+          ) : reqSuccess ? (
+            /* Request Success Screen - Pending approval */
+            <div className="space-y-4 py-2 animate-in fade-in zoom-in-95">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-900">
+                    ¡Solicitud Enviada con Éxito!
+                  </h3>
+                  <p className="text-xs text-emerald-700 mt-1">
+                    Estado: <span className="font-bold uppercase tracking-wider bg-emerald-200/80 px-2 py-0.5 rounded text-[10px]">Pendiente de Aprobación</span>
+                  </p>
+                </div>
+                <div className="text-left bg-white p-3 rounded-xl border border-emerald-100 text-[11px] text-slate-600 space-y-1">
+                  <div><span className="font-semibold text-slate-800">Titular:</span> {reqName}</div>
+                  <div><span className="font-semibold text-slate-800">Correo:</span> {reqEmail}</div>
+                  <div><span className="font-semibold text-slate-800">Empresa:</span> {reqCompany} (RUC: {reqRuc})</div>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed text-left">
+                  El Administrador Principal (<strong>{ADMIN_MASTER_EMAIL}</strong>) ha recibido su solicitud en su Panel de Control. Una vez aprobada, le entregará su <strong>Clave de Licencia oficial</strong> para que pueda ingresar de inmediato.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetRequestForm}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Volver a la Pantalla de Ingreso
+              </button>
+            </div>
           ) : (
             /* Request new license form */
             <form onSubmit={handleSendRequest} className="space-y-3.5">
@@ -383,19 +476,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <span>Solicitud de Registro de Licencia</span>
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Complete los datos para que el Administrador ({ADMIN_MASTER_EMAIL}) active su clave de acceso:
+                Complete los datos para que el Administrador ({ADMIN_MASTER_EMAIL}) revise y apruebe su licencia:
               </p>
-
-              {reqSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-medium flex items-center space-x-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>¡Solicitud enviada al Administrador con éxito!</span>
-                </div>
-              )}
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Nombre del Ingeniero / Responsable
+                  Nombre del Ingeniero / Responsable *
                 </label>
                 <div className="relative">
                   <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -412,7 +498,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Correo Electrónico
+                  Correo Electrónico *
                 </label>
                 <div className="relative">
                   <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -430,7 +516,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Razón Social
+                    Razón Social *
                   </label>
                   <input
                     type="text"
@@ -438,12 +524,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     placeholder="Constructora S.A.C."
                     value={reqCompany}
                     onChange={(e) => setReqCompany(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    RUC (11 dígitos)
+                    RUC (11 dígitos) *
                   </label>
                   <input
                     type="text"
@@ -457,6 +543,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Teléfono / WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="tel"
+                      placeholder="999 888 777"
+                      value={reqPhone}
+                      onChange={(e) => setReqPhone(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Uso Estimado
+                  </label>
+                  <select
+                    value={reqIntendedUse}
+                    onChange={(e) => setReqIntendedUse(e.target.value)}
+                    className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="Armado de Ofertas Técnicas OSCE">Armado de Ofertas OSCE</option>
+                    <option value="Control de Obras y Valorizaciones">Control de Obras & Valorizaciones</option>
+                    <option value="Consultoría y Supervisión de Obras">Consultoría y Supervisión</option>
+                    <option value="Suite Completa Corporativa">Suite Completa Corporativa</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="flex items-center space-x-2 pt-2">
                 <button
                   type="button"
@@ -467,9 +586,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                  disabled={isSubmittingReq}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  Enviar Solicitud
+                  {isSubmittingReq ? (
+                    <span>Enviando...</span>
+                  ) : (
+                    <span>Enviar Solicitud al Admin</span>
+                  )}
                 </button>
               </div>
             </form>

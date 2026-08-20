@@ -33,14 +33,16 @@ service cloud.firestore {
 
     // Users & Licenses collection
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Licenses collection for global key checks & registrations
     match /licenses/{licenseId} {
+      allow read, write: if true;
+    }
+
+    // License requests collection submitted by applicants
+    match /license_requests/{requestId} {
       allow read, write: if true;
     }
 

@@ -18,6 +18,22 @@ export interface LicenseSession {
   firebaseSynced?: boolean;
 }
 
+export interface LicenseRequest {
+  id: string;
+  userName: string;
+  userEmail: string;
+  companyName: string;
+  ruc: string;
+  intendedUse?: string;
+  phone?: string;
+  createdAt: string;
+  status: "pending" | "approved" | "rejected";
+  assignedKey?: string;
+  processedAt?: string;
+  processedBy?: string;
+  notes?: string;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   currentUser: LicenseSession | null;
@@ -46,45 +62,27 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
     expiresAt: "2035-12-31",
     maxTenders: 99999,
     currentTendersCount: 0,
-    lastLogin: "2026-08-18",
+    lastLogin: "2026-08-20",
     issuedBy: "System Root",
     notes: "Cuenta Maestra con acceso exclusivo al Panel de Control de Licencias y supervisión global.",
     firebaseSynced: true,
   },
   {
-    id: "lic-postor-andina",
-    userName: "Ing. Carlos Mendoza Ramos",
-    userEmail: "carlos@andinaingenieros.pe",
-    companyName: "ANDINA INGENIEROS & CONTRATISTAS S.A.C.",
-    ruc: "20549281921",
-    licenseKey: "LIC-ANDINA-2026-PRO",
+    id: "lic-postor-jhon-franklin",
+    userName: "Jhon Franklin",
+    userEmail: "jfta12345678@gmail.com",
+    companyName: "CONSTRUCTORA & CONSULTORES JF S.A.C.",
+    ruc: "20608899112",
+    licenseKey: "LIC-JHON-FRANKLIN-2026",
     role: "postor",
     status: "active",
-    createdAt: "2026-02-01",
-    expiresAt: "2027-02-01",
-    maxTenders: 50,
-    currentTendersCount: 2,
-    lastLogin: "2026-08-19",
+    createdAt: "2026-08-20",
+    expiresAt: "2027-08-20",
+    maxTenders: 100,
+    currentTendersCount: 0,
+    lastLogin: "2026-08-20",
     issuedBy: ADMIN_MASTER_EMAIL,
-    notes: "Licencia activa de postor - Registro independiente de expedientes y obras.",
-    firebaseSynced: true,
-  },
-  {
-    id: "lic-postor-pacifico",
-    userName: "Ing. Lucía Fernández Rojas",
-    userEmail: "lucia@pacificoconsultores.pe",
-    companyName: "CONSORCIO PACÍFICO VIAL",
-    ruc: "20601839281",
-    licenseKey: "LIC-PACIFICO-2026-STD",
-    role: "postor",
-    status: "active",
-    createdAt: "2026-03-15",
-    expiresAt: "2027-03-15",
-    maxTenders: 30,
-    currentTendersCount: 1,
-    lastLogin: "2026-08-19",
-    issuedBy: ADMIN_MASTER_EMAIL,
-    notes: "Licencia activa de postor - Espacio de trabajo exclusivo.",
+    notes: "Licencia de postor habilitada para Jhon Franklin.",
     firebaseSynced: true,
   },
 ];
