@@ -114,12 +114,15 @@ export default function App() {
     const saved = localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.licenseKey && parsed.status === "active") {
+          return parsed;
+        }
       } catch (e) {
-        return INITIAL_DEFAULT_SESSIONS[0]; // Master Admin default
+        // fallback
       }
     }
-    return INITIAL_DEFAULT_SESSIONS[0]; // Master Admin default
+    return null; // Requires login directly - No guest default
   });
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);

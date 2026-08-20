@@ -11,6 +11,10 @@ import {
   FileSpreadsheet,
   UserCheck,
   LogOut,
+  Mail,
+  User,
+  Hash,
+  ShieldAlert,
 } from "lucide-react";
 import { LicenseSession, ADMIN_MASTER_EMAIL } from "../types/auth";
 import { auth, googleProvider, isUserAdmin } from "../lib/firebase";
@@ -29,11 +33,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onLogin,
   availableSessions,
   onRequestLicense,
-  onClose,
 }) => {
+  const [activeTab, setActiveTab] = useState<"login" | "request">("login");
   const [licenseKeyInput, setLicenseKeyInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isRequestModal, setIsRequestModal] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
   // Form for requesting license from Admin
@@ -53,7 +56,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       const user = result.user;
       const userEmail = user.email || "";
 
-      // Check if user is the Master Admin
+      // 1. Check if user is the Master Admin
       if (isUserAdmin(userEmail)) {
         const adminSession: LicenseSession = {
           id: `admin-${user.uid}`,
@@ -70,48 +73,37 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           maxTenders: 99999,
           currentTendersCount: 0,
           issuedBy: "Firebase Master Auth",
-          notes: "Autenticado con Google como Administrador Principal de Firebase.",
+          notes: "Autenticado con Google como Administrador Principal.",
           firebaseSynced: true,
         };
         onLogin(adminSession);
         return;
       }
 
-      // Check if there is an existing license for this email in availableSessions
+      // 2. Check if there is an existing authorized license for this email
       const matched = availableSessions.find(
         (s) => s.userEmail.toLowerCase() === userEmail.toLowerCase()
       );
 
       if (matched) {
         if (matched.status === "suspended") {
-          setErrorMsg("Su cuenta se encuentra suspendida. Contacte al administrador.");
+          setErrorMsg("Su cuenta se encuentra suspendida. Contacte al Administrador.");
+          return;
+        }
+        if (matched.status === "expired") {
+          setErrorMsg("Su licencia ha expirado. El Administrador debe renovar su vigencia.");
           return;
         }
         onLogin({ ...matched, userId: user.uid });
       } else {
-        // User logged in with Google but not yet registered with a license
-        const newPostorSession: LicenseSession = {
-          id: `user-${user.uid}`,
-          userId: user.uid,
-          userName: user.displayName || userEmail.split("@")[0],
-          userEmail: userEmail,
-          companyName: "POSTOR EN PROCESO DE REGISTRO",
-          ruc: "20000000000",
-          licenseKey: `LIC-GOOG-${user.uid.substring(0, 6).toUpperCase()}`,
-          role: "postor",
-          status: "active",
-          createdAt: new Date().toISOString().split("T")[0],
-          expiresAt: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-          maxTenders: 10,
-          currentTendersCount: 0,
-          issuedBy: ADMIN_MASTER_EMAIL,
-          firebaseSynced: true,
-        };
-        onLogin(newPostorSession);
+        // REJECT ACCESS: User is not authorized/created by the admin!
+        setErrorMsg(
+          `Acceso denegado: El correo "${userEmail}" no cuenta con una licencia registrada por el Administrador. Solicite su registro en la pestaña "Solicitar Licencia".`
+        );
       }
     } catch (err: any) {
       console.error("Google login error:", err);
-      setErrorMsg(err.message || "Error al iniciar sesión con Google.");
+      setErrorMsg(err.message || "Error al autenticar con Google.");
     } finally {
       setIsLoadingGoogle(false);
     }
@@ -124,7 +116,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const trimmedKey = licenseKeyInput.trim();
 
     if (!trimmedKey) {
-      setErrorMsg("Ingrese su Clave de Licencia otorgada por el Administrador.");
+      setErrorMsg("Por favor ingrese su Clave de Licencia otorgada por el Administrador.");
       return;
     }
 
@@ -134,26 +126,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     );
 
     if (!foundSession) {
-      setErrorMsg("Clave de licencia no encontrada o inválida. Verifique con el Administrador.");
+      setErrorMsg(
+        "Clave de licencia no encontrada o inválida. Solo los usuarios creados por el Administrador tienen acceso."
+      );
       return;
     }
 
     if (foundSession.status === "suspended") {
-      setErrorMsg("Esta licencia ha sido suspendida por el Administrador. Comuníquese para reactivarla.");
+      setErrorMsg("Esta licencia ha sido suspendida por el Administrador. Comuníquese para su reactivación.");
       return;
     }
 
     if (foundSession.status === "expired") {
-      setErrorMsg("Esta licencia ha expirado. El Administrador debe renovar el plazo.");
+      setErrorMsg("Esta licencia ha expirado. El Administrador debe renovar el periodo de vigencia.");
       return;
     }
 
     // Success login
     onLogin(foundSession);
-  };
-
-  const handleQuickLogin = (session: LicenseSession) => {
-    onLogin(session);
   };
 
   const handleSendRequest = (e: React.FormEvent) => {
@@ -171,50 +161,89 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setReqSuccess(true);
     setTimeout(() => {
       setReqSuccess(false);
-      setIsRequestModal(false);
-    }, 2500);
+      setActiveTab("login");
+    }, 2800);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="bg-slate-900 text-white p-6 relative">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md">
+            <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-lg">
               MGC
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">
-                Acceso a METAGESTIONCHECK
+              <h2 className="text-base font-bold tracking-tight">
+                METAGESTIONCHECK
               </h2>
               <p className="text-xs text-slate-400">
-                Suite de Licitaciones SEACE & Control de Obras Públicas
+                Portal Privado de Licitaciones SEACE & Control de Obras
               </p>
             </div>
           </div>
+
+          <div className="mt-4 flex items-center gap-2 text-[11px] bg-slate-800/80 px-3 py-1.5 rounded-lg text-slate-300 border border-slate-700/60">
+            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Acceso estrictamente restringido a usuarios con licencia</span>
+          </div>
+        </div>
+
+        {/* Tab switchers */}
+        <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("login");
+              setErrorMsg(null);
+            }}
+            className={`flex-1 py-3 text-center transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+              activeTab === "login"
+                ? "bg-white text-blue-600 border-b-2 border-blue-600 font-bold"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>Ingresar con Licencia</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("request");
+              setErrorMsg(null);
+            }}
+            className={`flex-1 py-3 text-center transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+              activeTab === "request"
+                ? "bg-white text-blue-600 border-b-2 border-blue-600 font-bold"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Solicitar Licencia</span>
+          </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
-          {!isRequestModal ? (
-            <>
-              {errorMsg && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-rose-700 text-xs">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>{errorMsg}</div>
-                </div>
-              )}
+        <div className="p-6 space-y-4">
+          {errorMsg && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2.5 text-rose-700 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">{errorMsg}</div>
+            </div>
+          )}
 
+          {activeTab === "login" ? (
+            <div className="space-y-4">
               {/* 1. Google Sign-In Button */}
               <div>
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isLoadingGoogle}
-                  className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center space-x-2.5 shadow-xs transition hover:border-slate-400 cursor-pointer"
+                  className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold rounded-xl text-xs flex items-center justify-center space-x-2.5 shadow-xs transition hover:border-slate-400 cursor-pointer disabled:opacity-50"
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path
                       fill="#4285F4"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -234,14 +263,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </svg>
                   <span>
                     {isLoadingGoogle
-                      ? "Conectando con Google..."
-                      : "Iniciar Sesión con Google (Firebase Auth)"}
+                      ? "Verificando cuenta..."
+                      : "Iniciar Sesión con Google"}
                   </span>
                 </button>
-                <div className="flex items-center my-4">
+                <div className="flex items-center my-3.5">
                   <div className="flex-1 border-t border-slate-200"></div>
-                  <span className="px-3 text-[11px] text-slate-400 uppercase font-semibold">
-                    o con clave de licencia
+                  <span className="px-3 text-[10px] text-slate-400 uppercase font-semibold">
+                    o con tu clave de licencia
                   </span>
                   <div className="flex-1 border-t border-slate-200"></div>
                 </div>
@@ -251,103 +280,55 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <form onSubmit={handleLoginSubmit} className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Clave de Licencia del Postor / Administrador
+                    Clave de Licencia del Postor
                   </label>
                   <div className="relative">
                     <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                     <input
                       type="text"
-                      placeholder="Ej: ADMIN-OSCE-MASTER-2026 o LIC-ANDINA-2026-PRO"
+                      placeholder="Ej: LIC-ANDINA-2026-PRO"
                       value={licenseKeyInput}
                       onChange={(e) => setLicenseKeyInput(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                      autoFocus
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Ingrese la clave otorgada por el Administrador al registrar su empresa.
+                  </p>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer"
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
                 >
                   <Lock className="w-4 h-4" />
                   <span>Validar Licencia e Ingresar</span>
                 </button>
               </form>
 
-              {/* Quick Access Profiles */}
-              {availableSessions.length > 0 && (
-                <div className="pt-3 border-t border-slate-200">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                    <span>Cuentas Disponibles</span>
-                    <span className="text-blue-600 font-semibold">Seleccionar</span>
-                  </div>
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {availableSessions.map((sess) => (
-                      <div
-                        key={sess.id}
-                        onClick={() => handleQuickLogin(sess)}
-                        className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between hover:scale-[1.01] ${
-                          sess.role === "admin"
-                            ? "border-amber-300 bg-amber-50/60 hover:bg-amber-100/70"
-                            : "border-slate-200 bg-slate-50 hover:bg-white hover:border-blue-300"
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 overflow-hidden">
-                          <div
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                              sess.role === "admin"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
-                            }`}
-                          >
-                            {sess.role === "admin" ? "ADM" : "POST"}
-                          </div>
-                          <div className="truncate text-left">
-                            <div className="text-xs font-bold text-slate-900 truncate">
-                              {sess.userName}
-                            </div>
-                            <div className="text-[10px] text-slate-500 font-mono truncate">
-                              {sess.licenseKey} • {sess.companyName || sess.userEmail}
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[11px] text-blue-600 font-semibold flex items-center ml-2 shrink-0">
-                          Entrar <ArrowRight className="w-3 h-3 ml-0.5" />
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 text-center flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setIsRequestModal(true)}
-                  className="text-xs text-slate-600 hover:text-blue-600 font-medium underline cursor-pointer"
-                >
-                  Solicitar registro de licencia
-                </button>
-                {onClose && (
+              <div className="pt-2 text-center border-t border-slate-100">
+                <p className="text-[11px] text-slate-500">
+                  ¿No tienes una clave de licencia activa?{" "}
                   <button
                     type="button"
-                    onClick={onClose}
-                    className="text-xs text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+                    onClick={() => setActiveTab("request")}
+                    className="text-blue-600 font-semibold hover:underline cursor-pointer"
                   >
-                    Continuar como invitado
+                    Solicítala aquí
                   </button>
-                )}
+                </p>
               </div>
-            </>
+            </div>
           ) : (
             /* Request new license form */
-            <form onSubmit={handleSendRequest} className="space-y-4">
-              <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm mb-1">
+            <form onSubmit={handleSendRequest} className="space-y-3.5">
+              <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs">
                 <Building2 className="w-4 h-4 text-blue-600" />
-                <span>Solicitud de Nueva Licencia de Postor</span>
+                <span>Solicitud de Registro de Licencia</span>
               </div>
-              <p className="text-xs text-slate-500">
-                Llene los datos de su empresa para que el Administrador ({ADMIN_MASTER_EMAIL}) active su clave en Firebase:
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Complete los datos para que el Administrador ({ADMIN_MASTER_EMAIL}) active su clave de acceso:
               </p>
 
               {reqSuccess && (
@@ -358,49 +339,55 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nombre del Responsable / Ingeniero
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Nombre del Ingeniero / Responsable
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Ing. Jorge Ramirez"
-                  value={reqName}
-                  onChange={(e) => setReqName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                />
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Ing. Jorge Ramirez"
+                    value={reqName}
+                    onChange={(e) => setReqName(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                   Correo Electrónico
                 </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="correo@empresa.pe"
-                  value={reqEmail}
-                  onChange={(e) => setReqEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                />
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="correo@constructora.pe"
+                    value={reqEmail}
+                    onChange={(e) => setReqEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                     Razón Social
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Empresa S.A.C."
+                    placeholder="Constructora S.A.C."
                     value={reqCompany}
                     onChange={(e) => setReqCompany(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                     RUC (11 dígitos)
                   </label>
                   <input
@@ -410,24 +397,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     placeholder="2060..."
                     value={reqRuc}
                     onChange={(e) => setReqRuc(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 pt-3">
+              <div className="flex items-center space-x-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsRequestModal(false)}
+                  onClick={() => setActiveTab("login")}
                   className="flex-1 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
-                  Regresar
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
-                  Enviar al Administrador
+                  Enviar Solicitud
                 </button>
               </div>
             </form>
