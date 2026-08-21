@@ -13,7 +13,6 @@ import { OfferBuilder } from "./components/OfferBuilder";
 import { PersonnelManager } from "./components/PersonnelManager";
 import { ExperienceCalculator } from "./components/ExperienceCalculator";
 import { ObservationsManager } from "./components/ObservationsManager";
-import { LegalAssistant } from "./components/LegalAssistant";
 import { CompanyProfileEditor } from "./components/CompanyProfileEditor";
 import { AuditReportModal } from "./components/AuditReportModal";
 import { ThemeSelectorModal, ThemeOption, THEMES } from "./components/ThemeSelectorModal";
@@ -22,7 +21,6 @@ import { AdminPanel } from "./components/AdminPanel";
 import { LoginModal } from "./components/LoginModal";
 import { WorksDashboard } from "./components/works/WorksDashboard";
 import { WorksValuations } from "./components/works/WorksValuations";
-import { WorksDigitalNotebook } from "./components/works/WorksDigitalNotebook";
 import { WorksModificationsManager } from "./components/works/WorksModificationsManager";
 import { WorksSettlementManager } from "./components/works/WorksSettlementManager";
 
@@ -813,6 +811,9 @@ export default function App() {
             <TenderAnalyzer
               tender={tender}
               setTender={setTender}
+              onUpdateTender={setTender}
+              onNavigateToBuilder={() => setActiveTab("builder")}
+              onNavigateToTab={setActiveTab}
               onNext={() => setActiveTab("company")}
             />
           )}
@@ -838,10 +839,12 @@ export default function App() {
           {activeTab === "personnel" && (
             <PersonnelManager
               tender={tender}
+              company={company}
               personal={personal}
               setPersonal={setPersonal}
               equipment={equipment}
               setEquipment={setEquipment}
+              onNavigateToTab={setActiveTab}
               onNext={() => setActiveTab("observations")}
             />
           )}
@@ -852,12 +855,20 @@ export default function App() {
               company={company}
               observations={observations}
               setObservations={setObservations}
-              onNext={() => setActiveTab("legal-ai")}
+              onNavigateToTab={setActiveTab}
+              onOpenAudit={() => setIsAuditOpen(true)}
             />
           )}
 
           {activeTab === "legal-ai" && (
-            <LegalAssistant tender={tender} />
+            <ObservationsManager
+              tender={tender}
+              company={company}
+              observations={observations}
+              setObservations={setObservations}
+              onNavigateToTab={setActiveTab}
+              onOpenAudit={() => setIsAuditOpen(true)}
+            />
           )}
 
           {activeTab === "builder" && (
@@ -923,14 +934,6 @@ export default function App() {
               obra={obra}
               auditoriaData={auditoria}
               onSaveAudit={(newAudit) => setAuditoria(newAudit)}
-            />
-          )}
-
-          {activeTab === "obras-cuaderno" && (
-            <WorksDigitalNotebook
-              obra={obra}
-              asientos={asientos}
-              setAsientos={setAsientos}
             />
           )}
 

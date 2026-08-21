@@ -8,6 +8,7 @@ import {
   ClippedPdfSnippet,
 } from "../types/osce";
 import { formatPEN } from "./docxGenerator";
+import { DynamicOfferDocItem } from "./guidelineAnnexService";
 
 /**
  * Sanitizes text to remove characters unencodable by StandardFonts (Helvetica / WinAnsi)
@@ -21,6 +22,12 @@ export function sanitizePdfText(str: string | undefined | null): string {
     .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, "-")
     .replace(/[\u2026]/g, "...")
     .replace(/[\u00A0]/g, " ")
+    .replace(/[\u00E1\u00C1]/g, "a")
+    .replace(/[\u00E9\u00C9]/g, "e")
+    .replace(/[\u00ED\u00CD]/g, "i")
+    .replace(/[\u00F3\u00D3]/g, "o")
+    .replace(/[\u00FA\u00DA]/g, "u")
+    .replace(/[\u00F1\u00D1]/g, "n")
     .replace(/[^\x00-\x7F\xC0-\xFF]/g, " ");
 }
 
@@ -137,7 +144,7 @@ export function base64ToUint8Array(base64: string): Uint8Array {
 }
 
 /**
- * Creates a clean text page in PDF for Annexes
+ * Creates a clean formatted text page in PDF for Annexes and Declarations
  */
 export async function createSimpleAnnexPdf(
   annexTitle: string,
@@ -164,17 +171,17 @@ export async function createSimpleAnnexPdf(
   page.drawText(sanitizePdfText(annexTitle.toUpperCase()), {
     x: margin + 10,
     y: height - 52,
-    size: 10,
+    size: 9.5,
     font: fontBold,
     color: rgb(1, 1, 1),
   });
 
-  let currentY = height - 90;
+  let currentY = height - 88;
 
   page.drawText(sanitizePdfText(annexSubheader), {
     x: margin,
     y: currentY,
-    size: 9,
+    size: 8.5,
     font: fontBold,
     color: rgb(0.2, 0.2, 0.2),
   });
@@ -183,7 +190,7 @@ export async function createSimpleAnnexPdf(
 
   for (const para of paragraphs) {
     const cleanPara = sanitizePdfText(para);
-    if (currentY < 80) {
+    if (currentY < 70) {
       page = doc.addPage([595.28, 841.89]);
       currentY = height - 60;
     }
@@ -193,7 +200,7 @@ export async function createSimpleAnnexPdf(
     let line = "";
     for (const word of words) {
       const testLine = line + (line ? " " : "") + word;
-      const textWidth = fontRegular.widthOfTextAtSize(testLine, 9);
+      const textWidth = fontRegular.widthOfTextAtSize(testLine, 8.5);
       if (textWidth > width - margin * 2) {
         page.drawText(line, {
           x: margin,
@@ -204,7 +211,7 @@ export async function createSimpleAnnexPdf(
         });
         currentY -= 13;
         line = word;
-        if (currentY < 80) {
+        if (currentY < 70) {
           page = doc.addPage([595.28, 841.89]);
           currentY = height - 60;
         }
@@ -220,7 +227,7 @@ export async function createSimpleAnnexPdf(
         font: fontRegular,
         color: rgb(0.15, 0.15, 0.15),
       });
-      currentY -= 18;
+      currentY -= 16;
     }
   }
 
@@ -275,7 +282,7 @@ export async function createCoverPagePdf(
   page.drawText("EXPEDIENTE DE PROPUESTA TECNICA Y ECONOMICA", {
     x: margin + 10,
     y: height - 85,
-    size: 14,
+    size: 13,
     font: fontBold,
     color: rgb(1, 1, 1),
   });
@@ -384,7 +391,7 @@ export async function createCoverPagePdf(
 }
 
 /**
- * Creates the Table of Contents / Índice del Expediente with Estimated Folios
+ * Creates the Table of Contents / Índice del Expediente with exact Folios
  */
 export async function createIndexPagePdf(
   items: Array<{ title: string; category: string; estimatedPages: number }>
@@ -425,7 +432,7 @@ export async function createIndexPagePdf(
   let y = height - 105;
   page.drawText("N", { x: margin, y, size: 8.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
   page.drawText("DOCUMENTO / ANEXO", { x: margin + 30, y, size: 8.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-  page.drawText("FOLIOS", { x: width - margin - 50, y, size: 8.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+  page.drawText("FOLIOS", { x: width - margin - 60, y, size: 8.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
 
   y -= 10;
   page.drawLine({
@@ -452,7 +459,7 @@ export async function createIndexPagePdf(
 
     page.drawText(`${i + 1}`, { x: margin, y, size: 8, font: fontRegular, color: rgb(0.4, 0.4, 0.4) });
 
-    const maxTitleW = width - margin * 2 - 100;
+    const maxTitleW = width - margin * 2 - 110;
     let titleText = sanitizePdfText(item.title);
     if (fontRegular.widthOfTextAtSize(titleText, 8) > maxTitleW) {
       while (titleText.length > 5 && fontRegular.widthOfTextAtSize(titleText + "...", 8) > maxTitleW) {
@@ -462,7 +469,7 @@ export async function createIndexPagePdf(
     }
 
     page.drawText(titleText, { x: margin + 30, y, size: 8, font: fontRegular, color: rgb(0.1, 0.1, 0.1) });
-    page.drawText(folioStr, { x: width - margin - 50, y, size: 8, font: fontBold, color: rgb(0.12, 0.23, 0.45) });
+    page.drawText(folioStr, { x: width - margin - 60, y, size: 8, font: fontBold, color: rgb(0.12, 0.23, 0.45) });
 
     y -= 14;
   }
@@ -472,7 +479,7 @@ export async function createIndexPagePdf(
 
 /**
  * MASTER MERGER: Integrates all Annexes, Clipped PDFs, Cover & Index into ONE SINGLE PDF
- * and stamps official "FOLIO N 000X" on every single page!
+ * and stamps official "FOLIO N° 000X" on every single page!
  */
 export async function generateMasterUnifiedPdf(params: {
   tender: TenderInfo;
@@ -483,8 +490,9 @@ export async function generateMasterUnifiedPdf(params: {
   equipment: EquipmentItem[];
   experience: ExperienceRecord[];
   clippedSnippets: ClippedPdfSnippet[];
-}): Promise<{ pdfBytes: Uint8Array; blob: Blob; totalPages: number }> {
-  const { tender, company, montoOfertado, incluyeIGV, personal, equipment, experience, clippedSnippets } = params;
+  docItems?: DynamicOfferDocItem[];
+}): Promise<{ pdfBytes: Uint8Array; blob: Blob; totalPages: number; dataUrl?: string }> {
+  const { tender, company, montoOfertado, incluyeIGV, personal, equipment, experience, clippedSnippets, docItems } = params;
 
   const masterDoc = await PDFDocument.create();
 
@@ -494,128 +502,212 @@ export async function generateMasterUnifiedPdf(params: {
   const [coverPage] = await masterDoc.copyPages(coverDoc, [0]);
   masterDoc.addPage(coverPage);
 
-  // 2. Prepare items list for Index
+  // 2. Prepare items list for Index & Assembly
   const indexItems: Array<{ title: string; category: string; estimatedPages: number; pdfBytes?: Uint8Array }> = [];
 
-  // Anexo 1
-  const anexo1Bytes = await createSimpleAnnexPdf(
-    "Anexo N 1 - Declaracion Jurada de Datos del Postor",
-    `Procedimiento: ${tender.nomenclatura || "Convocatoria OSCE"}`,
-    [
-      `El que se suscribe, ${company.representanteLegal || "Representante Legal"}, identificado con DNI N ${company.dniRepresentante || "40192837"}, en representacion de ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial}, con RUC N ${company.ruc}, declara bajo juramento:`,
-      `1. Domicilio Legal / Fiscal: ${company.domicilioFiscal || "Av. Principal N 123, Lima"}`,
-      `2. Correo Electronico para Notificaciones: ${company.email || "contacto@empresa.pe"}`,
-      `3. Telefono de Contacto: ${company.telefono || "999-888-777"}`,
-      `4. Cuenta Corriente / CCI: ${company.cuentaCCI || "002-191-000000000000-00"}`,
-      `5. El postor se encuentra validamente inscrito en el Registro Nacional de Proveedores (RNP) en el capitulo correspondiente al objeto del procedimiento.`,
-    ]
-  );
-  indexItems.push({ title: "Anexo N 1: Datos del Postor", category: "Admisión", estimatedPages: 1, pdfBytes: anexo1Bytes });
+  // Helper mapping generator for standard annexes
+  const generateAnnexBytes = async (annexKey: string, customTitle?: string): Promise<Uint8Array | null> => {
+    switch (annexKey) {
+      case "anexo1":
+        return await createSimpleAnnexPdf(
+          customTitle || "Anexo N 1 - Declaracion Jurada de Datos del Postor",
+          `Procedimiento: ${tender.nomenclatura || "Convocatoria OSCE"}`,
+          [
+            `El que se suscribe, ${company.representanteLegal || "Representante Legal"}, identificado con DNI N ${company.dniRepresentante || "40192837"}, en representacion de ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial}, con RUC N ${company.ruc}, declara bajo juramento:`,
+            `1. Domicilio Legal / Fiscal: ${company.domicilioFiscal || "Av. Principal N 123, Lima"}`,
+            `2. Correo Electronico para Notificaciones: ${company.email || "contacto@empresa.pe"}`,
+            `3. Telefono de Contacto: ${company.telefono || "999-888-777"}`,
+            `4. Cuenta Corriente / CCI: ${company.cuentaCCI || "002-191-000000000000-00"}`,
+            `5. El postor se encuentra validamente inscrito en el Registro Nacional de Proveedores (RNP) en el capitulo correspondiente al objeto del procedimiento.`,
+          ]
+        );
 
-  // Anexo 2
-  const anexo2Bytes = await createSimpleAnnexPdf(
-    "Anexo N 2 - Declaracion Jurada de Cumplimiento de TDR / EETT",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `El que suscribe, declara bajo juramento que mi representada CUMPLE Y SE COMPROMETE a ejecutar integramente todas las Especificaciones Tecnicas, Terminos de Referencia y Requerimientos Tecnicos Minimos establecidos en el Capitulo III de las Bases.`,
-      `Alcance Tecnico Declarado: ${tender.resumenAlcance || "Cumplimiento al 100% de las partidas y condiciones contractuales."}`,
-      `Garantizamos la disponibilidad inmediata y continua de los recursos para el fiel cumplimiento del contrato.`,
-    ]
-  );
-  indexItems.push({ title: "Anexo N 2: Cumplimiento de TDR/EETT", category: "Admisión", estimatedPages: 1, pdfBytes: anexo2Bytes });
+      case "anexo2":
+        return await createSimpleAnnexPdf(
+          customTitle || "Anexo N 2 - Declaracion Jurada de Cumplimiento de TDR / Pacto de Integridad",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `El que suscribe, declara bajo juramento que mi representada CUMPLE Y SE COMPROMETE a ejecutar integramente todas las Especificaciones Tecnicas, Terminos de Referencia y Requerimientos Tecnicos Minimos establecidos en el Capitulo III de las Bases.`,
+            `Alcance Tecnico Declarado: ${tender.resumenAlcance || "Cumplimiento al 100% de las partidas y condiciones contractuales."}`,
+            `Pacto de Integridad: Asumimos el compromiso formal de conducirnos en todo momento con honradez, probidad, veracidad e integridad, no incurriendo en actos de soborno, fraude o colusion.`,
+            `Garantizamos la disponibilidad inmediata y continua de los recursos para el fiel cumplimiento del contrato.`,
+          ]
+        );
 
-  // Anexo 3
-  const anexo3Bytes = await createSimpleAnnexPdf(
-    "Anexo N 3 - Declaracion Jurada de Plazo de Entrega / Ejecucion",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `Declaramos bajo juramento que nos comprometemos a ejecutar y entregar la totalidad de las prestaciones objeto de la contratacion en el plazo estipulado en las Bases:`,
-      `PLAZO DE EJECUCION OFERTADO: ${tender.plazoEjecucion || "90 dias calendario"}, computados conforme a lo establecido en la normativa de contrataciones del Estado.`,
-    ]
-  );
-  indexItems.push({ title: "Anexo N 3: Plazo de Ejecucion", category: "Admisión", estimatedPages: 1, pdfBytes: anexo3Bytes });
+      case "anexo3":
+        return await createSimpleAnnexPdf(
+          customTitle || "Anexo N 3 - Declaracion Jurada de No Impedimento y Plazo de Entrega",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `Declaramos bajo juramento que:`,
+            `a) No tenemos impedimento para postular en el procedimiento de seleccion ni para contratar con el Estado, conforme a la normativa de contrataciones publicas.`,
+            `b) PLAZO DE EJECUCION OFERTADO: ${tender.plazoEjecucion || "90 dias calendario"}, computados conforme a lo establecido en las Bases.`,
+            `c) Somos responsables de la veracidad y autenticidad de toda la documentacion e informacion presentada en nuestra oferta.`,
+          ]
+        );
 
-  // Anexo 4
-  const anexo4Bytes = await createSimpleAnnexPdf(
-    "Anexo N 4 - Declaracion Jurada (Art. 52 del Reglamento)",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `Declaramos bajo juramento que:`,
-      `a) No tenemos impedimento para postular en el procedimiento de seleccion ni para contratar con el Estado, conforme al articulo 11 del TUO de la Ley N 30225 y Ley N 32069.`,
-      `b) Conocemos, aceptamos y nos sometemos a las Bases, condiciones y reglas del procedimiento.`,
-      `c) Somos responsables de la veracidad de los documentos e informacion que presentamos.`,
-      `d) Nos comprometemos a mantener la oferta durante el procedimiento y a suscribir el contrato en caso de resultar favorecidos con la Buena Pro.`,
-      `e) Conocemos las sanciones aplicables por el Tribunal de Contrataciones del Estado ante la presentacion de informacion o documentacion inexacta o falsa.`,
-    ]
-  );
-  indexItems.push({ title: "Anexo N 4: Declaracion Jurada Art. 52", category: "Admisión", estimatedPages: 1, pdfBytes: anexo4Bytes });
+      case "anexo4":
+      case "anexo5":
+        if (company.esConsorcio) {
+          return await createSimpleAnnexPdf(
+            customTitle || "Promesa Formal de Consorcio",
+            `Procedimiento: ${tender.nomenclatura}`,
+            [
+              `Los suscritos, representantes legales de las empresas consorciadas, nos comprometemos formalmente a constituir el "${company.nombreConsorcio || "CONSORCIO POSTOR"}" para participar en el presente procedimiento de seleccion:`,
+              `1. Representante Comun del Consorcio: ${company.representanteComunConsorcio || company.representanteLegal || "Representante Comun"}`,
+              `2. Domicilio Comun: ${company.domicilioComunConsorcio || company.domicilioFiscal || "Av. Principal N 123"}`,
+              `3. Integrantes y Obligaciones:`,
+              ...(company.integrantesConsorcio || []).map(
+                (m, idx) =>
+                  `   ${idx + 1}. ${m.razonSocial} (RUC: ${m.ruc}) - Participacion: ${m.porcentajeParticipacion}% - Obligaciones: ${m.obligaciones}`
+              ),
+            ]
+          );
+        } else {
+          return await createSimpleAnnexPdf(
+            customTitle || "Declaracion Jurada de Cumplimiento Legal",
+            `Procedimiento: ${tender.nomenclatura}`,
+            [
+              `El que suscribe, declara bajo juramento no encontrarse incurso en ninguna causal de impedimento ni inhabilitacion para contratar con el Estado peruano.`,
+              `Nos comprometemos a mantener vigente la oferta y suscribir oportunamente el contrato correspondiente.`,
+            ]
+          );
+        }
 
-  // Anexo 5 if Consortium
-  if (company.esConsorcio) {
-    const anexo5Bytes = await createSimpleAnnexPdf(
-      "Anexo N 5 - Promesa Formal de Consorcio",
-      `Procedimiento: ${tender.nomenclatura}`,
-      [
-        `Los suscritos, representantes legales de las empresas consorciadas, nos comprometemos formalmente a constituir el "${company.nombreConsorcio || "CONSORCIO POSTOR"}" para participar en el presente procedimiento de seleccion:`,
-        `1. Representante Comun del Consorcio: ${company.representanteComunConsorcio || company.representanteLegal || "Representante Comun"}`,
-        `2. Domicilio Comun: ${company.domicilioComunConsorcio || company.domicilioFiscal || "Av. Principal N 123"}`,
-        `3. Integrantes y Obligaciones:`,
-        ...(company.integrantesConsorcio || []).map(
-          (m, idx) =>
-            `   ${idx + 1}. ${m.razonSocial} (RUC: ${m.ruc}) - Participacion: ${m.porcentajeParticipacion}% - Obligaciones: ${m.obligaciones}`
-        ),
-      ]
-    );
-    indexItems.push({ title: "Anexo N 5: Promesa de Consorcio", category: "Admisión", estimatedPages: 1, pdfBytes: anexo5Bytes });
+      case "anexo6":
+        return await createSimpleAnnexPdf(
+          customTitle || "Anexo N 6 - Oferta Economica",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `El que suscribe, en representacion de ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial}, formula su PROPUESTA ECONOMICA para el procedimiento de seleccion:`,
+            `MONTO TOTAL OFERTADO: ${formatPEN(montoOfertado)} SOLES.`,
+            `Condicion Tributaria: ${incluyeIGV ? "El monto ofertado INCLUYE el Impuesto General a las Ventas (IGV - 18%)." : "El monto ofertado NO incluye IGV por estar exonerado conforme a Ley."}`,
+            `La oferta comprende los costos directos, costos indirectos, gastos generales, utilidad, tributos, seguros y todo concepto necesario para la ejecucion contractual.`,
+          ]
+        );
+
+      case "anexo8":
+      case "anexo11_experiencia":
+        return await createSimpleAnnexPdf(
+          customTitle || "Anexo N 8 - Declaracion Jurada de Experiencia del Postor",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `Relacion de contrataciones similares ejecutadas por el postor en los ultimos anos conforme al Capitulo III de las Bases:`,
+            `Monto Total de Experiencia Acreditado: ${formatPEN(experience.reduce((acc, curr) => acc + (curr.montoEnSoles || 0), 0))} Soles.`,
+            ...experience.slice(0, 10).map(
+              (exp, idx) =>
+                `Item ${idx + 1}: ${exp.cliente} - Doc: ${exp.nroDocumento} - Monto: ${formatPEN(exp.montoEnSoles)} - Objeto: ${exp.objetoContrato}`
+            ),
+          ]
+        );
+
+      case "personal":
+      case "anexo19_personal":
+        return await createSimpleAnnexPdf(
+          customTitle || "Carta de Acreditacion de Personal Clave",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `Declaramos bajo juramento la nomina de profesionales clave asignados al presente proyecto:`,
+            ...personal.map(
+              (p, idx) =>
+                `   ${idx + 1}. ${p.cargoPostulado}: ${p.nombreCompleto} (DNI: ${p.dni} - ${p.cipOCol}) - ${p.tiempoExperienciaMeses} meses de experiencia.`
+            ),
+          ]
+        );
+
+      case "djEquipos":
+      case "equipment":
+        return await createSimpleAnnexPdf(
+          customTitle || "Declaracion Jurada de Equipamiento Estrategico en Obra",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `El postor declara bajo juramento que pondra a disposicion oportuna en obra la totalidad de la maquinaria y equipamiento estrategico requerido:`,
+            ...equipment.map(
+              (eq, idx) =>
+                `   ${idx + 1}. ${eq.denominacion} - Marca/Modelo: ${eq.marcaModelo} (Ano: ${eq.anioFabricacion}) - Capacidad: ${eq.capacidad} - Condicion: ${eq.estadoDisponibilidad}`
+            ),
+            `Nos comprometemos expresamente a mantener el equipamiento en optimas condiciones operativas durante toda la ejecucion contractual.`,
+          ]
+        );
+
+      case "contratoConsorcio":
+        if (company.esConsorcio) {
+          return await createSimpleAnnexPdf(
+            customTitle || "Contrato Privado de Consorcio con Firmas Legalizadas Notarialmente",
+            `Procedimiento: ${tender.nomenclatura}`,
+            [
+              `CONTRATO DE CONSORCIO suscrito entre los integrantes con facultades expresas y representacion comun.`,
+              `Consorcio: ${company.nombreConsorcio || "Consorcio Postor"}`,
+              `Representante Comun: ${company.representanteComunConsorcio || company.representanteLegal || "Representante Comun"}`,
+              `Operador Tributario: ${company.operadorTributario || company.razonSocial}`,
+              `Clausula de Responsabilidad Solidaria: Las partes asumen responsabilidad solidaria e indivisible ante la Entidad por todas las consecuencias derivadas de la ejecucion contractual.`,
+            ]
+          );
+        }
+        return null;
+
+      case "caratulas":
+        return await createSimpleAnnexPdf(
+          customTitle || "Caratula y Separador Oficial de Sobres",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `SEPARADOR OFICIAL DE LA PROPUESTA TECNICA Y ECONOMICA`,
+            `Entidad: ${tender.entidadConvocante || "Entidad Convocante"}`,
+            `Procedimiento: ${tender.nomenclatura}`,
+            `Postor: ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial}`,
+          ]
+        );
+
+      default:
+        return await createSimpleAnnexPdf(
+          customTitle || "Declaracion Jurada Complementaria",
+          `Procedimiento: ${tender.nomenclatura}`,
+          [
+            `Declaracion jurada y documentacion complementaria presentada conforme a las Bases Administrativas del procedimiento.`,
+            `Postor: ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial} - RUC: ${company.ruc}`,
+          ]
+        );
+    }
+  };
+
+  // If dynamic docItems are passed, assemble them in order
+  if (docItems && docItems.length > 0) {
+    const includedDocItems = docItems.filter((d) => d.isIncluded);
+    for (const docItem of includedDocItems) {
+      const key = docItem.annexKey || docItem.codigoInterno || docItem.id;
+      const annexBytes = await generateAnnexBytes(key, docItem.title);
+      if (annexBytes) {
+        indexItems.push({
+          title: docItem.title,
+          category: docItem.folderKey === "folder4" ? "Económica" : "Técnica",
+          estimatedPages: docItem.estimatedPages || 1,
+          pdfBytes: annexBytes,
+        });
+      }
+    }
+  } else {
+    // Default fallback order
+    const anexo1 = await generateAnnexBytes("anexo1");
+    if (anexo1) indexItems.push({ title: "Anexo N 1: Datos del Postor", category: "Admisión", estimatedPages: 1, pdfBytes: anexo1 });
+
+    const anexo2 = await generateAnnexBytes("anexo2");
+    if (anexo2) indexItems.push({ title: "Anexo N 2: Cumplimiento de TDR/EETT", category: "Admisión", estimatedPages: 1, pdfBytes: anexo2 });
+
+    const anexo3 = await generateAnnexBytes("anexo3");
+    if (anexo3) indexItems.push({ title: "Anexo N 3: Plazo de Ejecucion", category: "Admisión", estimatedPages: 1, pdfBytes: anexo3 });
+
+    const anexo4 = await generateAnnexBytes(company.esConsorcio ? "anexo5" : "anexo4");
+    if (anexo4) indexItems.push({ title: company.esConsorcio ? "Anexo N 5: Promesa de Consorcio" : "Anexo N 4: Declaracion Jurada", category: "Admisión", estimatedPages: 1, pdfBytes: anexo4 });
+
+    const anexo8 = await generateAnnexBytes("anexo8");
+    if (anexo8) indexItems.push({ title: "Anexo N 8: Experiencia del Postor", category: "Calificación", estimatedPages: 1, pdfBytes: anexo8 });
+
+    const personalBytes = await generateAnnexBytes("personal");
+    if (personalBytes) indexItems.push({ title: "Personal Clave y Equipamiento", category: "Calificación", estimatedPages: 1, pdfBytes: personalBytes });
+
+    const anexo6 = await generateAnnexBytes("anexo6");
+    if (anexo6) indexItems.push({ title: "Anexo N 6: Oferta Economica", category: "Económica", estimatedPages: 1, pdfBytes: anexo6 });
   }
-
-  // Anexo 8 Experiencia
-  const anexo8Bytes = await createSimpleAnnexPdf(
-    "Anexo N 8 - Declaracion Jurada de Experiencia del Postor",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `Relacion de contrataciones similares ejecutadas por el postor en los ultimos anos conforme al Capitulo III de las Bases:`,
-      `Monto Total de Experiencia Acreditado: ${formatPEN(experience.reduce((acc, curr) => acc + (curr.montoEnSoles || 0), 0))} Soles.`,
-      ...experience.slice(0, 10).map(
-        (exp, idx) =>
-          `Item ${idx + 1}: ${exp.cliente} - Doc: ${exp.nroDocumento} - Monto: ${formatPEN(exp.montoEnSoles)} - Objeto: ${exp.objetoContrato}`
-      ),
-    ]
-  );
-  indexItems.push({ title: "Anexo N 8: Experiencia del Postor", category: "Calificación", estimatedPages: 1, pdfBytes: anexo8Bytes });
-
-  // Carta Personal y Equipos
-  const personalBytes = await createSimpleAnnexPdf(
-    "Carta de Acreditacion de Personal Clave y Equipamiento Estrategico",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `Declaramos bajo juramento la nomina de profesionales y maquinaria estrategica asignada:`,
-      `A. PERSONAL CLAVE:`,
-      ...personal.map(
-        (p, idx) =>
-          `   ${idx + 1}. ${p.cargoPostulado}: ${p.nombreCompleto} (DNI: ${p.dni} - ${p.cipOCol}) - ${p.tiempoExperienciaMeses} meses de experiencia.`
-      ),
-      `B. EQUIPAMIENTO ESTRATEGICO:`,
-      ...equipment.map(
-        (eq, idx) =>
-          `   ${idx + 1}. ${eq.denominacion} - Marca: ${eq.marcaModelo} (Ano ${eq.anioFabricacion}) - Condicion: ${eq.estadoDisponibilidad}`
-      ),
-    ]
-  );
-  indexItems.push({ title: "Carta de Personal Clave y Equipos", category: "Calificación", estimatedPages: 1, pdfBytes: personalBytes });
-
-  // Anexo 6 Oferta Económica
-  const anexo6Bytes = await createSimpleAnnexPdf(
-    "Anexo N 6 - Oferta Economica",
-    `Procedimiento: ${tender.nomenclatura}`,
-    [
-      `El que suscribe, en representacion de ${company.esConsorcio ? "Consorcio " + (company.nombreConsorcio || "Postor") : company.razonSocial}, formula su PROPUESTA ECONOMICA para el procedimiento de seleccion:`,
-      `MONTO TOTAL OFERTADO: ${formatPEN(montoOfertado)} SOLES.`,
-      `Condicion Tributaria: ${incluyeIGV ? "El monto ofertado INCLUYE el Impuesto General a las Ventas (IGV - 18%)." : "El monto ofertado NO incluye IGV por estar exonerado conforme a Ley."}`,
-      `La oferta comprende los costos directos, costos indirectos, gastos generales, utilidad, tributos, seguros y todo concepto necesario para la ejecucion contractual.`,
-    ]
-  );
-  indexItems.push({ title: "Anexo N 6: Oferta Economica", category: "Económica", estimatedPages: 1, pdfBytes: anexo6Bytes });
 
   // Add Clipped PDF Snippets that actually contain valid base64 data
   const activeSnippets = clippedSnippets.filter((s) => s.isIncluded !== false);
@@ -705,3 +797,4 @@ export async function generateMasterUnifiedPdf(params: {
     totalPages,
   };
 }
+

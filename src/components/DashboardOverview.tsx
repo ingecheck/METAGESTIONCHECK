@@ -1,28 +1,29 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileText,
   FolderTree,
   Users,
   Award,
-  MessageSquare,
   Building2,
-  ShieldCheck,
-  Download,
   CheckCircle2,
   TrendingUp,
   ArrowRight,
-  Sparkles,
-  ChevronRight,
   HelpCircle,
   Plus,
   Search,
   Copy,
   Trash2,
   Edit3,
-  Calendar,
   Layers,
-  MapPin,
   Check,
+  ShieldCheck,
+  Scale,
+  BadgePercent,
+  Clock,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from "lucide-react";
 import {
   TenderInfo,
@@ -33,7 +34,7 @@ import {
   ObservationItem,
   UserOfferPackage,
 } from "../types/osce";
-import { NewOfferModal } from "./NewOfferModal";
+import { PROCUREMENT_GUIDELINES, ProcurementGuideline } from "../data/procurementGuidelines";
 
 interface DashboardOverviewProps {
   tender: TenderInfo;
@@ -47,12 +48,12 @@ interface DashboardOverviewProps {
   onOpenAudit: () => void;
   onDownloadAllZip: () => void;
   isDownloadingZip: boolean;
-  onSelectTender: (t: TenderInfo) => void;
+  onSelectTender?: (t: TenderInfo) => void;
   // Multi-offers management
   offersList: UserOfferPackage[];
   activeOfferId: string;
   onSelectOffer: (offerId: string) => void;
-  onSaveOffer: (offer: UserOfferPackage) => void;
+  onSaveOffer?: (offer: UserOfferPackage) => void;
   onDeleteOffer: (offerId: string) => void;
   onDuplicateOffer: (offerId: string) => void;
 }
@@ -69,17 +70,46 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenAudit,
   onDownloadAllZip,
   isDownloadingZip,
+  onSelectTender,
   offersList,
   activeOfferId,
   onSelectOffer,
-  onSaveOffer,
   onDeleteOffer,
   onDuplicateOffer,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [isNewOfferModalOpen, setIsNewOfferModalOpen] = useState(false);
-  const [editingOffer, setEditingOffer] = useState<UserOfferPackage | null>(null);
+  const [selectedGuidelineId, setSelectedGuidelineId] = useState<string>(
+    tender.guidelineId || "lpa-obras-32069"
+  );
+  const [annexFilterTab, setAnnexFilterTab] = useState<string>("all");
+  const [isGuidelineDetailsOpen, setIsGuidelineDetailsOpen] = useState(true);
+  const [guidelineSuccessMessage, setGuidelineSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tender.guidelineId) {
+      setSelectedGuidelineId(tender.guidelineId);
+    }
+  }, [tender.guidelineId]);
+
+  const activeGuideline =
+    PROCUREMENT_GUIDELINES.find((g) => g.id === selectedGuidelineId) || PROCUREMENT_GUIDELINES[0];
+
+  const handleApplyGuideline = (gl: ProcurementGuideline) => {
+    setSelectedGuidelineId(gl.id);
+    if (onSelectTender) {
+      onSelectTender({
+        ...tender,
+        guidelineId: gl.id,
+        guidelineRol: gl.rolPostor,
+        marcoNormativo: gl.marcoNormativo,
+        tipoProcedimiento: gl.tipo as any,
+        objetoContratacion: gl.objetoContratacion,
+      });
+      setGuidelineSuccessMessage(`¡Lineamiento "${gl.nombre}" activado y sincronizado automáticamente con todos los anexos del Armador!`);
+      setTimeout(() => setGuidelineSuccessMessage(null), 3500);
+    }
+  };
 
   // Calculations for progress of currently active offer
   const totalExpSoles = experience.reduce((acc, curr) => acc + (curr.montoEnSoles || 0), 0);
@@ -105,99 +135,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return matchesSearch && matchesStatus;
   });
 
-  // Stages status in chronological order for active offer
-  const stages = [
-    {
-      stepNumber: "Paso 1",
-      title: "1. Análisis de Bases SEACE",
-      subtitle: `${tender.nomenclatura || "Subir o analizar Bases PDF"}`,
-      icon: FileText,
-      status: tender.nomenclatura ? "Bases Extraídas" : "Pendiente",
-      statusColor: tender.nomenclatura
-        ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-        : "text-slate-600 bg-slate-50 border-slate-200",
-      tab: "analyzer",
-      detail: `Presupuesto: ${tender.valorEstimadoReferencial || tender.valorReferencial || "S/ 514,737.28"}`,
-    },
-    {
-      stepNumber: "Paso 2",
-      title: company.esConsorcio ? "2. Consorcio Postor" : "2. Perfil Empresa Postora",
-      subtitle: company.esConsorcio
-        ? `${company.nombreConsorcio || "Consorcio"} (${company.integrantesConsorcio?.length || 2} empresas)`
-        : `${company.razonSocial || "Configurar datos de la empresa"}`,
-      icon: Building2,
-      status: company.ruc || company.esConsorcio ? "Configurado" : "Pendiente",
-      statusColor: company.ruc || company.esConsorcio
-        ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-        : "text-amber-700 bg-amber-50 border-amber-200",
-      tab: "company",
-      detail: company.esConsorcio
-        ? `Consorcio • Rep: ${company.representanteComunConsorcio || company.representanteLegal}`
-        : `RUC: ${company.ruc || "Sin RUC"} • ${company.rnpVigente ? "RNP Vigente ✓" : "RNP Pendiente"}`,
-    },
-    {
-      stepNumber: "Paso 3",
-      title: "3. Experiencia del Postor (Anexo 8)",
-      subtitle: `${experience.length} contratos acumulados`,
-      icon: Award,
-      status: expPercentage >= 100 ? "100% Cubierto" : `${expPercentage}% del monto`,
-      statusColor:
-        expPercentage >= 100
-          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-          : "text-blue-700 bg-blue-50 border-blue-200",
-      tab: "experience",
-      detail: `S/ ${totalExpSoles.toLocaleString("es-PE")} acumulados`,
-    },
-    {
-      stepNumber: "Paso 4",
-      title: "4. Personal Clave y Equipos",
-      subtitle: `${personal.length} profesionales / ${equipment.length} equipos`,
-      icon: Users,
-      status: personnelReady > 0 ? "Acreditado" : "Pendiente",
-      statusColor:
-        personnelReady > 0
-          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-          : "text-amber-700 bg-amber-50 border-amber-200",
-      tab: "personnel",
-      detail: `${personnelReady} perfiles con constancias`,
-    },
-    {
-      stepNumber: "Paso 5",
-      title: "5. Consultas y Observaciones",
-      subtitle: `${observations.length} consultas/observaciones formuladas`,
-      icon: HelpCircle,
-      status: observations.length > 0 ? `${observations.length} Registradas` : "Opcional",
-      statusColor:
-        observations.length > 0
-          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-          : "text-slate-600 bg-slate-50 border-slate-200",
-      tab: "observations",
-      detail: "Pliego formal Ley N° 30225",
-    },
-    {
-      stepNumber: "Paso 6",
-      title: "6. Consultor Legal OSCE",
-      subtitle: "Consultoría y jurisprudencia del Tribunal",
-      icon: MessageSquare,
-      status: "Disponible",
-      statusColor: "text-purple-700 bg-purple-50 border-purple-200",
-      tab: "legal-ai",
-      detail: "Consultas especializadas de normativa",
-    },
-    {
-      stepNumber: "Paso 7 (Final)",
-      title: "7. Armador de Oferta Final",
-      subtitle: company.esConsorcio
-        ? "7 Anexos Word (incluye Promesa de Consorcio)"
-        : "6 Anexos Word + Foliación + Auditoría",
-      icon: FolderTree,
-      status: "Listo para exportar",
-      statusColor: "text-indigo-700 bg-indigo-50 border-indigo-200",
-      tab: "builder",
-      detail: `Oferta: S/ ${montoOfertado.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`,
-    },
-  ];
-
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
@@ -220,14 +157,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
 
           <button
-            onClick={() => {
-              setEditingOffer(null);
-              setIsNewOfferModalOpen(true);
-            }}
+            onClick={() => onNavigateToTab("analyzer")}
             className="flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Nueva Oferta / Convocatoria</span>
+            <FileText className="w-4 h-4" />
+            <span>Cargar / Analizar Bases (Paso 1)</span>
           </button>
         </div>
 
@@ -293,8 +227,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         {/* Offers Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
           {filteredOffers.length === 0 ? (
-            <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
-              No se encontraron ofertas con los filtros aplicados. Haga clic en "+ Nueva Oferta / Convocatoria" para registrar una.
+            <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500 space-y-2">
+              <p>No se encontraron ofertas registradas con los filtros aplicados.</p>
+              <button
+                onClick={() => onNavigateToTab("analyzer")}
+                className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer shadow-xs"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Cargar PDF en Paso 1 (Análisis de Bases SEACE)</span>
+              </button>
             </div>
           ) : (
             filteredOffers.map((off) => {
@@ -373,10 +314,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
-                          setEditingOffer(off);
-                          setIsNewOfferModalOpen(true);
+                          onSelectOffer(off.id);
+                          onNavigateToTab("analyzer");
                         }}
-                        title="Editar datos de la convocatoria"
+                        title="Ver y editar bases en Paso 1"
                         className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -445,7 +386,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
 
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            {tender.nomenclatura || "Armador de Ofertas SEACE"}
+            {tender.nomenclatura || "Convocatoria SEACE"}
           </h1>
 
           {tender.nombreProyectoInversion && (
@@ -485,25 +426,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-row lg:flex-col items-center sm:items-stretch gap-2.5 w-full sm:w-auto shrink-0">
+        {/* Quick Navigate to Step 1 */}
+        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
           <button
-            id="btn-dashboard-download-all"
-            onClick={onDownloadAllZip}
-            disabled={isDownloadingZip}
-            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+            onClick={() => onNavigateToTab("analyzer")}
+            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-xs transition cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>{isDownloadingZip ? "Generando ZIP..." : "Descargar Expediente (.docx)"}</span>
-          </button>
-
-          <button
-            id="btn-dashboard-open-audit"
-            onClick={onOpenAudit}
-            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 border border-amber-400/50 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer"
-          >
-            <ShieldCheck className="w-4 h-4 text-amber-600" />
-            <span>Auditoría de Admisibilidad</span>
+            <span>Iniciar / Ver Paso 1 (Bases SEACE)</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -590,62 +520,118 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
-      {/* 3. Main Dashboard Sections: Modules Progress & Quick Anexos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (2 spans): Workflow Steps & Anexos */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Workflow Modules Cards */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                  Módulos de Conformación del Expediente
+      {/* ========================================================================= */}
+      {/* SECCIÓN: SELECTOR DE LINEAMIENTO NORMATIVO DE CONTRATACIÓN (LEY N° 32069) */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  Lineamientos Normativos por Tipo de Contratación
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Estructura ordenada de acuerdo a las Bases Estándar y Reglamento OSCE
-                </p>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Ley N° 32069 & D.S. N° 009-2025-EF
+                </span>
               </div>
-              <span className="text-xs bg-blue-50 text-blue-700 font-semibold px-2.5 py-1 rounded-md border border-blue-200/60">
-                7 Pasos Secuenciales
+              <p className="text-xs text-slate-500">
+                Seleccione el lineamiento oficial correspondiente a su licitación para adaptar automáticamente los anexos requeridos, plazos legales y condiciones de evaluación.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsGuidelineDetailsOpen(!isGuidelineDetailsOpen)}
+            className="flex items-center space-x-1 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition cursor-pointer self-start sm:self-auto"
+          >
+            <span>{isGuidelineDetailsOpen ? "Ocultar Detalles" : "Ver Detalles y Anexos"}</span>
+            {isGuidelineDetailsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {guidelineSuccessMessage && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{guidelineSuccessMessage}</span>
+          </div>
+        )}
+
+        {/* 2-Column Split: Contratistas (Izquierda) vs Supervisores (Derecha) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* ========================================================= */}
+          {/* COLUMNA IZQUIERDA: CONTRATISTAS (EJECUCIÓN DE OBRAS)      */}
+          {/* ========================================================= */}
+          <div className="bg-gradient-to-b from-blue-50/50 to-white rounded-2xl border-2 border-blue-200 p-4 space-y-3.5 shadow-xs">
+            {/* Column Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-blue-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-xs">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">CONTRATISTAS (EJECUCIÓN DE OBRAS)</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Bases estándar para constructoras y consorcios ejecutores
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-600 text-white shadow-xs">
+                Obras
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {stages.map((stg, idx) => {
-                const Icon = stg.icon;
+            {/* Contractor Guidelines Cards */}
+            <div className="space-y-3">
+              {PROCUREMENT_GUIDELINES.filter(
+                (gl) => gl.rolPostor.includes("Contratista") || gl.objetoContratacion === "Ejecución de Obras"
+              ).map((gl) => {
+                const isSelected = selectedGuidelineId === gl.id;
                 return (
                   <div
-                    key={idx}
-                    onClick={() => onNavigateToTab(stg.tab)}
-                    className="p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition bg-slate-50/50 hover:bg-white cursor-pointer flex flex-col justify-between group"
+                    key={gl.id}
+                    onClick={() => handleApplyGuideline(gl)}
+                    className={`p-4 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between relative ${
+                      isSelected
+                        ? "bg-blue-50/90 border-blue-600 ring-2 ring-blue-500/30 shadow-sm"
+                        : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 shadow-2xs"
+                    }`}
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition">
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            {stg.stepNumber}
-                          </span>
-                        </div>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${stg.statusColor}`}>
-                          {stg.status}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-900 text-white">
+                          {gl.codigo}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200">
+                          {gl.tipo}
                         </span>
                       </div>
-                      <div className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition">
-                        {stg.title}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1 truncate">
-                        {stg.subtitle}
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">{gl.nombre}</h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{gl.descripcion}</p>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-medium text-slate-600">{stg.detail}</span>
-                      <span className="flex items-center text-blue-600 font-semibold group-hover:translate-x-0.5 transition">
-                        Abrir <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    <div className="mt-3.5 pt-2.5 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                      <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                        <FolderTree className="w-3.5 h-3.5 text-blue-600" />
+                        {gl.anexosRegulados.length} Anexos Regulados
                       </span>
+                      <div className="flex items-center space-x-1 font-semibold">
+                        {isSelected ? (
+                          <span className="flex items-center space-x-1 text-blue-800 bg-blue-100 px-2.5 py-1 rounded-lg font-bold text-xs border border-blue-300 shadow-2xs">
+                            <Check className="w-3.5 h-3.5 text-blue-700" />
+                            <span>Activo en Todo el Sistema</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium text-xs transition">
+                            Clic para Activar
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -653,106 +639,266 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {/* Quick Access to Anexos */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FolderTree className="w-4 h-4 text-blue-600" />
-                Anexos Obligatorios Listos para Descarga
-              </h3>
-              <button
-                onClick={() => onNavigateToTab("builder")}
-                className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center"
-              >
-                Ver armador completo <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-              </button>
+          {/* ========================================================= */}
+          {/* COLUMNA DERECHA: SUPERVISORES (CONSULTORÍA DE OBRAS)       */}
+          {/* ========================================================= */}
+          <div className="bg-gradient-to-b from-emerald-50/50 to-white rounded-2xl border-2 border-emerald-200 p-4 space-y-3.5 shadow-xs">
+            {/* Column Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-emerald-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-xs">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">SUPERVISORES (CONSULTORÍA DE OBRAS)</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Bases estándar para consultores, inspectores y supervisores
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-600 text-white shadow-xs">
+                Supervisión
+              </span>
             </div>
 
-            <div className="divide-y divide-slate-100 text-xs">
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 1</span>
-                  <span className="text-slate-500">Declaración Jurada de Datos del Postor</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 2</span>
-                  <span className="text-slate-500">Declaración de Cumplimiento de TDR / EE.TT.</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 3</span>
-                  <span className="text-slate-500">Declaración Jurada de Plazo de Entrega</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 4</span>
-                  <span className="text-slate-500">Declaración Jurada Art. 52 Reglamento e Integridad</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 6</span>
-                  <span className="text-slate-500">Oferta Económica Detallada en Soles</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">Anexo N° 8</span>
-                  <span className="text-slate-500">Experiencia del Postor en la Especialidad</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">.docx</span>
-              </div>
+            {/* Supervisor Guidelines Cards */}
+            <div className="space-y-3">
+              {PROCUREMENT_GUIDELINES.filter(
+                (gl) =>
+                  gl.rolPostor.includes("Supervisor") ||
+                  gl.rolPostor.includes("Consultor") ||
+                  gl.objetoContratacion.includes("Consultoría")
+              ).map((gl) => {
+                const isSelected = selectedGuidelineId === gl.id;
+                return (
+                  <div
+                    key={gl.id}
+                    onClick={() => handleApplyGuideline(gl)}
+                    className={`p-4 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between relative ${
+                      isSelected
+                        ? "bg-emerald-50/90 border-emerald-600 ring-2 ring-emerald-500/30 shadow-sm"
+                        : "bg-white border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 shadow-2xs"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-900 text-white">
+                          {gl.codigo}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {gl.tipo}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">{gl.nombre}</h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{gl.descripcion}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3.5 pt-2.5 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                      <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                        <FolderTree className="w-3.5 h-3.5 text-emerald-600" />
+                        {gl.anexosRegulados.length} Anexos Regulados
+                      </span>
+                      <div className="flex items-center space-x-1 font-semibold">
+                        {isSelected ? (
+                          <span className="flex items-center space-x-1 text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg font-bold text-xs border border-emerald-300 shadow-2xs">
+                            <Check className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Activo en Todo el Sistema</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-100 px-2.5 py-1 rounded-lg font-medium text-xs transition">
+                            Clic para Activar
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Right Column (1 span): Quick Tools & Legal Support */}
-        <div className="space-y-6">
-          {/* Quick Legal Support */}
-          <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-4 shadow-sm">
-            <div className="flex items-center space-x-2 text-sky-400">
-              <Sparkles className="w-4 h-4" />
-              <h4 className="text-xs font-bold uppercase tracking-wider">Consultoría Normativa OSCE</h4>
+        {/* Selected Guideline Detailed Analysis & Anexos (Ley 32069 / D.S. 009-2025-EF) */}
+        {isGuidelineDetailsOpen && activeGuideline && (
+          <div className="bg-slate-900 text-white rounded-xl p-5 space-y-5 border border-slate-800 mt-2">
+            {/* Header of details */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Lineamiento Activo • {activeGuideline.rolPostor}</span>
+                </div>
+                <h3 className="text-base font-bold text-slate-100 mt-0.5">{activeGuideline.nombre}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{activeGuideline.marcoNormativo}</p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Sincronizado Automáticamente</span>
+                </span>
+                <button
+                  onClick={() => onNavigateToTab("builder")}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer flex items-center space-x-1.5"
+                >
+                  <FolderTree className="w-3.5 h-3.5" />
+                  <span>Ver en Armador</span>
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Consulta sobre causales de no admisión, subsanación de ofertas (Art. 60 RLCE) o formulación de consultas técnicas a las Bases.
-            </p>
-            <button
-              onClick={() => onNavigateToTab("legal-ai")}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Abrir Consultor Legal</span>
-            </button>
+
+            {/* Grid of Key Conditions and Legal Deadlines */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80 space-y-1">
+                <div className="flex items-center space-x-1.5 text-blue-400 font-bold text-[11px]">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Plazos del Procedimiento</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Consultas:</strong> {activeGuideline.plazos.consultasObservaciones}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Apelación:</strong> {activeGuideline.plazos.consentimientoApelacion}
+                </p>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80 space-y-1">
+                <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-[11px]">
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>Subcontratación y Garantías</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Subcontratación:</strong> {activeGuideline.condicionesClave.subcontratacionMaxima}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Fiel Cumplimiento:</strong> {activeGuideline.condicionesClave.retencionGarantiaMype}
+                </p>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80 space-y-1">
+                <div className="flex items-center space-x-1.5 text-emerald-400 font-bold text-[11px]">
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Experiencia del Postor</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Antigüedad:</strong> {activeGuideline.condicionesClave.antiguedadExperienciaPostor}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  <strong className="text-white">Contrataciones:</strong> {activeGuideline.condicionesClave.maximoContratacionesExperiencia}
+                </p>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80 space-y-1">
+                <div className="flex items-center space-x-1.5 text-purple-400 font-bold text-[11px]">
+                  <BadgePercent className="w-3.5 h-3.5" />
+                  <span>Bonificaciones Aplicables</span>
+                </div>
+                {activeGuideline.bonificacionesAplicables.map((bon, i) => (
+                  <p key={i} className="text-[11px] text-slate-300">
+                    <strong className="text-white">{bon.porcentaje}:</strong> {bon.nombre} ({bon.anexo})
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* Official Annexes Breakdown Table / Tabs */}
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    Catálogo Oficial de Anexos del Lineamiento ({activeGuideline.anexosRegulados.length} Anexos)
+                  </h4>
+                </div>
+
+                {/* Filter Annexes by Stage */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => setAnnexFilterTab("all")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      annexFilterTab === "all" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Todos ({activeGuideline.anexosRegulados.length})
+                  </button>
+                  <button
+                    onClick={() => setAnnexFilterTab("oferta_tecnica")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      annexFilterTab === "oferta_tecnica"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Oferta Técnica
+                  </button>
+                  <button
+                    onClick={() => setAnnexFilterTab("oferta_economica")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      annexFilterTab === "oferta_economica"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Oferta Económica
+                  </button>
+                  <button
+                    onClick={() => setAnnexFilterTab("perfeccionamiento_contrato")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      annexFilterTab === "perfeccionamiento_contrato"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Contrato
+                  </button>
+                  <button
+                    onClick={() => setAnnexFilterTab("facultativo")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      annexFilterTab === "facultativo"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    Bonificaciones
+                  </button>
+                </div>
+              </div>
+
+              {/* Annexes List */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                {activeGuideline.anexosRegulados
+                  .filter((anx) => annexFilterTab === "all" || anx.etapa === annexFilterTab)
+                  .map((anx, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 bg-slate-800/70 border border-slate-700/80 rounded-lg text-xs space-y-1 hover:border-slate-600 transition"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-indigo-300 text-[11px]">{anx.numero}</span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase ${
+                            anx.obligatorio
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          }`}
+                        >
+                          {anx.obligatorio ? "Obligatorio" : "Facultativo"}
+                        </span>
+                      </div>
+                      <div className="font-semibold text-slate-200 truncate">{anx.nombre}</div>
+                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{anx.descripcion}</p>
+                      <div className="text-[9.5px] text-slate-500 pt-1 border-t border-slate-700/40">
+                        Base: {anx.baseLegal}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
-
-      {/* New / Edit Offer Modal */}
-      <NewOfferModal
-        isOpen={isNewOfferModalOpen}
-        onClose={() => {
-          setIsNewOfferModalOpen(false);
-          setEditingOffer(null);
-        }}
-        onSaveOffer={onSaveOffer}
-        editingOffer={editingOffer}
-      />
     </div>
   );
 };

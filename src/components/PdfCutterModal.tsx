@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Scissors,
   UploadCloud,
@@ -11,8 +11,10 @@ import {
   RefreshCw,
   Eye,
   Check,
+  Zap,
+  BookOpen,
 } from "lucide-react";
-import { ClippedPdfSnippet } from "../types/osce";
+import { ClippedPdfSnippet, DetectedDocumentItem } from "../types/osce";
 import { slicePdfFile, parsePageRanges } from "../services/pdfMasterService";
 import { extractTextFromPdfFile, ExtractedPdfResult } from "../services/pdfExtractor";
 
@@ -22,6 +24,10 @@ interface PdfCutterModalProps {
   onSnippetCreated: (snippet: ClippedPdfSnippet) => void;
   defaultCategory?: ClippedPdfSnippet["category"];
   initialPdf?: ExtractedPdfResult | null;
+  initialTitle?: string;
+  initialPageRange?: string;
+  initialNotes?: string;
+  detectedSuggestions?: DetectedDocumentItem[];
 }
 
 export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
@@ -30,6 +36,10 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
   onSnippetCreated,
   defaultCategory = "experiencia",
   initialPdf = null,
+  initialTitle = "",
+  initialPageRange = "",
+  initialNotes = "",
+  detectedSuggestions = [],
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [pdfResult, setPdfResult] = useState<ExtractedPdfResult | null>(initialPdf);
@@ -37,12 +47,24 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle);
   const [category, setCategory] = useState<ClippedPdfSnippet["category"]>(defaultCategory);
-  const [pageRange, setPageRange] = useState("1-3");
-  const [notes, setNotes] = useState("");
+  const [pageRange, setPageRange] = useState(initialPageRange || "1-3");
+  const [notes, setNotes] = useState(initialNotes);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialPdf) {
+      setPdfResult(initialPdf);
+    }
+  }, [initialPdf]);
+
+  useEffect(() => {
+    if (initialTitle) setTitle(initialTitle);
+    if (initialPageRange) setPageRange(initialPageRange);
+    if (initialNotes) setNotes(initialNotes);
+  }, [initialTitle, initialPageRange, initialNotes]);
 
   if (!isOpen) return null;
 
@@ -67,13 +89,23 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
       if (!title) {
         setTitle(selectedFile.name.replace(/\.pdf$/i, "").replace(/_/g, " "));
       }
-      setPageRange(`1-${Math.min(3, extracted.pageCount)}`);
+      if (!pageRange || pageRange === "1-3") {
+        setPageRange(`1-${Math.min(3, extracted.pageCount)}`);
+      }
     } catch (err: any) {
       console.error(err);
       setErrorMessage("Error al procesar el PDF: " + (err.message || String(err)));
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleApplySuggestion = (sug: DetectedDocumentItem) => {
+    setTitle(`${sug.nroDocumento} - ${sug.tipoDocumento} (${sug.cliente})`);
+    setPageRange(sug.rangoPaginas || sug.rangoCorteSugerido || "1-3");
+    setNotes(sug.justificacionSimilaridad || sug.instruccionCorte || "");
+    setCategory(sug.destinatarioSobre || "experiencia");
+    setSuccessMessage(`Corte pre-cargado: Páginas ${sug.rangoPaginas} para ${sug.nroDocumento}`);
   };
 
   const handleApplyPreset = (preset: "all" | "first1" | "first2" | "first3" | "last") => {
@@ -138,7 +170,7 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center space-x-2.5">
@@ -147,10 +179,10 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-slate-900 text-base">
-                Cortador y Extractor de Páginas PDF
+                Cortador y Segmentador Inteligente de Páginas PDF
               </h3>
               <p className="text-[11px] text-slate-500">
-                Corta y extrae solo las páginas clave de contratos grandes, CVs o fichas técnicas para incorporarlas al expediente final.
+                Segmenta y recorta exactamente las páginas que acreditan la especialidad requerida por las Bases.
               </p>
             </div>
           </div>
@@ -211,6 +243,42 @@ export const PdfCutterModal: React.FC<PdfCutterModalProps> = ({
             >
               Cambiar Archivo
             </button>
+          </div>
+        )}
+
+        {/* AI Suggestions Bar if available */}
+        {detectedSuggestions && detectedSuggestions.length > 0 && (
+          <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center space-x-1.5 text-xs font-bold text-blue-900">
+              <Sparkles className="w-4 h-4 text-blue-600" />
+              <span>Contratos y Documentos Detectados en este PDF por IA:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+              {detectedSuggestions.map((sug) => (
+                <button
+                  key={sug.id}
+                  type="button"
+                  onClick={() => handleApplySuggestion(sug)}
+                  className="text-left p-2.5 bg-white hover:bg-blue-100/60 border border-blue-100 hover:border-blue-300 rounded-lg transition text-xs space-y-1 cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 truncate group-hover:text-blue-700">
+                      {sug.nroDocumento}
+                    </span>
+                    <span className="bg-blue-100 text-blue-800 font-mono text-[10.5px] px-1.5 py-0.5 rounded font-semibold shrink-0">
+                      Págs. {sug.rangoPaginas}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 line-clamp-1">
+                    {sug.tipoDocumento} - {sug.cliente}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                    <span className="text-emerald-700 font-medium">{sug.especialidad}</span>
+                    <span className="font-semibold text-blue-600 group-hover:underline">Aplicar corte →</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

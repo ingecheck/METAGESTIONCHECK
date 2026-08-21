@@ -124,7 +124,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                 Cartera de Proyectos de Obra Pública en Ejecución
               </h2>
               <p className="text-xs text-slate-500">
-                Seleccione el proyecto de obra para gestionar sus valorizaciones, cuaderno digital, adicionales y liquidación
+                Seleccione el proyecto de obra para gestionar sus valorizaciones, adicionales y liquidación
               </p>
             </div>
           </div>
@@ -458,30 +458,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
           </button>
         </div>
 
-        {/* Card 3: Cuaderno de Obra Digital */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cuaderno de Obra</span>
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <BookOpen className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-indigo-900">{asientos.length} Asientos</span>
-            <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Al Día</span>
-          </div>
-          <div className="text-[11px] text-slate-600">
-            Registros oficiales Residente y Supervisor
-          </div>
-          <button
-            onClick={() => onNavigateSubtab("cuaderno")}
-            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-1 cursor-pointer"
-          >
-            <span>Abrir Cuaderno Digital</span> <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* Card 4: Incidencia de Modificaciones */}
+        {/* Card 3: Incidencia de Modificaciones */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Incidencia Adicionales</span>
@@ -505,6 +482,31 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             <span>Ver Adicionales y Plazos</span> <ArrowRight className="w-3 h-3" />
           </button>
         </div>
+
+        {/* Card 4: Plazo Contractual y Reprogramado */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Plazo de Ejecución</span>
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline space-x-2">
+            <span className="text-2xl font-black text-amber-900">{obra.plazoEjecucionDias} Días</span>
+            <span className="text-xs text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+              {obra.estado}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-600">
+            Término: {obra.fechaFinReprogramada || obra.fechaFinProgramada}
+          </div>
+          <button
+            onClick={() => onNavigateSubtab("modificaciones")}
+            className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 pt-1 cursor-pointer"
+          >
+            <span>Ver Ampliaciones</span> <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
       </div>
 
       {/* Modules Quick Navigation */}
@@ -513,7 +515,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
           Módulos de Ejecución y Supervisión Técnica
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div
             onClick={() => onNavigateSubtab("valorizaciones")}
             className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white transition cursor-pointer group"
@@ -529,24 +531,6 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             <h4 className="font-bold text-slate-900 text-sm">Valorizaciones y Curva S</h4>
             <p className="text-xs text-slate-500 mt-1">
               Cálculo de Fórmula Polinómica (K), amortizaciones de adelantos y retenciones.
-            </p>
-          </div>
-
-          <div
-            onClick={() => onNavigateSubtab("cuaderno")}
-            className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white transition cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <span className="text-xs text-indigo-600 font-bold group-hover:translate-x-0.5 transition">
-                Entrar &rarr;
-              </span>
-            </div>
-            <h4 className="font-bold text-slate-900 text-sm">Cuaderno de Obra Digital</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Asientos del Residente y Supervisor, causales de ampliación y control de lluvias.
             </p>
           </div>
 

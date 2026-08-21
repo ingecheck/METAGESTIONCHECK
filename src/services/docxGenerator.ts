@@ -1658,16 +1658,27 @@ export async function generatePersonalYEquipamientoDocx(
       ],
     }),
     ...equipment.map((e) => {
+      const sustentoText = e.declaradoEnDJ || e.estadoDisponibilidad === "Declaración Jurada de Disponibilidad en Obra"
+        ? `Declaración Jurada de Disponibilidad en Obra (Rep. ${company.esConsorcio ? "Común del Consorcio" : "Legal"})`
+        : `${e.estadoDisponibilidad} (${e.sustento})`;
       return new TableRow({
         children: [
           createStyledTableCell(e.denominacion, true, 30),
           createStyledTableCell(e.marcaModelo, false, 25),
           createStyledTableCell(`${e.anioFabricacion} - ${e.capacidad}`, false, 20),
-          createStyledTableCell(`${e.estadoDisponibilidad} (${e.sustento})`, false, 25),
+          createStyledTableCell(sustentoText, false, 25),
         ],
       });
     }),
   ];
+
+  const tieneDJEquipos = equipment.some((e) => e.declaradoEnDJ || e.estadoDisponibilidad === "Declaración Jurada de Disponibilidad en Obra");
+  const repDeclarante = company.esConsorcio && company.representanteComunConsorcio
+    ? company.representanteComunConsorcio
+    : company.representanteLegal;
+  const calidadDeclarante = company.esConsorcio
+    ? `Representante Común del ${company.nombreConsorcio || "CONSORCIO"}`
+    : `Representante Legal de ${company.razonSocial}`;
 
   const doc = new Document({
     ...createDocHeaderFooter(tender),
@@ -1722,7 +1733,7 @@ export async function generatePersonalYEquipamientoDocx(
             spacing: { after: 200 },
             children: [
               new TextRun({
-                text: `El que suscribe, ${company.representanteLegal}, en representación de ${company.razonSocial}, presenta la relación formal de los profesionales y equipamiento asignados a la presente contratación:`,
+                text: `El que suscribe, ${repDeclarante}, en calidad de ${calidadDeclarante}, presenta la relación formal de los profesionales propuestos y del equipamiento estratégico asignado a la presente contratación:`,
                 font: FONT_FAMILY,
                 size: 20,
               }),
@@ -1745,13 +1756,34 @@ export async function generatePersonalYEquipamientoDocx(
           new Paragraph({
             spacing: { before: 250, after: 100 },
             children: [
-              new TextRun({ text: "2. RELACIÓN DE EQUIPAMIENTO ESTRATÉGICO:", bold: true, size: 20, font: FONT_FAMILY, color: COLOR_PRIMARY }),
+              new TextRun({ text: "2. RELACIÓN DE EQUIPAMIENTO ESTRATÉGICO Y COMPROMISO DE DISPONIBILIDAD:", bold: true, size: 20, font: FONT_FAMILY, color: COLOR_PRIMARY }),
             ],
           }),
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: eqRows,
           }),
+
+          ...(tieneDJEquipos ? [
+            new Paragraph({
+              alignment: AlignmentType.JUSTIFIED,
+              spacing: { before: 200, after: 150 },
+              children: [
+                new TextRun({
+                  text: `DECLARACIÓN JURADA DE DISPONIBILIDAD EN OBRA: `,
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: 20,
+                  color: COLOR_PRIMARY,
+                }),
+                new TextRun({
+                  text: `El suscrito, en calidad de ${calidadDeclarante}, DECLARA BAJO JURAMENTO que el postor cuenta con la total disponibilidad y se compromete formalmente a poner a disposición y tener físicamente en el lugar de la ejecución de la obra / prestación la totalidad del equipamiento estratégico detallado precedentemente, en óptimo estado de funcionamiento y operatividad, al inicio del plazo de ejecución contractual o según el calendario de utilización de equipo establecido en las Bases Administrativas.`,
+                  font: FONT_FAMILY,
+                  size: 20,
+                }),
+              ],
+            }),
+          ] : []),
 
           new Paragraph({
             alignment: AlignmentType.RIGHT,
@@ -1764,6 +1796,264 @@ export async function generatePersonalYEquipamientoDocx(
               }),
             ],
           }),
+          ...createSignatureBlock(company),
+        ],
+      },
+    ],
+  });
+
+  return await Packer.toBlob(doc);
+}
+
+// -------------------------------------------------------------
+// 7.1. GENERATOR: DECLARACIÓN JURADA DE DISPONIBILIDAD Y COMPROMISO DE EQUIPAMIENTO ESTRATÉGICO EN OBRA
+// -------------------------------------------------------------
+export async function generateDeclaracionJuradaEquipamientoDocx(
+  tender: TenderInfo,
+  company: CompanyProfile,
+  equipment: EquipmentItem[],
+  tipoDeclarante: "representanteLegal" | "representanteComun" = "representanteLegal"
+): Promise<Blob> {
+  const isConsorcio = Boolean(company.esConsorcio || tipoDeclarante === "representanteComun");
+  const nombrePostor = isConsorcio ? (company.nombreConsorcio || "CONSORCIO POSTOR").toUpperCase() : company.razonSocial.toUpperCase();
+  const nombreDeclarante = isConsorcio && company.representanteComunConsorcio
+    ? company.representanteComunConsorcio.toUpperCase()
+    : company.representanteLegal.toUpperCase();
+  const dniDeclarante = isConsorcio && company.dniRepresentanteComun
+    ? company.dniRepresentanteComun
+    : company.dniRepresentante || "40192837";
+  const cargoDeclarante = isConsorcio ? "REPRESENTANTE COMÚN DEL CONSORCIO" : "REPRESENTANTE LEGAL";
+
+  const eqTableRows = [
+    new TableRow({
+      children: [
+        createStyledTableCell("ITEM", true, 8, AlignmentType.CENTER),
+        createStyledTableCell("DENOMINACIÓN DE LA MAQUINARIA / EQUIPO", true, 34),
+        createStyledTableCell("MARCA / MODELO / AÑO", true, 22),
+        createStyledTableCell("CAPACIDAD / POTENCIA", true, 18),
+        createStyledTableCell("CONDICIÓN / DISPONIBILIDAD", true, 18),
+      ],
+    }),
+    ...(equipment.length > 0 ? equipment : [
+      {
+        id: "eq-default-1",
+        denominacion: "Cargador Frontal sobre orugas / llantas",
+        marcaModelo: "Caterpillar 938K / Año 2022",
+        anioFabricacion: "2022",
+        capacidad: "170 HP / Capacidad 2.5 yd3",
+        estadoDisponibilidad: "Declaración Jurada de Disponibilidad en Obra" as any,
+        sustento: "Declaración Jurada de Disponibilidad",
+      },
+      {
+        id: "eq-default-2",
+        denominacion: "Rodillo Liso Vibratorio Autopropulsado",
+        marcaModelo: "Dynapac CA250 / Año 2022",
+        anioFabricacion: "2022",
+        capacidad: "125 HP / 10 - 12 Tn",
+        estadoDisponibilidad: "Declaración Jurada de Disponibilidad en Obra" as any,
+        sustento: "Declaración Jurada de Disponibilidad",
+      },
+    ]).map((eq, idx) => {
+      return new TableRow({
+        children: [
+          createStyledTableCell(`${idx + 1}`, false, 8, AlignmentType.CENTER),
+          createStyledTableCell(eq.denominacion, true, 34),
+          createStyledTableCell(`${eq.marcaModelo} (Año: ${eq.anioFabricacion})`, false, 22),
+          createStyledTableCell(eq.capacidad, false, 18),
+          createStyledTableCell("Disponible en Obra / " + (eq.estadoDisponibilidad || "Propio"), false, 18),
+        ],
+      });
+    }),
+  ];
+
+  const doc = new Document({
+    ...createDocHeaderFooter(tender),
+    sections: [
+      {
+        properties: {},
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 150 },
+            children: [
+              new TextRun({
+                text: "DECLARACIÓN JURADA DE DISPONIBILIDAD Y COMPROMISO DE EQUIPAMIENTO ESTRATÉGICO",
+                bold: true,
+                size: 24,
+                font: FONT_FAMILY,
+                color: COLOR_PRIMARY,
+              }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 300 },
+            children: [
+              new TextRun({
+                text: "(Requisito de Calificación - Capacidad Técnica y Operativa en Obra)",
+                font: FONT_FAMILY,
+                size: 18,
+                italics: true,
+                color: "475569",
+              }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 150 },
+            children: [
+              new TextRun({ text: "Señores\n", font: FONT_FAMILY, size: 20, bold: true }),
+              new TextRun({ text: "COMITÉ DE SELECCIÓN / ÓRGANO ENCARGADO DE LAS CONTRATACIONES\n", font: FONT_FAMILY, size: 20, bold: true }),
+              new TextRun({ text: `${tender.entidadConvocante.toUpperCase()}\n`, font: FONT_FAMILY, size: 20 }),
+              new TextRun({ text: "Presente.-\n", font: FONT_FAMILY, size: 20 }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [
+              new TextRun({ text: "Procedimiento de Selección: ", font: FONT_FAMILY, size: 20, bold: true }),
+              new TextRun({ text: tender.nomenclatura, font: FONT_FAMILY, size: 20 }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [
+              new TextRun({ text: "Objeto de la Contratación: ", font: FONT_FAMILY, size: 20, bold: true }),
+              new TextRun({ text: tender.objetoContratacion || tender.nombreProyectoInversion || "Ejecución de Obra / Servicios", font: FONT_FAMILY, size: 20 }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { before: 150, after: 200 },
+            children: [
+              new TextRun({
+                text: `El que suscribe, Don(ña) `,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: `${nombreDeclarante}`,
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+                color: COLOR_PRIMARY,
+              }),
+              new TextRun({
+                text: `, identificado con DNI N° `,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: `${dniDeclarante}`,
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: `, en calidad de `,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: `${cargoDeclarante}`,
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+                color: COLOR_PRIMARY,
+              }),
+              new TextRun({
+                text: ` del postor `,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: `\"${nombrePostor}\"`,
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              ...(isConsorcio ? [] : [
+                new TextRun({
+                  text: `, con RUC N° ${company.ruc}`,
+                  font: FONT_FAMILY,
+                  size: 20,
+                }),
+              ]),
+              new TextRun({
+                text: `, con domicilio fiscal en ${company.domicilioFiscal || "domicilio legal acreditado"}, y correo electrónico: ${company.email || "contacto@postor.pe"}, al amparo del principio de presunción de veracidad establecido en el TUO de la Ley N° 27444 (Ley del Procedimiento Administrativo General) y de conformidad con las Bases Estándar del OSCE:`,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { before: 100, after: 150 },
+            children: [
+              new TextRun({
+                text: "DECLARO BAJO JURAMENTO LO SIGUIENTE:\n",
+                bold: true,
+                font: FONT_FAMILY,
+                size: 21,
+                color: COLOR_PRIMARY,
+              }),
+              new TextRun({
+                text: "1. Que mi representada cuenta con la total disponibilidad y capacidad operativa del siguiente EQUIPAMIENTO ESTRATÉGICO mínimo exigido en el Capítulo III de las Bases del procedimiento de selección:",
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+            ],
+          }),
+
+          // Table of Strategic Equipment
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: eqTableRows,
+          }),
+
+          // Formal Undertaking Clauses
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { before: 200, after: 150 },
+            children: [
+              new TextRun({
+                text: "2. COMPROMISO FORMAL DE PUESTA EN OBRA:\n",
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+                color: COLOR_PRIMARY,
+              }),
+              new TextRun({
+                text: `El postor que represento se COMPROMETE FORMAL Y EXPRESAMENTE a poner a disposición y tener físicamente en el lugar de la ejecución de la obra / prestación la totalidad de las maquinarias, vehículos y equipos detallados precedentemente, en óptimas condiciones de funcionamiento, mantenimiento preventivo y operatividad técnica, al inicio del plazo de ejecución contractual o según el Calendario de Adquisición / Utilización de Equipos y Maquinarias aprobado por la Entidad, en caso de resultar favorecido con la adjudicación de la Buena Pro.\n\n`,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+              new TextRun({
+                text: "3. RESPONSABILIDAD LEGAL:\n",
+                bold: true,
+                font: FONT_FAMILY,
+                size: 20,
+                color: COLOR_PRIMARY,
+              }),
+              new TextRun({
+                text: `Declaro conocer que cualquier inexactitud o falsedad en la presente declaración jurada generará la descalificación automática de la oferta, la pérdida de la buena pro, la resolución del contrato por causa imputable al contratista, así como el inicio de las acciones administrativas de sanción ante el Tribunal de Contrataciones del Estado (TCE) y las acciones civiles y penales correspondientes por delito contra la fe pública tipificado en el Código Penal.`,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+            ],
+          }),
+
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 250, after: 200 },
+            children: [
+              new TextRun({
+                text: `Lima, ${new Date().toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" })}`,
+                font: FONT_FAMILY,
+                size: 20,
+              }),
+            ],
+          }),
+
           ...createSignatureBlock(company),
         ],
       },
@@ -2845,6 +3135,12 @@ export async function generateAllTenderDocumentsZip(params: {
   folder?.file("06_Anexo_6_Oferta_Economica.docx", anexo6Blob);
   folder?.file("07_Anexo_8_Experiencia_del_Postor.docx", anexo8Blob);
   folder?.file("08_Personal_Clave_y_Equipamiento.docx", personalBlob);
+
+  if (params.equipment && params.equipment.length > 0) {
+    const djEquipBlob = await generateDeclaracionJuradaEquipamientoDocx(params.tender, params.company, params.equipment);
+    folder?.file("08B_Declaracion_Jurada_Equipamiento_en_Obra.docx", djEquipBlob);
+  }
+
   folder?.file("09_Ficha_Especialidad_y_Calificacion.docx", fichaClasificacionBlob);
 
   if (params.observations && params.observations.length > 0) {

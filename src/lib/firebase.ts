@@ -45,13 +45,16 @@ export interface FirestoreErrorInfo {
 
 export function isFirestoreQuotaError(error: unknown): boolean {
   if (!error) return false;
-  const msg = error instanceof Error ? error.message : String(error);
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return (
     msg.includes("resource-exhausted") ||
-    msg.includes("Quota limit exceeded") ||
-    msg.includes("Quota exceeded") ||
-    msg.includes("Free daily write units") ||
-    msg.includes("Free daily read units")
+    msg.includes("quota limit exceeded") ||
+    msg.includes("quota exceeded") ||
+    msg.includes("free daily write units") ||
+    msg.includes("free daily read units") ||
+    msg.includes("write stream exhausted") ||
+    msg.includes("overloading the backend") ||
+    msg.includes("maximum allowed queued writes")
   );
 }
 

@@ -6,6 +6,7 @@ import {
   ExperienceRecord,
   AuditReport,
   ObservationItem,
+  DetectedDocumentItem,
 } from "../types/osce";
 
 export async function analyzeBasesAPI(params: {
@@ -197,6 +198,7 @@ export async function analyzeExperienceAPI(params: {
   targetSubSpecialty?: string;
 }): Promise<{
   records: ExperienceRecord[];
+  detectedDocuments?: DetectedDocumentItem[];
   analisisEspecialidad?: {
     especialidadDetectada?: string;
     subEspecialidadDetectada?: string;
@@ -204,6 +206,8 @@ export async function analyzeExperienceAPI(params: {
     totalGeneralSoles?: number;
     cumpleMontoMinimo?: boolean;
     recomendacionOSCE?: string;
+    totalDocumentosDetectados?: number;
+    documentosValidosParaCorte?: number;
   };
 }> {
   const response = await fetch("/api/gemini/analyze-experience", {
@@ -240,10 +244,50 @@ export async function analyzeExperienceAPI(params: {
     esSimilar: r.esSimilar !== false,
     porcentajeSimilaridad: Number(r.porcentajeSimilaridad) || 90,
     justificacionSimilaridad: r.justificacionSimilaridad || "Acreditado con contrato y acta de conformidad que cumple los requisitos del Capítulo III.",
+    sourcePdfPages: r.sourcePdfPages || r.rangoPaginas ? `Páginas ${r.sourcePdfPages || r.rangoPaginas}` : undefined,
+    rangoCorteSugerido: r.rangoCorteSugerido || r.rangoPaginas || `${(idx * 3) + 1}-${(idx * 3) + 3}`,
+    pagInicio: Number(r.pagInicio) || (idx * 3) + 1,
+    pagFin: Number(r.pagFin) || (idx * 3) + 3,
+    tipoDocumentoDetectado: r.tipoDocumento || r.tipoDocumentoDetectado || "Contrato + Acta de Recepción",
+    sustentoDocumentarioCompleto: r.sustentoCompleto !== false && r.sustentoDocumentarioCompleto !== false,
+    documentosFaltantes: r.documentosFaltantes,
+    instruccionCorte: r.instruccionCorte || `Cortar páginas ${r.rangoCorteSugerido || r.rangoPaginas || `${(idx * 3) + 1}-${(idx * 3) + 3}`} para incorporar al Sobre de Experiencia.`,
+  }));
+
+  const rawDocs = Array.isArray(data.detectedDocuments) ? data.detectedDocuments : [];
+  const parsedDetectedDocs: DetectedDocumentItem[] = (rawDocs.length > 0 ? rawDocs : parsedRecords).map((d: any, idx: number) => ({
+    id: d.id || `doc-${Date.now()}-${idx}`,
+    nroDocumento: d.nroDocumento || `CONTRATO N° 0${idx + 1}-2024`,
+    cliente: d.cliente || "ENTIDAD / CLIENTE",
+    tipoCliente: d.tipoCliente === "Privado" ? "Privado" : "Público",
+    tipoDocumento: d.tipoDocumento || d.tipoDocumentoDetectado || "Contrato de Obra + Acta de Recepción",
+    objetoContrato: d.objetoContrato || "Servicio / Obra",
+    pagInicio: Number(d.pagInicio) || (idx * 3) + 1,
+    pagFin: Number(d.pagFin) || (idx * 3) + 3,
+    rangoPaginas: d.rangoPaginas || d.rangoCorteSugerido || `${(idx * 3) + 1}-${(idx * 3) + 3}`,
+    fechaEmision: d.fechaEmision || "2023-01-15",
+    fechaConformidad: d.fechaConformidad || "2023-08-20",
+    moneda: d.moneda === "USD" ? "USD" : "PEN",
+    montoOriginal: Number(d.montoOriginal) || Number(d.montoEnSoles) || 100000,
+    tipoCambioSBS: d.moneda === "USD" ? (Number(d.tipoCambioSBS) || 3.75) : undefined,
+    montoEnSoles: Number(d.montoEnSoles) || 100000,
+    especialidad: d.especialidad || params.targetSpecialty || params.tenderInfo?.especialidad || "Obras Viales",
+    subEspecialidad: d.subEspecialidad || params.targetSubSpecialty || params.tenderInfo?.subEspecialidad || "Vías urbanas",
+    tipologia: d.tipologia,
+    esSimilar: d.esSimilar !== false,
+    porcentajeSimilaridad: Number(d.porcentajeSimilaridad) || 90,
+    justificacionSimilaridad: d.justificacionSimilaridad || "Coincide con la especialidad y tipología de obras viales.",
+    validoOSCE: d.validoOSCE !== false,
+    sustentoCompleto: d.sustentoCompleto !== false && d.sustentoDocumentarioCompleto !== false,
+    documentosFaltantes: d.documentosFaltantes,
+    instruccionCorte: d.instruccionCorte || `Cortar páginas ${d.rangoPaginas || d.rangoCorteSugerido || `${(idx * 3) + 1}-${(idx * 3) + 3}`} para acreditar experiencia en el Anexo 8.`,
+    rangoCorteSugerido: d.rangoCorteSugerido || d.rangoPaginas || `${(idx * 3) + 1}-${(idx * 3) + 3}`,
+    destinatarioSobre: d.destinatarioSobre || "experiencia",
   }));
 
   return {
     records: parsedRecords,
+    detectedDocuments: parsedDetectedDocs,
     analisisEspecialidad: data.analisisEspecialidad,
   };
 }
@@ -256,6 +300,7 @@ export async function analyzePersonnelAPI(params: {
 }): Promise<{
   personal: KeyPersonnel[];
   equipment: EquipmentItem[];
+  detectedDocuments?: DetectedDocumentItem[];
 }> {
   const response = await fetch("/api/gemini/analyze-personnel", {
     method: "POST",
@@ -283,21 +328,73 @@ export async function analyzePersonnelAPI(params: {
     descripcionExperiencia: p.descripcionExperiencia || "Experiencia acreditada en puestos similares conforme a las Bases.",
     documentosAcreditacion: p.documentosAcreditacion || "Copia simple de Título Profesional, Habilitación CIP y Certificados de Trabajo.",
     cumpleRequisito: p.cumpleRequisito !== false,
+    sourcePdfPages: p.sourcePdfPages || p.rangoPaginas ? `Páginas ${p.sourcePdfPages || p.rangoPaginas}` : undefined,
+    rangoCorteSugerido: p.rangoCorteSugerido || p.rangoPaginas || `${(idx * 4) + 1}-${(idx * 4) + 4}`,
+    pagInicio: Number(p.pagInicio) || (idx * 4) + 1,
+    pagFin: Number(p.pagFin) || (idx * 4) + 4,
+    instruccionCorte: p.instruccionCorte || `Cortar páginas ${p.rangoCorteSugerido || p.rangoPaginas || `${(idx * 4) + 1}-${(idx * 4) + 4}`} para sustentar el perfil de ${p.cargoPostulado || "Personal Clave"}.`,
   }));
 
   const rawEquipment = Array.isArray(data.equipment) ? data.equipment : [];
-  const parsedEquipment: EquipmentItem[] = rawEquipment.map((eq: any, idx: number) => ({
-    id: eq.id || `eq-${Date.now()}-${idx}`,
-    denominacion: eq.denominacion || "Maquinaria / Equipo Operativo",
-    marcaModelo: eq.marcaModelo || "Caterpillar / Komatsu / Estándar",
-    anioFabricacion: eq.anioFabricacion || "2022",
-    capacidad: eq.capacidad || "Estándar según Requisitos",
-    estadoDisponibilidad: eq.estadoDisponibilidad === "Alquilado" ? "Alquilado" : eq.estadoDisponibilidad === "Compromiso de Compra/Alquiler" ? "Compromiso de Compra/Alquiler" : "Propio",
-    sustento: eq.sustento || "Factura de Compra / Tarjeta de Propiedad / Carta de Compromiso",
+  const parsedEquipment: EquipmentItem[] = rawEquipment.map((eq: any, idx: number) => {
+    const isDJ = Boolean(eq.declaradoEnDJ || eq.estadoDisponibilidad === "Declaración Jurada de Disponibilidad en Obra");
+    const estadoDisp = isDJ
+      ? "Declaración Jurada de Disponibilidad en Obra"
+      : eq.estadoDisponibilidad === "Alquilado"
+      ? "Alquilado"
+      : eq.estadoDisponibilidad === "Compromiso de Compra/Alquiler"
+      ? "Compromiso de Compra/Alquiler"
+      : "Propio";
+
+    return {
+      id: eq.id || `eq-${Date.now()}-${idx}`,
+      denominacion: eq.denominacion || "Maquinaria / Equipo Operativo",
+      marcaModelo: eq.marcaModelo || "Caterpillar / Komatsu / Estándar",
+      anioFabricacion: eq.anioFabricacion || "2022",
+      capacidad: eq.capacidad || "Estándar según Requisitos",
+      estadoDisponibilidad: estadoDisp,
+      sustento: eq.sustento || (isDJ ? "Declaración Jurada de Disponibilidad y Compromiso en Obra" : "Factura de Compra / Tarjeta de Propiedad / Carta de Compromiso"),
+      declaradoEnDJ: isDJ,
+      sourcePdfPages: eq.sourcePdfPages || eq.rangoPaginas ? `Páginas ${eq.sourcePdfPages || eq.rangoPaginas}` : undefined,
+      rangoCorteSugerido: eq.rangoCorteSugerido || eq.rangoPaginas || `${12 + idx * 2}-${13 + idx * 2}`,
+      pagInicio: Number(eq.pagInicio) || 12 + idx * 2,
+      pagFin: Number(eq.pagFin) || 13 + idx * 2,
+      instruccionCorte: eq.instruccionCorte || `Cortar páginas ${eq.rangoCorteSugerido || eq.rangoPaginas || `${12 + idx * 2}-${13 + idx * 2}`} para sustentar la maquinaria ${eq.denominacion}.`,
+    };
+  });
+
+  const rawDocs = Array.isArray(data.detectedDocuments) ? data.detectedDocuments : [];
+  const parsedDetectedDocs: DetectedDocumentItem[] = rawDocs.map((d: any, idx: number) => ({
+    id: d.id || `doc-pe-${Date.now()}-${idx}`,
+    nroDocumento: d.nroDocumento || `DOC-${idx + 1}`,
+    cliente: d.cliente || "Postor",
+    tipoCliente: d.tipoCliente === "Privado" ? "Privado" : "Público",
+    tipoDocumento: d.tipoDocumento || "CV / Ficha de Equipo",
+    objetoContrato: d.objetoContrato || "Personal / Maquinaria",
+    pagInicio: Number(d.pagInicio) || idx + 1,
+    pagFin: Number(d.pagFin) || idx + 2,
+    rangoPaginas: d.rangoPaginas || `${Number(d.pagInicio) || idx + 1}-${Number(d.pagFin) || idx + 2}`,
+    fechaConformidad: d.fechaConformidad || "2024-01-15",
+    moneda: d.moneda === "USD" ? "USD" : "PEN",
+    montoOriginal: Number(d.montoOriginal) || 0,
+    montoEnSoles: Number(d.montoEnSoles) || 0,
+    especialidad: d.especialidad || "Capacidad Técnica",
+    subEspecialidad: d.subEspecialidad || "Personal y Equipos",
+    tipologia: d.tipologia,
+    esSimilar: d.esSimilar !== false,
+    porcentajeSimilaridad: Number(d.porcentajeSimilaridad) || 100,
+    justificacionSimilaridad: d.justificacionSimilaridad || "Cumple los requisitos técnicos del Capítulo III de las Bases.",
+    validoOSCE: d.validoOSCE !== false,
+    sustentoCompleto: d.sustentoCompleto !== false,
+    documentosFaltantes: d.documentosFaltantes,
+    instruccionCorte: d.instruccionCorte || `Cortar páginas ${d.rangoPaginas || `${Number(d.pagInicio) || idx + 1}-${Number(d.pagFin) || idx + 2}`} para el sobre de ${d.destinatarioSobre || "personal"}.`,
+    rangoCorteSugerido: d.rangoCorteSugerido || d.rangoPaginas || `${Number(d.pagInicio) || idx + 1}-${Number(d.pagFin) || idx + 2}`,
+    destinatarioSobre: d.destinatarioSobre === "equipos" ? "equipos" : "personal",
   }));
 
   return {
     personal: parsedPersonnel,
     equipment: parsedEquipment,
+    detectedDocuments: parsedDetectedDocs,
   };
 }

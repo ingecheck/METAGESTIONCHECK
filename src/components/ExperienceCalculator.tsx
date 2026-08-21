@@ -22,8 +22,13 @@ import {
   RefreshCw,
   Info,
   ChevronRight,
+  Layers,
+  FileBadge,
+  Zap,
+  Scissors,
+  CheckCheck,
 } from "lucide-react";
-import { TenderInfo, CompanyProfile, ExperienceRecord } from "../types/osce";
+import { TenderInfo, CompanyProfile, ExperienceRecord, DetectedDocumentItem, ClippedPdfSnippet } from "../types/osce";
 import {
   generateAnexo8ExperienciaDocx,
   downloadDocxBlob,
@@ -31,9 +36,8 @@ import {
 } from "../services/docxGenerator";
 import { analyzeExperienceAPI } from "../services/api";
 import { extractTextFromPdfFile, ExtractedPdfResult } from "../services/pdfExtractor";
+import { slicePdfFile, parsePageRanges } from "../services/pdfMasterService";
 import { PdfCutterModal } from "./PdfCutterModal";
-import { ClippedPdfSnippet } from "../types/osce";
-import { Scissors } from "lucide-react";
 
 interface ExperienceCalculatorProps {
   tender: TenderInfo;
@@ -168,10 +172,21 @@ export const ExperienceCalculator: React.FC<ExperienceCalculatorProps> = ({
   const [activeInputTab, setActiveInputTab] = useState<"upload" | "text" | "presets">("upload");
   const [filterSpecialty, setFilterSpecialty] = useState<string>("TODOS");
 
-  // AI Extraction state
+  // AI Extraction & Smart PDF Cutter state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const [showPdfCutter, setShowPdfCutter] = useState(false);
+  const [detectedDocs, setDetectedDocs] = useState<DetectedDocumentItem[]>([]);
+  const [isBatchCutting, setIsBatchCutting] = useState(false);
+  const [cutSuccessDocs, setCutSuccessDocs] = useState<Record<string, boolean>>({});
+  const [cutterConfig, setCutterConfig] = useState<{
+    isOpen: boolean;
+    initialTitle?: string;
+    initialPageRange?: string;
+    initialNotes?: string;
+    initialCategory?: ClippedPdfSnippet["category"];
+  }>({ isOpen: false });
+
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [rawText, setRawText] = useState("");
@@ -189,6 +204,94 @@ export const ExperienceCalculator: React.FC<ExperienceCalculatorProps> = ({
     existing.push(snippet);
     localStorage.setItem("osce_clipped_pdf_snippets", JSON.stringify(existing));
     setStatusMessage(`Recorte "${snippet.title}" guardado e incorporado para el armado final.`);
+  };
+
+  // Direct 1-Click Cut & Save for a Detected Document
+  const handleQuickCutDocument = async (doc: DetectedDocumentItem) => {
+    if (!uploadedPdf?.pdfBase64) {
+      setErrorMessage("No hay un archivo PDF base cargado para recortar.");
+      return;
+    }
+
+    const rangeToUse = doc.rangoPaginas || doc.rangoCorteSugerido || "1";
+    const pagesToCut = parsePageRanges(rangeToUse, uploadedPdf.pageCount);
+    if (pagesToCut.length === 0) {
+      setErrorMessage(`El rango de páginas "${rangeToUse}" no es válido.`);
+      return;
+    }
+
+    try {
+      setStatusMessage(`Recortando páginas ${rangeToUse} de "${doc.nroDocumento}"...`);
+      const sliced = await slicePdfFile(uploadedPdf.pdfBase64, pagesToCut);
+
+      const snippet: ClippedPdfSnippet = {
+        id: "snip-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        title: `${doc.nroDocumento} - ${doc.tipoDocumento} (${doc.cliente})`,
+        category: doc.destinatarioSobre || "experiencia",
+        sourceFileName: uploadedPdf.fileName,
+        selectedPages: `Páginas ${rangeToUse} (${sliced.pageCount} pág.)`,
+        pageCount: sliced.pageCount,
+        pdfBase64: sliced.base64,
+        createdAt: Date.now(),
+        notes: doc.justificacionSimilaridad || doc.instruccionCorte,
+        isIncluded: true,
+      };
+
+      handleSnippetCreated(snippet);
+      setCutSuccessDocs((prev) => ({ ...prev, [doc.id]: true }));
+      setStatusMessage(`¡Recorte listo! Se extrajeron las Páginas ${rangeToUse} (${sliced.pageCount} pág.) e incorporaron al Sobre de Experiencia.`);
+    } catch (err: any) {
+      console.error("Error al cortar PDF:", err);
+      setErrorMessage("Error al recortar PDF: " + (err.message || String(err)));
+    }
+  };
+
+  // Batch Cut All Valid Detected Documents in 1 Click
+  const handleBatchCutAllValidDocs = async () => {
+    if (!uploadedPdf?.pdfBase64 || detectedDocs.length === 0) return;
+    setIsBatchCutting(true);
+    let count = 0;
+    try {
+      for (const doc of detectedDocs) {
+        const rangeToUse = doc.rangoPaginas || doc.rangoCorteSugerido || "1";
+        const pagesToCut = parsePageRanges(rangeToUse, uploadedPdf.pageCount);
+        if (pagesToCut.length > 0) {
+          const sliced = await slicePdfFile(uploadedPdf.pdfBase64, pagesToCut);
+          const snippet: ClippedPdfSnippet = {
+            id: "snip-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            title: `${doc.nroDocumento} - ${doc.tipoDocumento} (${doc.cliente})`,
+            category: doc.destinatarioSobre || "experiencia",
+            sourceFileName: uploadedPdf.fileName,
+            selectedPages: `Páginas ${rangeToUse} (${sliced.pageCount} pág.)`,
+            pageCount: sliced.pageCount,
+            pdfBase64: sliced.base64,
+            createdAt: Date.now(),
+            notes: doc.justificacionSimilaridad || doc.instruccionCorte,
+            isIncluded: true,
+          };
+          handleSnippetCreated(snippet);
+          setCutSuccessDocs((prev) => ({ ...prev, [doc.id]: true }));
+          count++;
+        }
+      }
+      setStatusMessage(`¡Corte por lote completado! Se generaron y guardaron ${count} recortes PDF individuales listos para la propuesta.`);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("Error durante el corte por lotes: " + (err.message || String(err)));
+    } finally {
+      setIsBatchCutting(false);
+    }
+  };
+
+  // Open interactive cutter prefilled with specific document
+  const handleOpenCutterForDoc = (doc: DetectedDocumentItem) => {
+    setCutterConfig({
+      isOpen: true,
+      initialTitle: `${doc.nroDocumento} - ${doc.tipoDocumento} (${doc.cliente})`,
+      initialPageRange: doc.rangoPaginas || doc.rangoCorteSugerido || "1-3",
+      initialNotes: doc.justificacionSimilaridad || doc.instruccionCorte,
+      initialCategory: doc.destinatarioSobre || "experiencia",
+    });
   };
 
   // Modal / Form state for Add/Edit Record
@@ -279,7 +382,12 @@ export const ExperienceCalculator: React.FC<ExperienceCalculatorProps> = ({
 
       if (result.records && result.records.length > 0) {
         setExperience(result.records);
-        setStatusMessage(`Se extrajeron y evaluaron ${result.records.length} contrataciones con éxito.`);
+        if (result.detectedDocuments && result.detectedDocuments.length > 0) {
+          setDetectedDocs(result.detectedDocuments);
+        }
+        setStatusMessage(
+          `¡Análisis completo! Se detectaron y evaluaron ${result.records.length} contrataciones con mapeo de páginas para corte según Bases.`
+        );
       } else {
         setErrorMessage("No se pudieron detectar contratos en el texto. Puede ingresarlos manualmente.");
       }
@@ -425,7 +533,7 @@ export const ExperienceCalculator: React.FC<ExperienceCalculatorProps> = ({
           <div className="space-y-1">
             <div className="flex items-center space-x-2 text-blue-700 text-xs font-bold uppercase tracking-wider">
               <Award className="w-4 h-4" />
-              <span>Paso 3 de 7 • Requisitos de Calificación • Anexo N° 8 OSCE</span>
+              <span>Paso 3 de 6 • Requisitos de Calificación • Anexo N° 8 OSCE</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               Experiencia del Postor en la Especialidad
@@ -671,7 +779,160 @@ CONTRATO N° 102-2022-GRC/GGR - Gobierno Regional de Cusco - Mantenimiento vial 
         </div>
       </div>
 
-      {/* 4. Experience Records Table Card */}
+      {/* 4. Intelligent PDF Segmenter & Detector Section (Only when detected documents exist) */}
+      {detectedDocs.length > 0 && (
+        <div className="bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-slate-50 rounded-2xl border border-blue-200 shadow-sm p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-200/60 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <Scissors className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Detector de Experiencia & Segmentador de Páginas PDF por Especialidad
+                  </h3>
+                  <span className="bg-blue-600 text-white text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                    {detectedDocs.length} detectados
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-slate-600">
+                  El lector inteligente identificó los conjuntos de contratos en el PDF y calculó qué páginas exactas cortar según la especialidad de las Bases (<strong>{tender.especialidad || "Viales"} &gt; {tender.subEspecialidad || "Vías urbanas"}</strong>).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleBatchCutAllValidDocs}
+                disabled={isBatchCutting || !uploadedPdf}
+                className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                title="Corta automáticamente todos los contratos detectados en archivos PDF individuales para el expediente"
+              >
+                {isBatchCutting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Cortando Lote...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Cortar Todos en Lote (1 Clic)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPdfCutter(true)}
+                className="flex items-center space-x-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg text-xs font-semibold transition cursor-pointer"
+              >
+                <Scissors className="w-3.5 h-3.5 text-blue-600" />
+                <span>Cortador Manual</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Grid of Detected Documents with Cutting Controls */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {detectedDocs.map((doc, idx) => {
+              const isCut = cutSuccessDocs[doc.id];
+              return (
+                <div
+                  key={doc.id || idx}
+                  className="bg-white rounded-xl border border-blue-100 hover:border-blue-300 p-4 shadow-xs space-y-3 transition flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-xs font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <span className="font-bold text-slate-900 text-xs block leading-tight">
+                            {doc.nroDocumento}
+                          </span>
+                          <span className="text-[10.5px] text-slate-500 block truncate max-w-[240px]">
+                            {doc.cliente}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Page Range Badge */}
+                      <span className="bg-amber-100 text-amber-900 font-mono font-bold text-[11px] px-2.5 py-1 rounded-lg border border-amber-300 shrink-0 flex items-center space-x-1">
+                        <Scissors className="w-3 h-3 text-amber-700" />
+                        <span>Págs. {doc.rangoPaginas || doc.rangoCorteSugerido || "1"}</span>
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
+                      {doc.objetoContrato}
+                    </p>
+
+                    {/* Specialty & Similarity Badges */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="bg-blue-50 text-blue-800 text-[10px] font-semibold px-2 py-0.5 rounded border border-blue-200">
+                        {doc.tipoDocumento}
+                      </span>
+                      <span className="bg-purple-50 text-purple-800 text-[10px] font-semibold px-2 py-0.5 rounded border border-purple-200">
+                        {doc.subEspecialidad || doc.especialidad || "Obras Viales"}
+                      </span>
+                      <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
+                        {doc.porcentajeSimilaridad || 100}% Similar
+                      </span>
+                      <span className="bg-slate-100 text-slate-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded ml-auto">
+                        {formatPEN(doc.montoEnSoles || 0)}
+                      </span>
+                    </div>
+
+                    {/* Cutting Instruction Note */}
+                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 text-[11px] text-slate-600 flex items-start space-x-1.5">
+                      <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">
+                        {doc.instruccionCorte || `Extraer páginas ${doc.rangoPaginas} que contienen el contrato y su acta de recepción.`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions per document */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
+                    {isCut ? (
+                      <span className="inline-flex items-center space-x-1 bg-emerald-50 text-emerald-700 font-bold text-[11px] px-2.5 py-1 rounded-lg border border-emerald-200">
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Recorte Guardado ✓</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickCutDocument(doc)}
+                        className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                        title="Extrae solo estas páginas del PDF y las guarda en el expediente"
+                      >
+                        <Scissors className="w-3.5 h-3.5" />
+                        <span>Cortar Págs. {doc.rangoPaginas} (1 Clic)</span>
+                      </button>
+                    )}
+
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCutterForDoc(doc)}
+                        className="text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                        title="Abrir en el modal con vista previa"
+                      >
+                        Ajustar Rango
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Experience Records Table Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center space-x-2">
@@ -720,6 +981,7 @@ CONTRATO N° 102-2022-GRC/GGR - Gobierno Regional de Cusco - Mantenimiento vial 
                 <th className="p-3 text-center">N°</th>
                 <th className="p-3">Cliente / Entidad</th>
                 <th className="p-3">Objeto de Contratación & N° Documento</th>
+                <th className="p-3 text-center">Páginas PDF / Corte</th>
                 <th className="p-3 text-center">Similitud Acreditada</th>
                 <th className="p-3 text-center">Fecha Conformidad</th>
                 <th className="p-3 text-right">Importe Soles (S/)</th>
@@ -729,72 +991,85 @@ CONTRATO N° 102-2022-GRC/GGR - Gobierno Regional de Cusco - Mantenimiento vial 
             <tbody className="divide-y divide-slate-200">
               {filteredExperience.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     No se encontraron registros de experiencia. Puede cargarlos en el panel superior o agregarlos manualmente con el botón azul.
                   </td>
                 </tr>
               ) : (
-                filteredExperience.map((rec, idx) => (
-                  <tr key={rec.id} className="hover:bg-slate-50/80 transition">
-                    <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
-                    <td className="p-3">
-                      <div className="font-semibold text-slate-900">{rec.cliente}</div>
-                      <span className="text-[10px] text-slate-500 uppercase">{rec.tipoCliente}</span>
-                    </td>
-                    <td className="p-3 max-w-md">
-                      <div className="text-slate-800 font-medium text-xs line-clamp-2">{rec.objetoContrato}</div>
-                      <div className="font-mono text-slate-500 text-[10.5px] mt-0.5">{rec.nroDocumento}</div>
-                    </td>
-                    <td className="p-3 text-center">
-                      {rec.esSimilar !== false ? (
-                        <div>
-                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200 inline-flex items-center space-x-1" title={rec.justificacionSimilaridad || "Obra similar"}>
-                            <span>✓ {rec.porcentajeSimilaridad || 100}% Similar</span>
+                filteredExperience.map((rec, idx) => {
+                  const pagesRef = rec.sourcePdfPages || rec.rangoCorteSugerido || (rec.pagInicio ? `${rec.pagInicio}-${rec.pagFin}` : null);
+                  return (
+                    <tr key={rec.id} className="hover:bg-slate-50/80 transition">
+                      <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-900">{rec.cliente}</div>
+                        <span className="text-[10px] text-slate-500 uppercase">{rec.tipoCliente}</span>
+                      </td>
+                      <td className="p-3 max-w-md">
+                        <div className="text-slate-800 font-medium text-xs line-clamp-2">{rec.objetoContrato}</div>
+                        <div className="font-mono text-slate-500 text-[10.5px] mt-0.5">{rec.nroDocumento}</div>
+                      </td>
+                      <td className="p-3 text-center">
+                        {pagesRef ? (
+                          <span className="bg-blue-50 text-blue-700 font-mono text-[10.5px] font-bold px-2 py-0.5 rounded border border-blue-200 inline-flex items-center space-x-1" title={rec.instruccionCorte || "Páginas acreditadas en el PDF"}>
+                            <Scissors className="w-3 h-3 text-blue-600" />
+                            <span>Págs. {pagesRef}</span>
                           </span>
-                          {rec.justificacionSimilaridad && (
-                            <div className="text-[10px] text-slate-500 mt-1 line-clamp-1 max-w-xs mx-auto">
-                              {rec.justificacionSimilaridad}
-                            </div>
-                          )}
+                        ) : (
+                          <span className="text-slate-400 text-[10.5px] italic">Completo</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        {rec.esSimilar !== false ? (
+                          <div>
+                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200 inline-flex items-center space-x-1" title={rec.justificacionSimilaridad || "Obra similar"}>
+                              <span>✓ {rec.porcentajeSimilaridad || 100}% Similar</span>
+                            </span>
+                            {rec.justificacionSimilaridad && (
+                              <div className="text-[10px] text-slate-500 mt-1 line-clamp-1 max-w-xs mx-auto">
+                                {rec.justificacionSimilaridad}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200">
+                            Exp. General
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="font-mono text-slate-700">{rec.fechaConformidad}</div>
+                        <span className="text-[9.5px] text-emerald-600 font-semibold block">Válido OSCE</span>
+                      </td>
+                      <td className="p-3 text-right font-bold text-emerald-700 font-mono text-xs">
+                        {formatPEN(rec.montoEnSoles)}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <button
+                            onClick={() => handleOpenEditForm(rec)}
+                            className="text-slate-600 hover:text-blue-600 p-1 rounded transition cursor-pointer"
+                            title="Editar contrato"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRecord(rec.id)}
+                            className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
+                            title="Eliminar contrato"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      ) : (
-                        <span className="bg-slate-100 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200">
-                          Exp. General
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="font-mono text-slate-700">{rec.fechaConformidad}</div>
-                      <span className="text-[9.5px] text-emerald-600 font-semibold block">Válido OSCE</span>
-                    </td>
-                    <td className="p-3 text-right font-bold text-emerald-700 font-mono text-xs">
-                      {formatPEN(rec.montoEnSoles)}
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center space-x-1.5">
-                        <button
-                          onClick={() => handleOpenEditForm(rec)}
-                          className="text-slate-600 hover:text-blue-600 p-1 rounded transition cursor-pointer"
-                          title="Editar contrato"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRecord(rec.id)}
-                          className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
-                          title="Eliminar contrato"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             <tfoot className="bg-slate-100/90 font-bold border-t border-slate-200">
               <tr>
-                <td colSpan={5} className="p-3 text-right text-slate-800">
+                <td colSpan={6} className="p-3 text-right text-slate-800">
                   TOTAL ACUMULADO EN SOLES:
                 </td>
                 <td className="p-3 text-right text-emerald-800 text-sm font-mono">
@@ -980,7 +1255,7 @@ CONTRATO N° 102-2022-GRC/GGR - Gobierno Regional de Cusco - Mantenimiento vial 
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-900/40 shadow-sm">
         <div>
           <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-            Paso 3 de 7 • Requisitos de Calificación Acreditados
+            Paso 3 de 6 • Requisitos de Calificación Acreditados
           </div>
           <h4 className="text-base font-bold text-white mt-0.5">
             Siguiente Paso: Configurar Personal Clave y Equipamiento Estratégico
@@ -1001,13 +1276,20 @@ CONTRATO N° 102-2022-GRC/GGR - Gobierno Regional de Cusco - Mantenimiento vial 
         </div>
       </div>
       {/* 7. PDF Cutter Modal */}
-      {showPdfCutter && (
+      {(showPdfCutter || cutterConfig.isOpen) && (
         <PdfCutterModal
-          isOpen={showPdfCutter}
-          onClose={() => setShowPdfCutter(false)}
+          isOpen={showPdfCutter || cutterConfig.isOpen}
+          onClose={() => {
+            setShowPdfCutter(false);
+            setCutterConfig({ isOpen: false });
+          }}
           onSnippetCreated={handleSnippetCreated}
-          defaultCategory="experiencia"
+          defaultCategory={cutterConfig.initialCategory || "experiencia"}
           initialPdf={uploadedPdf}
+          detectedSuggestions={detectedDocs}
+          initialTitle={cutterConfig.initialTitle}
+          initialPageRange={cutterConfig.initialPageRange}
+          initialNotes={cutterConfig.initialNotes}
         />
       )}
     </div>

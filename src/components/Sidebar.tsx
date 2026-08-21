@@ -87,9 +87,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     { id: "experience", label: "3. Experiencia (Anexo 8)", icon: Award },
     { id: "personnel", label: "4. Personal y Equipos", icon: Users },
-    { id: "observations", label: "5. Consultas y Obs.", icon: HelpCircle },
-    { id: "legal-ai", label: "6. Consultor Legal OSCE", icon: MessageSquare },
-    { id: "builder", label: "7. Armador de Oferta Final", icon: FolderTree },
+    { id: "observations", label: "5. Consultas y Asesor Legal OSCE", icon: HelpCircle },
+    { id: "builder", label: "6. Armador de Oferta Final", icon: FolderTree },
   ];
 
   // Sub-items for Module 2: Control de Obras / Entidades
@@ -98,9 +97,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "obras-valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
     { id: "obras-partidas", label: "2. Cuadro Partidas Ejecutadas", icon: ListTree },
     { id: "obras-auditoria", label: "3. Auditoría Excel vs Escaneado", icon: ShieldAlert },
-    { id: "obras-cuaderno", label: "4. Cuaderno de Obra Digital", icon: BookOpen },
-    { id: "obras-adicionales", label: "5. Adicionales y Plazos", icon: Scale },
-    { id: "obras-liquidacion", label: "6. Recepción y Liquidación", icon: Award },
+    { id: "obras-adicionales", label: "4. Adicionales y Plazos", icon: Scale },
+    { id: "obras-liquidacion", label: "5. Recepción y Liquidación", icon: Award },
   ];
 
   return (

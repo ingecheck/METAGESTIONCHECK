@@ -66,6 +66,8 @@ export interface TenderInfo {
   subEspecialidad?: string; // Ej: "Vías urbanas", "Obras viales", "Edificación educativa"
   tipologia?: string; // Ej: "Pistas, veredas, ciclovías, puentes peatonales...", "Carreteras nacionales..."
   marcoNormativo?: string; // "Ley N° 32069 y D.S. N° 009-2025-EF / RD N° 0016-2025-EF/54.01"
+  guidelineId?: string; // Ej: "lpa-obras-32069", "cp-supervision-32069", "lp-obras-32069"
+  guidelineRol?: "Contratista (Ejecución de Obras)" | "Supervisor (Consultoría de Obras)" | "Consultor (Expediente Técnico)";
   valorEstimadoReferencial: string; // Ej: S/ 514,737.28
   valorReferencial?: string;
   valorNumerico: number;
@@ -171,6 +173,12 @@ export interface KeyPersonnel {
   descripcionExperiencia: string;
   documentosAcreditacion: string; // Título, Constancias, Contratos
   cumpleRequisito: boolean;
+  // PDF Page mapping & Intelligent cutting
+  sourcePdfPages?: string; // Ej: "Páginas 1 a 4 (CV + Título + Certificados)"
+  rangoCorteSugerido?: string; // Ej: "1-4"
+  pagInicio?: number;
+  pagFin?: number;
+  instruccionCorte?: string;
 }
 
 export interface EquipmentItem {
@@ -179,8 +187,52 @@ export interface EquipmentItem {
   marcaModelo: string;
   anioFabricacion: string;
   capacidad: string;
-  estadoDisponibilidad: "Propio" | "Alquilado" | "Compromiso de Compra/Alquiler";
-  sustento: string; // Factura, Tarjeta de Propiedad, Carta de Compromiso
+  estadoDisponibilidad: "Propio" | "Alquilado" | "Compromiso de Compra/Alquiler" | "Declaración Jurada de Disponibilidad en Obra";
+  sustento: string; // Factura, Tarjeta de Propiedad, Carta de Compromiso, Declaración Jurada del Representante Legal/Común
+  // PDF Page mapping & Intelligent cutting
+  sourcePdfPages?: string;
+  rangoCorteSugerido?: string;
+  pagInicio?: number;
+  pagFin?: number;
+  instruccionCorte?: string;
+  // DJ fields
+  declaradoEnDJ?: boolean;
+  tipoAcreditacion?: "Declaración Jurada de Disponibilidad" | "Documento de Propiedad" | "Compromiso de Alquiler/Compra";
+  declarante?: string; // Nombre del Rep. Legal o Rep. Común
+  dniDeclarante?: string;
+  cargoDeclarante?: string;
+  compromisoTexto?: string; // Texto de compromiso bajo juramento
+  compromisoPuestaEnObra?: string; // "Se compromete a poner el equipo en obra al inicio del plazo de ejecución contractual"
+}
+
+export interface DetectedDocumentItem {
+  id: string;
+  nroDocumento: string;
+  cliente: string;
+  tipoCliente: "Público" | "Privado";
+  tipoDocumento: string; // "Contrato de Obra", "Acta de Recepción", "Orden de Servicio", "Comprobante de Pago Cancelado", "Constancia de Prestación", "Resolución de Liquidación"
+  objetoContrato: string;
+  pagInicio: number;
+  pagFin: number;
+  rangoPaginas: string; // Ej: "1-3", "4", "5-8"
+  fechaEmision?: string;
+  fechaConformidad: string;
+  moneda: "PEN" | "USD";
+  montoOriginal: number;
+  tipoCambioSBS?: number;
+  montoEnSoles: number;
+  especialidad: string;
+  subEspecialidad: string;
+  tipologia?: string;
+  esSimilar: boolean;
+  porcentajeSimilaridad: number;
+  justificacionSimilaridad: string;
+  validoOSCE: boolean;
+  sustentoCompleto: boolean;
+  documentosFaltantes?: string;
+  instruccionCorte: string;
+  rangoCorteSugerido: string;
+  destinatarioSobre: "experiencia" | "personal" | "equipos" | "habilitacion" | "economica" | "otros";
 }
 
 export interface ExperienceRecord {
@@ -203,6 +255,15 @@ export interface ExperienceRecord {
   esSimilar?: boolean; // Cumple con los criterios de Obra/Servicio Similar de las Bases
   porcentajeSimilaridad?: number; // Grado de coincidencia técnica (0 a 100%)
   justificacionSimilaridad?: string; // Sustento técnico de por qué califica como similar
+  // Intelligent PDF Page Detection & Cutting properties
+  sourcePdfPages?: string; // Ej: "Páginas 1 a 3 (Contrato) y Pág. 4 (Acta)"
+  rangoCorteSugerido?: string; // Ej: "1-4"
+  pagInicio?: number;
+  pagFin?: number;
+  tipoDocumentoDetectado?: string;
+  sustentoDocumentarioCompleto?: boolean;
+  documentosFaltantes?: string;
+  instruccionCorte?: string;
 }
 
 export interface AnnexDocument {

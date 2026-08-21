@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Building2,
   Save,
@@ -25,8 +25,19 @@ import {
   Copy,
   Check,
   ScrollText,
+  Download,
 } from "lucide-react";
 import { CompanyProfile, ConsorcioMember, TenderInfo } from "../types/osce";
+import { WordDocumentEditor } from "./WordDocumentEditor";
+import {
+  getContratoConsorcioHtml,
+  getAnexo5PromesaConsorcioHtml,
+} from "../services/annexHtmlTemplates";
+import {
+  generateContratoConsorcioDocx,
+  generateAnexo5PromesaConsorcioDocx,
+  downloadDocxBlob,
+} from "../services/docxGenerator";
 
 interface CompanyProfileEditorProps {
   company: CompanyProfile;
@@ -45,19 +56,67 @@ export const CompanyProfileEditor: React.FC<CompanyProfileEditorProps> = ({
   const [copiedText, setCopiedText] = useState(false);
   const [activeConsortiumTab, setActiveConsortiumTab] = useState<"general" | "integrantes" | "notarial" | "visualizador">("integrantes");
   const [previewDocType, setPreviewDocType] = useState<"contrato" | "anexo5">("contrato");
+  const [contratoHtml, setContratoHtml] = useState<string>("");
+  const [anexo5Html, setAnexo5Html] = useState<string>("");
+  const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
 
   // Fallback tender info if not provided
-  const currentTender: TenderInfo = tender || {
-    nomenclatura: "AS-SM-12-2024-GRSM/CS-1",
-    entidadConvocante: "GOBIERNO REGIONAL DE SAN MARTÍN",
-    objetoContratacion: "Servicio de Mantenimiento Periódico de Vías Departamentales",
-    descripcionObjeto: "SERVICIO DE MANTENIMIENTO PERIODICO DEL CAMINO VECINAL TRAMO: EMP. SM-113 - YURACYACU - SAN FERNANDO",
-    valorReferencial: "S/ 1,450,000.00",
-    valorNumerico: 1450000,
-    sistemaContratacion: "A Suma Alzada",
-    plazoEjecucion: "90 días calendario",
-    modalidad: "Servicio en General",
-    tipologiaProyecto: "Mantenimiento Periódico Vial",
+  const currentTender: TenderInfo = useMemo(() => {
+    return tender || {
+      nomenclatura: "AS-SM-12-2024-GRSM/CS-1",
+      entidadConvocante: "GOBIERNO REGIONAL DE SAN MARTÍN",
+      objetoContratacion: "Servicio de Mantenimiento Periódico de Vías Departamentales",
+      descripcionObjeto: "SERVICIO DE MANTENIMIENTO PERIODICO DEL CAMINO VECINAL TRAMO: EMP. SM-113 - YURACYACU - SAN FERNANDO",
+      valorReferencial: "S/ 1,450,000.00",
+      valorNumerico: 1450000,
+      sistemaContratacion: "A Suma Alzada",
+      plazoEjecucion: "90 días calendario",
+      modalidad: "Servicio en General",
+      tipologiaProyecto: "Mantenimiento Periódico Vial",
+    };
+  }, [tender]);
+
+  const isInitializedDocsRef = useRef(false);
+
+  // Initialize once on mount or when company/tender is first loaded, NOT on every keystroke
+  useEffect(() => {
+    if (!isInitializedDocsRef.current) {
+      isInitializedDocsRef.current = true;
+      setContratoHtml(getContratoConsorcioHtml(currentTender, company));
+      setAnexo5Html(getAnexo5PromesaConsorcioHtml(currentTender, company));
+    }
+  }, []);
+
+  const handleDownloadContratoWord = async () => {
+    setIsDownloadingDocx(true);
+    try {
+      const blob = await generateContratoConsorcioDocx(currentTender, company);
+      downloadDocxBlob(blob, `Contrato_Privado_Consorcio_${currentTender.nomenclatura.replace(/[\/\\:]/g, "_")}.docx`);
+    } catch (err) {
+      console.error("Error generating contrato word:", err);
+    } finally {
+      setIsDownloadingDocx(false);
+    }
+  };
+
+  const handleDownloadAnexo5Word = async () => {
+    setIsDownloadingDocx(true);
+    try {
+      const blob = await generateAnexo5PromesaConsorcioDocx(currentTender, company);
+      downloadDocxBlob(blob, `Anexo_05_Promesa_Formal_Consorcio_${currentTender.nomenclatura.replace(/[\/\\:]/g, "_")}.docx`);
+    } catch (err) {
+      console.error("Error generating anexo 5 word:", err);
+    } finally {
+      setIsDownloadingDocx(false);
+    }
+  };
+
+  const handleResetContrato = () => {
+    setContratoHtml(getContratoConsorcioHtml(currentTender, company));
+  };
+
+  const handleResetAnexo5 = () => {
+    setAnexo5Html(getAnexo5PromesaConsorcioHtml(currentTender, company));
   };
 
   // Strictly 2 consortium members
@@ -289,7 +348,7 @@ En señal de conformidad, las partes suscriben el presente contrato en la ciudad
         <div>
           <div className="flex items-center space-x-2 text-blue-600 text-xs font-bold uppercase tracking-wider mb-1">
             <Building2 className="w-4 h-4" />
-            <span>Paso 2 de 7 • Identificación del Postor • Empresa Individual o Consorcio (2 Empresas)</span>
+            <span>Paso 2 de 6 • Identificación del Postor • Empresa Individual o Consorcio (2 Empresas)</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
             Identificación del Postor y Consorcio Postor
@@ -414,8 +473,8 @@ En señal de conformidad, las partes suscriben el presente contrato en la ciudad
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              <Eye className="w-4 h-4 text-blue-600" />
-              <span>4. Visualizador en Vivo del Contrato</span>
+              <FileText className="w-4 h-4 text-blue-600" />
+              <span>4. Editor Word Interactivo (Contrato y Anexo 5)</span>
             </button>
           </div>
 
@@ -1047,268 +1106,83 @@ En señal de conformidad, las partes suscriben el presente contrato en la ciudad
             </div>
           )}
 
-          {/* TAB 4: VISUALIZADOR EN VIVO DEL CONTRATO / ANEXO 5 */}
+          {/* TAB 4: EDITOR WORD INTERACTIVO DEL CONTRATO / ANEXO 5 */}
           {activeConsortiumTab === "visualizador" && (
-            <div className="bg-white rounded-b-xl shadow-sm border border-slate-200 overflow-hidden text-xs">
-              {/* Visualizer Top Bar */}
-              <div className="bg-slate-900 text-white px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-4">
+              {/* Document Selector Ribbon */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 bg-blue-600 rounded-lg">
-                    <ScrollText className="w-4 h-4 text-white" />
+                  <div className="p-2 bg-blue-600 rounded-xl text-white shadow-xs">
+                    <ScrollText className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-white">
-                      Visualizador de Documentación Legal del Consorcio
+                    <h3 className="font-bold text-sm text-slate-900">
+                      Editor Documentario Tipo Word (Consorcio y Anexo 5)
                     </h3>
-                    <p className="text-[11px] text-slate-300">
-                      Vista previa renderizada en tiempo real con todos los datos legales ingresados.
+                    <p className="text-xs text-slate-500">
+                      Edita directamente en la hoja cualquier cláusula, porcentaje o representante como en Microsoft Word.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 flex text-[11px] font-semibold">
+                  <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex text-xs font-bold">
                     <button
                       type="button"
                       onClick={() => setPreviewDocType("contrato")}
-                      className={`px-3 py-1 rounded transition cursor-pointer ${
+                      className={`px-3.5 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1.5 ${
                         previewDocType === "contrato"
-                          ? "bg-blue-600 text-white font-bold"
-                          : "text-slate-300 hover:text-white"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Contrato Notarial
+                      <Stamp className="w-3.5 h-3.5" />
+                      <span>Contrato Notarial de Consorcio</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPreviewDocType("anexo5")}
-                      className={`px-3 py-1 rounded transition cursor-pointer ${
+                      className={`px-3.5 py-1.5 rounded-lg transition cursor-pointer flex items-center space-x-1.5 ${
                         previewDocType === "anexo5"
-                          ? "bg-blue-600 text-white font-bold"
-                          : "text-slate-300 hover:text-white"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Promesa Anexo 5
+                      <FileCheck2 className="w-3.5 h-3.5" />
+                      <span>Anexo 5: Promesa Formal OSCE</span>
                     </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyText}
-                    className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer text-xs"
-                    title="Copiar texto completo al portapapeles"
-                  >
-                    {copiedText ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400 font-bold">¡Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copiar Texto</span>
-                      </>
-                    )}
-                  </button>
                 </div>
               </div>
 
-              {/* Document Sheet Container */}
-              <div className="bg-slate-100/70 p-4 sm:p-8 flex justify-center">
-                <div className="w-full max-w-3xl bg-white shadow-md border border-slate-300 rounded-sm p-6 sm:p-10 text-slate-800 leading-relaxed font-serif space-y-4">
-                  {previewDocType === "contrato" ? (
-                    <>
-                      {/* Document Header */}
-                      <div className="text-center pb-4 border-b-2 border-slate-900 space-y-1">
-                        <h2 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 uppercase">
-                          CONTRATO PRIVADO DE CONSORCIO CON FIRMAS LEGALIZADAS NOTARIALMENTE
-                        </h2>
-                        <p className="text-xs font-sans text-slate-600 font-semibold uppercase">
-                          {company.nombreConsorcio || "CONSORCIO VIAL NORTE"}
-                        </p>
-                        <p className="text-[11px] font-sans text-blue-900 font-bold">
-                          {currentTender.nomenclatura}
-                        </p>
-                      </div>
-
-                      {/* Introduction */}
-                      <p className="text-justify text-xs">
-                        Conste por el presente documento privado de <strong>CONTRATO DE CONSORCIO</strong>, que celebran de conformidad con lo establecido en el <strong>Artículo 13 de la Ley de Contrataciones del Estado (Ley N° 30225 / Ley N° 32069)</strong>, su Reglamento aprobado mediante D.S. N° 344-2018-EF, y supletoriamente por los <strong>Artículos 445° al 448° de la Ley General de Sociedades (Ley N° 26887)</strong>:
-                      </p>
-
-                      {/* Consortiated Parties */}
-                      <div className="bg-slate-50/80 p-3.5 rounded border border-slate-200 space-y-2 text-xs font-sans">
-                        <div className="text-justify">
-                          <strong>1. {member1.razonSocial}</strong>, con <strong>RUC N° {member1.ruc}</strong>, inscrita en la <strong>Partida Electrónica N° {member1.partidaRegistralSunarp || "11052546"}</strong>, Asiento {member1.asientoRegistral || "C00003"} del Registro de Personas Jurídicas de la {member1.sedeRegistral || "SUNARP"}, con domicilio fiscal en {member1.domicilioFiscal}, debidamente representada por su {member1.cargoRepresentante || "Gerente General"}, don(ña) <strong>{member1.representante}</strong>, identificado con <strong>DNI N° {member1.dni}</strong>.
-                        </div>
-                        <div className="text-justify pt-1 border-t border-slate-200">
-                          <strong>2. {member2.razonSocial}</strong>, con <strong>RUC N° {member2.ruc}</strong>, inscrita en la <strong>Partida Electrónica N° {member2.partidaRegistralSunarp || "11084474"}</strong>, Asiento {member2.asientoRegistral || "C00002"} del Registro de Personas Jurídicas de la {member2.sedeRegistral || "SUNARP"}, con domicilio fiscal en {member2.domicilioFiscal}, debidamente representada por su {member2.cargoRepresentante || "Gerente General"}, don(ña) <strong>{member2.representante}</strong>, identificado con <strong>DNI N° {member2.dni}</strong>.
-                        </div>
-                      </div>
-
-                      {/* Clauses */}
-                      <div className="space-y-3 text-justify text-xs">
-                        <div>
-                          <strong>CLÁUSULA PRIMERA: DE LAS PARTES Y MARCO LEGAL.-</strong> Las partes declaran ser empresas legalmente constituidas e inscritas en el Registro Nacional de Proveedores (RNP) del OSCE.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA SEGUNDA: DEL OBJETO DEL CONSORCIO.-</strong> El Consorcio tiene por objeto exclusivo la participación conjunta en el procedimiento de selección <strong>{currentTender.nomenclatura}</strong>, convocado por <strong>{currentTender.entidadConvocante}</strong>, para la contratación de: <em>"{currentTender.descripcionObjeto || currentTender.objetoContratacion}"</em>.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA TERCERA: DENOMINACIÓN Y DOMICILIO COMÚN.-</strong> El Consorcio actuará bajo la denominación de <strong>"{company.nombreConsorcio || "CONSORCIO VIAL NORTE"}"</strong>, fijando su domicilio común en {company.domicilioComunConsorcio || member1.domicilioFiscal} y correo electrónico oficial {company.emailComunConsorcio || "consorcio@gmail.com"}.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA CUARTA: DURACIÓN DEL CONSORCIO.-</strong> El plazo de vigencia rige desde la suscripción del presente hasta la total culminación, liquidación y pago final del contrato derivado.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA QUINTA: PORCENTAJE DE PARTICIPACIÓN Y OBLIGACIONES ASUMIDAS.-</strong>
-                          <ul className="list-disc pl-5 mt-1 space-y-1 font-sans">
-                            <li>
-                              <strong>{member1.razonSocial} ({member1.porcentajeParticipacion}%):</strong> {member1.obligaciones}
-                            </li>
-                            <li>
-                              <strong>{member2.razonSocial} ({member2.porcentajeParticipacion}%):</strong> {member2.obligaciones}
-                            </li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA SEXTA: OPERADOR TRIBUTARIO Y FACTURACIÓN.-</strong> Se designa a <strong>{company.operadorTributario || member1.razonSocial}</strong> como Operador Tributario facultado para centralizar la facturación y contabilidad del consorcio conforme a la normativa SUNAT.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA SÉPTIMA: RESPONSABILIDAD SOLIDARIA E INDIVISIBLE.-</strong> Los consorciados responden solidariamente ante la Entidad por todas las obligaciones técnicas y contractuales de conformidad con el Art. 13 de la Ley de Contrataciones.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA OCTAVA: REPRESENTANTE LEGAL COMÚN Y FACULTADES NOTARIALES.-</strong> Se confiere poder especial y representación legal a don(ña) <strong>{company.representanteComunConsorcio || member1.representante}</strong> (DNI N° {company.dniRepresentanteComun || member1.dni}) y como alterno a don(ña) <strong>{company.representanteAlternoConsorcio || member2.representante}</strong> (DNI N° {company.dniRepresentanteAlterno || member2.dni}), confiriéndoles las 11 facultades notariales plenas para representación, suscripción contractual, cartas fianzas, SUNAT y liquidación.
-                        </div>
-
-                        <div>
-                          <strong>CLÁUSULA NOVENA: SOLUCIÓN DE CONTROVERSIAS Y ARBITRAJE.-</strong> Toda controversia será resuelta mediante arbitraje de derecho administrado por: <strong>{company.centroArbitraje || "Centro de Arbitraje de la PUCP / OSCE"}</strong>.
-                        </div>
-                      </div>
-
-                      {/* Signature Blocks */}
-                      <div className="pt-8 border-t border-slate-300 grid grid-cols-2 gap-6 text-center font-sans text-xs">
-                        <div className="space-y-1 pt-6 border-t border-slate-400">
-                          <p className="font-bold">{member1.representante}</p>
-                          <p className="text-[11px] text-slate-600">DNI N° {member1.dni}</p>
-                          <p className="text-[11px] text-slate-500 font-semibold">{member1.razonSocial}</p>
-                          <span className="inline-block mt-1 text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-300">
-                            Firma Legalizada Notarialmente
-                          </span>
-                        </div>
-
-                        <div className="space-y-1 pt-6 border-t border-slate-400">
-                          <p className="font-bold">{member2.representante}</p>
-                          <p className="text-[11px] text-slate-600">DNI N° {member2.dni}</p>
-                          <p className="text-[11px] text-slate-500 font-semibold">{member2.razonSocial}</p>
-                          <span className="inline-block mt-1 text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-300">
-                            Firma Legalizada Notarialmente
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    /* ANEXO 5 PREVIEW */
-                    <>
-                      <div className="text-center pb-4 border-b-2 border-slate-900 space-y-1">
-                        <h2 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 uppercase">
-                          ANEXO N° 5: PROMESA FORMAL DE CONSORCIO
-                        </h2>
-                        <p className="text-xs font-sans text-slate-600 font-semibold uppercase">
-                          (Directiva N° 005-2019-OSCE/CD • Firmas Legalizadas Notarialmente)
-                        </p>
-                        <p className="text-[11px] font-sans text-blue-900 font-bold">
-                          {currentTender.nomenclatura}
-                        </p>
-                      </div>
-
-                      <div className="space-y-3 text-justify text-xs">
-                        <p>
-                          Señores <strong>COMITÉ DE SELECCIÓN</strong> de <strong>{currentTender.entidadConvocante}</strong>:
-                        </p>
-                        <p>
-                          Los suscritos declaramos bajo juramento nuestra formal e irrevocable promesa de constituir el consorcio <strong>"{company.nombreConsorcio || "CONSORCIO VIAL NORTE"}"</strong> para participar en el procedimiento de selección <strong>{currentTender.nomenclatura}</strong>.
-                        </p>
-
-                        <div className="overflow-x-auto border border-slate-300 rounded mt-3 font-sans">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead className="bg-slate-100 border-b border-slate-300 text-slate-800">
-                              <tr>
-                                <th className="p-2 border-r border-slate-300">Empresa Integrante</th>
-                                <th className="p-2 border-r border-slate-300 text-center">% Part.</th>
-                                <th className="p-2">Obligaciones Asumidas</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                              <tr>
-                                <td className="p-2 border-r border-slate-300 font-semibold">
-                                  {member1.razonSocial} (RUC: {member1.ruc})
-                                </td>
-                                <td className="p-2 border-r border-slate-300 text-center font-bold text-blue-900">
-                                  {member1.porcentajeParticipacion}%
-                                </td>
-                                <td className="p-2 text-slate-700">
-                                  {member1.obligaciones}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="p-2 border-r border-slate-300 font-semibold">
-                                  {member2.razonSocial} (RUC: {member2.ruc})
-                                </td>
-                                <td className="p-2 border-r border-slate-300 text-center font-bold text-blue-900">
-                                  {member2.porcentajeParticipacion}%
-                                </td>
-                                <td className="p-2 text-slate-700">
-                                  {member2.obligaciones}
-                                </td>
-                              </tr>
-                              <tr className="bg-slate-50 font-bold">
-                                <td className="p-2 border-r border-slate-300">TOTAL CONSOLIDADO</td>
-                                <td className="p-2 border-r border-slate-300 text-center text-emerald-700">
-                                  {totalPercentage.toFixed(2)}%
-                                </td>
-                                <td className="p-2 text-slate-500">Conforme a Directiva OSCE</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <p className="pt-2">
-                          Designamos como Representante Común a don(ña) <strong>{company.representanteComunConsorcio || member1.representante}</strong> (DNI N° {company.dniRepresentanteComun || member1.dni}) fijando domicilio común en {company.domicilioComunConsorcio || member1.domicilioFiscal}.
-                        </p>
-                      </div>
-
-                      {/* Signature Blocks */}
-                      <div className="pt-8 border-t border-slate-300 grid grid-cols-2 gap-6 text-center font-sans text-xs">
-                        <div className="space-y-1 pt-6 border-t border-slate-400">
-                          <p className="font-bold">{member1.representante}</p>
-                          <p className="text-[11px] text-slate-600">DNI N° {member1.dni}</p>
-                          <p className="text-[11px] text-slate-500 font-semibold">{member1.razonSocial}</p>
-                          <span className="inline-block mt-1 text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-300">
-                            Firma Legalizada
-                          </span>
-                        </div>
-
-                        <div className="space-y-1 pt-6 border-t border-slate-400">
-                          <p className="font-bold">{member2.representante}</p>
-                          <p className="text-[11px] text-slate-600">DNI N° {member2.dni}</p>
-                          <p className="text-[11px] text-slate-500 font-semibold">{member2.razonSocial}</p>
-                          <span className="inline-block mt-1 text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-300">
-                            Firma Legalizada
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+              {/* Word Document Editor Container */}
+              {previewDocType === "contrato" ? (
+                <WordDocumentEditor
+                  initialHtml={contratoHtml}
+                  documentTitle="Contrato Privado de Consorcio con Firmas Legalizadas Notarialmente"
+                  documentSubtitle={`${company.nombreConsorcio || "CONSORCIO VIAL NORTE"} • 11 Facultades Notariales Plenas`}
+                  nomenclatura={currentTender.nomenclatura}
+                  onContentChange={(html) => {
+                    setContratoHtml(html);
+                  }}
+                  onDownloadDocx={handleDownloadContratoWord}
+                  onResetToDefault={handleResetContrato}
+                  isDownloadingDocx={isDownloadingDocx}
+                />
+              ) : (
+                <WordDocumentEditor
+                  initialHtml={anexo5Html}
+                  documentTitle="Anexo N° 5: Promesa Formal de Consorcio"
+                  documentSubtitle="Directiva N° 005-2019-OSCE/CD • Ley N° 32069 • OSCE / SEACE"
+                  nomenclatura={currentTender.nomenclatura}
+                  onContentChange={(html) => {
+                    setAnexo5Html(html);
+                  }}
+                  onDownloadDocx={handleDownloadAnexo5Word}
+                  onResetToDefault={handleResetAnexo5}
+                  isDownloadingDocx={isDownloadingDocx}
+                />
+              )}
             </div>
           )}
 

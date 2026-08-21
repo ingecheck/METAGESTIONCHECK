@@ -32,24 +32,34 @@ import {
   TenderPersonalClaveRequirement,
   TenderEquipamientoRequirement,
 } from "../types/osce";
-import { SAMPLE_TENDERS } from "../data/sampleTenders";
 import { analyzeBasesAPI } from "../services/api";
 import { extractTextFromPdfFile, ExtractedPdfResult } from "../services/pdfExtractor";
 import { ArrowRight } from "lucide-react";
 
 interface TenderAnalyzerProps {
   tender: TenderInfo;
-  onUpdateTender: (updated: TenderInfo) => void;
-  onNavigateToBuilder: () => void;
+  onUpdateTender?: (updated: TenderInfo) => void;
+  setTender?: React.Dispatch<React.SetStateAction<TenderInfo>> | ((updated: TenderInfo) => void);
+  onNext?: () => void;
+  onNavigateToBuilder?: () => void;
   onNavigateToTab?: (tab: string) => void;
 }
 
 export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
   tender,
   onUpdateTender,
+  setTender,
+  onNext,
   onNavigateToBuilder,
   onNavigateToTab,
 }) => {
+  const updateTenderHandler = (updated: TenderInfo) => {
+    if (typeof onUpdateTender === "function") {
+      onUpdateTender(updated);
+    } else if (typeof setTender === "function") {
+      setTender(updated);
+    }
+  };
   const [inputMode, setInputMode] = useState<"pdf" | "text">("pdf");
   const [rawText, setRawText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -168,7 +178,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
       editDepartamento ? `Departamento de ${editDepartamento}` : ""
     ].filter(Boolean).join(", ") || editLugar || "PERÚ";
 
-    onUpdateTender({
+    updateTenderHandler({
       ...tender,
       nomenclatura: editNomenclatura,
       entidadConvocante: editEntidad,
@@ -206,15 +216,6 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
     setIsEditModalOpen(false);
     setSuccessMessage("¡Datos del proyecto de inversión, entidad, ubicación y calificación actualizados con éxito!");
     setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  const handleSelectSample = (sampleId: string) => {
-    const selected = SAMPLE_TENDERS.find((t) => t.id === sampleId);
-    if (selected) {
-      onUpdateTender({ ...selected });
-      setSuccessMessage(`Procedimiento "${selected.nomenclatura}" cargado exitosamente.`);
-      setTimeout(() => setSuccessMessage(null), 3500);
-    }
   };
 
   // PDF File Upload and Parsing Handler
@@ -312,7 +313,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
         sugerenciasConsultas: extracted.sugerenciasConsultas || tender.sugerenciasConsultas,
       };
 
-      onUpdateTender(updatedTender);
+      updateTenderHandler(updatedTender);
       setSuccessMessage("¡Bases analizadas con éxito! Se extrajo el Proyecto de Inversión, CUI, Entidad, Ubicación, Especialidad y Requisitos.");
     } catch (err: any) {
       setErrorMessage(err.message || "Error al analizar las bases.");
@@ -328,65 +329,36 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Banner */}
-      <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-md border border-slate-800">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-3.5 pb-6">
+      {/* Top Banner - Compact & Focused */}
+      <div className="bg-slate-900 rounded-xl p-4 text-white shadow-xs border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center space-x-2 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Compass className="w-4 h-4" />
-              <span>Paso 1 de 7 • Análisis de Bases del SEACE y Requisitos</span>
+            <div className="flex items-center space-x-2 text-blue-400 text-[11px] font-semibold uppercase tracking-wider mb-0.5">
+              <Compass className="w-3.5 h-3.5" />
+              <span>Paso 1 de 6 • Análisis de Bases SEACE</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
-              Analizador de Bases: Especialidad, Requisitos de Calificación y Presupuesto
+            <h1 className="text-base font-bold tracking-tight text-slate-100">
+              Analizador de Bases: Especialidad y Requisitos de Calificación
             </h1>
-            <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-3xl">
-              Cargue el PDF de Bases del SEACE o pegue el texto. El sistema extraerá y estructurará automáticamente la especialidad, sub-especialidad, definición de obras similares, personal clave y equipamiento estratégico del Capítulo III.
+            <p className="text-slate-300 text-xs mt-0.5 max-w-2xl">
+              Cargue el PDF de Bases del SEACE o pegue el texto para extraer automáticamente especialidad, sub-especialidad y requisitos de calificación.
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => onNavigateToTab ? onNavigateToTab("company") : onNavigateToBuilder()}
-              className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition shadow-xs cursor-pointer flex items-center space-x-2 whitespace-nowrap"
-            >
-              <span>Siguiente: Perfil Postor / Consorcio (Paso 2)</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Procedure Selector */}
-        <div className="mt-6 pt-4 border-t border-slate-800">
-          <label className="block text-xs font-medium text-slate-300 mb-2">
-            Procedimiento activo en el sistema:
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {SAMPLE_TENDERS.map((sample) => (
-              <button
-                key={sample.id}
-                onClick={() => handleSelectSample(sample.id)}
-                className={`text-left p-3 rounded-xl border text-xs transition cursor-pointer ${
-                  tender.id === sample.id
-                    ? "bg-blue-600/30 border-blue-400 text-white font-medium shadow-2xs"
-                    : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700/80 hover:text-white"
-                }`}
-              >
-                <div className="font-semibold truncate text-blue-300">{sample.nomenclatura}</div>
-                <div className="text-[11px] text-slate-400 truncate mt-0.5">{sample.entidadConvocante}</div>
-                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-300">
-                  <span>{sample.objetoContratacion}</span>
-                  <span className="font-semibold text-emerald-400">{sample.valorEstimadoReferencial}</span>
-                </div>
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => onNavigateToTab ? onNavigateToTab("company") : onNavigateToBuilder && onNavigateToBuilder()}
+            className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-xs cursor-pointer flex items-center space-x-1.5 shrink-0 self-start sm:self-auto"
+          >
+            <span>Ir a Perfil Postor (Paso 2)</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
         </div>
       </div>
 
       {/* Feedback Messages */}
       {errorMessage && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2 rounded-lg text-xs flex items-center justify-between shadow-2xs">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
             <span>{errorMessage}</span>
@@ -396,7 +368,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
       )}
 
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-lg text-xs flex items-center justify-between shadow-2xs">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{successMessage}</span>
@@ -405,48 +377,48 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
         </div>
       )}
 
-      {/* Dual Input Area: PDF Upload or Text Paste */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+      {/* Dual Input Area: PDF Upload or Text Paste - Compact */}
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
         {/* Tab selector for Input Mode */}
-        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
+        <div className="px-3.5 py-1.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center space-x-1.5">
             <button
               onClick={() => setInputMode("pdf")}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
                 inputMode === "pdf"
                   ? "bg-blue-600 text-white shadow-2xs"
                   : "text-slate-600 hover:bg-slate-200/70"
               }`}
             >
-              <UploadCloud className="w-4 h-4" />
+              <UploadCloud className="w-3.5 h-3.5" />
               <span>Subir Archivo PDF de Bases</span>
             </button>
 
             <button
               onClick={() => setInputMode("text")}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
                 inputMode === "text"
                   ? "bg-blue-600 text-white shadow-2xs"
                   : "text-slate-600 hover:bg-slate-200/70"
               }`}
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-3.5 h-3.5" />
               <span>Pegar Texto de Bases / TDR</span>
             </button>
           </div>
 
-          <span className="text-xs text-slate-500 bg-white px-2.5 py-1 rounded-md border border-slate-200">
-            Motor de Análisis Normativo y Extracción Estructurada
+          <span className="text-[10.5px] text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+            Motor de Análisis Normativo SEACE
           </span>
         </div>
 
-        <div className="p-6">
+        <div className="p-3.5">
           {inputMode === "pdf" ? (
-            /* PDF Upload Box */
-            <div className="space-y-4">
+            /* PDF Upload Box - Compact & proportional */
+            <div className="space-y-2.5">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center ${
+                className={`border-2 border-dashed rounded-lg p-3.5 text-center cursor-pointer transition flex flex-col items-center justify-center ${
                   uploadedPdf
                     ? "border-emerald-400 bg-emerald-50/40 hover:bg-emerald-50/70"
                     : "border-slate-300 hover:border-blue-500 bg-slate-50/60 hover:bg-blue-50/30"
@@ -461,64 +433,61 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
                 />
 
                 {isExtractingPdf ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+                  <div className="flex flex-col items-center space-y-1">
+                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
                     <div className="text-xs font-bold text-slate-800">
                       Extrayendo páginas y tablas del PDF...
                     </div>
-                    <div className="text-[11px] text-slate-500">
-                      Procesando capas de texto e imágenes escaneadas
+                    <div className="text-[10px] text-slate-500">
+                      Procesando capas de texto
                     </div>
                   </div>
                 ) : uploadedPdf ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                      <FileCheck className="w-6 h-6" />
+                  <div className="flex flex-col items-center space-y-1">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <FileCheck className="w-4 h-4" />
                     </div>
-                    <div className="text-sm font-bold text-slate-900">
+                    <div className="text-xs font-bold text-slate-900">
                       {uploadedPdf.fileName}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {uploadedPdf.pageCount} páginas leídas • {(uploadedPdf.fileSizeBytes / 1024 / 1024).toFixed(2)} MB
+                    <div className="text-[10.5px] text-slate-500">
+                      {uploadedPdf.pageCount} páginas • {(uploadedPdf.fileSizeBytes / 1024 / 1024).toFixed(2)} MB
                     </div>
                     {uploadedPdf.isScannedImage ? (
-                      <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 font-semibold text-[11px] mt-1 border border-amber-300">
-                        <span>🔍 Documento Escaneado detectado: Digitalización OCR activada</span>
+                      <div className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold text-[10px] border border-amber-300">
+                        <span>🔍 Documento Escaneado: OCR activado</span>
                       </div>
                     ) : (
-                      <div className="text-[11px] text-emerald-700 font-semibold mt-1">
-                        ✓ Contenido listo para estructuración. Haga clic abajo para analizar.
+                      <div className="text-[10px] text-emerald-700 font-semibold">
+                        ✓ Contenido listo para análisis.
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                      <UploadCloud className="w-6 h-6" />
+                  <div className="flex flex-col items-center space-y-1">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <UploadCloud className="w-4 h-4" />
                     </div>
-                    <div className="text-sm font-bold text-slate-900">
-                      Haga clic o arrastre aquí el archivo PDF de las Bases del SEACE
+                    <div className="text-xs font-bold text-slate-800">
+                      Haga clic o arrastre el archivo PDF de las Bases del SEACE
                     </div>
-                    <div className="text-xs text-slate-500 max-w-md">
-                      Soporta documentos PDF de Bases Administrativas, Términos de Referencia (TDR), Especificaciones Técnicas y Requerimientos de Calificación.
+                    <div className="text-[10.5px] text-slate-500">
+                      Bases Administrativas, Términos de Referencia o Especificaciones Técnicas
                     </div>
-                    <span className="text-[11px] bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-md mt-2">
-                      Seleccionar archivo (.pdf)
-                    </span>
                   </div>
                 )}
               </div>
 
               {uploadedPdf && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-slate-700">Vista previa del texto extraído del PDF:</span>
-                    <span className="text-slate-400 text-[11px]">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-700 text-[10.5px]">Vista previa del texto extraído:</span>
+                    <span className="text-slate-400 text-[9.5px]">
                       {rawText.length.toLocaleString()} caracteres
                     </span>
                   </div>
-                  <div className="max-h-32 overflow-y-auto font-mono text-[11px] text-slate-600 bg-white p-2.5 rounded border border-slate-200 whitespace-pre-wrap">
-                    {rawText.substring(0, 1500)}...
+                  <div className="max-h-20 overflow-y-auto font-mono text-[9.5px] text-slate-600 bg-white p-2 rounded border border-slate-200 whitespace-pre-wrap">
+                    {rawText.substring(0, 800)}...
                   </div>
                 </div>
               )}
@@ -529,38 +498,38 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               <textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                rows={6}
+                rows={4}
                 placeholder="Pegue aquí el texto copiado de las bases del SEACE (Capítulo III Requerimiento, TDR, Requisitos de Calificación, etc.). El sistema extraerá automáticamente el alcance, plazos, valor referencial, especialidad, sub-especialidad, personal clave y equipamiento..."
-                className="w-full text-xs font-mono text-slate-800 border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-50/50"
+                className="w-full text-xs font-mono text-slate-800 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-50/50"
               />
             </div>
           )}
 
           {/* Action Trigger */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            <div className="text-xs text-slate-500">
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="text-[10.5px] text-slate-500">
               {rawText ? (
                 <span className="text-emerald-700 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Documento preparado para procesamiento normativo
+                  <CheckCircle2 className="w-3 h-3" /> Bases listas para procesamiento
                 </span>
               ) : (
-                <span>Suba un archivo PDF o pegue el contenido para iniciar el análisis.</span>
+                <span>Cargue el archivo o pegue el texto para iniciar.</span>
               )}
             </div>
 
             <button
               onClick={handleAnalyzeWithAI}
               disabled={isAnalyzing || !rawText.trim()}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition shadow-xs cursor-pointer disabled:opacity-50"
+              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
               {isAnalyzing ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Procesando Especialidad y Requisitos...</span>
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  <span>Procesando...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <Sparkles className="w-3 h-3 text-amber-300" />
                   <span>Analizar y Estructurar Oferta</span>
                 </>
               )}
@@ -812,7 +781,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
         </div>
 
         {/* MÓDULO 1: Experiencia del Postor en la Especialidad */}
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center space-x-2">
               <Award className="w-5 h-5 text-amber-600" />
@@ -825,8 +794,8 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1">
               <span className="text-slate-500 font-medium">Monto Mínimo Acumulado Exigido:</span>
               <div className="text-base font-extrabold text-emerald-700">
                 {tender.requisitosCalificacion.experienciaPostor.montoMinimoAcumulado || tender.valorEstimadoReferencial}
@@ -836,24 +805,38 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               </p>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
-              <span className="text-slate-500 font-medium">Límite de Contrataciones:</span>
-              <div className="text-sm font-bold text-slate-900">
-                Hasta un máximo de {tender.requisitosCalificacion.experienciaPostor.numeroMaximoContrataciones || 20} contrataciones
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Conforme a la Directiva de Bases Estándar del OSCE.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1">
-              <span className="text-slate-500 font-medium">Periodo de Antigüedad:</span>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1">
+              <span className="text-slate-500 font-medium">Periodo de Antigüedad Válido:</span>
               <div className="text-sm font-bold text-slate-900">
                 Últimos {tender.requisitosCalificacion.experienciaPostor.periodoAntiguedadAnios || 10} años
               </div>
               <p className="text-[11px] text-slate-500">
-                Computados hasta la fecha de presentación de ofertas.
+                Computados hasta la fecha de presentación de ofertas en el SEACE.
               </p>
+            </div>
+          </div>
+
+          {/* Verificación de Especialidad y Sub-Especialidad vinculadas a Obras Similares */}
+          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200/80 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="font-bold text-blue-950 flex items-center gap-1.5">
+                <Compass className="w-4 h-4 text-blue-600" />
+                <span>Especialidad y Sub-Especialidad Exigidas para la Calificación:</span>
+              </div>
+              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded border border-blue-200">
+                Criterio de Validación RNP
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-white p-2.5 rounded-lg border border-blue-100">
+                <span className="text-slate-500 font-semibold block text-[10px]">Especialidad Requerida:</span>
+                <strong className="text-blue-900 font-bold text-xs">{tender.especialidad || "Obras Viales y Pavimentación Urbana"}</strong>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-blue-100">
+                <span className="text-slate-500 font-semibold block text-[10px]">Sub-Especialidad / Alcance:</span>
+                <strong className="text-indigo-900 font-bold text-xs">{tender.subEspecialidad || "Pistas, veredas y pavimentos rígidos/flexibles"}</strong>
+              </div>
             </div>
           </div>
 
@@ -869,17 +852,20 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
             </p>
           </div>
 
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
-            <span className="font-bold text-slate-700">Documentos de Sustento Exigidos:</span>
-            <p className="text-slate-600 mt-1 text-[11px] leading-relaxed">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/70 text-xs space-y-1.5">
+            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-slate-600" />
+              Documentos de Sustento Exigidos para Acreditación (Completos):
+            </span>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-slate-700 text-[11px] leading-relaxed">
               {tender.requisitosCalificacion.experienciaPostor.documentosSustento ||
-                "Copia simple de contratos u órdenes de servicio/compra con sus respectivas actas de recepción de obra, resoluciones de liquidación final o comprobantes de pago cancelados."}
-            </p>
+                "Copia simple de contratos u órdenes de servicio con sus respectivas actas de recepción y conformidad, resoluciones de liquidación de obra con constancia de pago final o comprobantes de pago cancelados de forma fehaciente (voucher de depósito bancario, estado de cuenta o sello de cancelado)."}
+            </div>
           </div>
         </div>
 
         {/* MÓDULO 2: Personal Clave Requerido */}
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
             <div className="flex items-center space-x-2">
               <UserCheck className="w-5 h-5 text-blue-600" />
@@ -938,7 +924,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
         </div>
 
         {/* MÓDULO 3: Equipamiento Estratégico Mínimo */}
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
             <div className="flex items-center space-x-2">
               <Wrench className="w-5 h-5 text-slate-700" />
@@ -993,31 +979,6 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               </table>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Next Step Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-900/40 shadow-sm">
-        <div>
-          <div className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">
-            Paso 1 Completado • Bases Analizadas
-          </div>
-          <h4 className="text-base font-bold text-white mt-0.5">
-            Siguiente Paso: Configurar el Perfil del Postor (Empresa Individual o Consorcio)
-          </h4>
-          <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-            Configure la empresa postora o añada las empresas consorciadas con sus porcentajes y obligaciones para inyectarlos en los Anexos OSCE.
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-3 shrink-0">
-          <button
-            onClick={() => onNavigateToTab ? onNavigateToTab("company") : onNavigateToBuilder()}
-            className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition shadow cursor-pointer flex items-center space-x-2"
-          >
-            <span>Continuar al Paso 2: Perfil del Postor / Consorcio</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

@@ -3,7 +3,6 @@ import {
   Building2,
   HardHat,
   TrendingUp,
-  BookOpen,
   Scale,
   Award,
   Calendar,
@@ -21,7 +20,6 @@ import {
 } from "../../types/obras";
 import { WorksDashboard } from "./WorksDashboard";
 import { WorksValuations } from "./WorksValuations";
-import { WorksDigitalNotebook } from "./WorksDigitalNotebook";
 import { WorksModificationsManager } from "./WorksModificationsManager";
 import { WorksSettlementManager } from "./WorksSettlementManager";
 
@@ -68,9 +66,8 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
   const navSubItems = [
     { id: "dashboard-obras", label: "Panel Principal", icon: Building2 },
     { id: "valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "cuaderno", label: "2. Cuaderno de Obra Digital", icon: BookOpen },
-    { id: "adicionales", label: "3. Adicionales y Plazos", icon: Scale },
-    { id: "liquidacion", label: "4. Recepción y Liquidación", icon: Award },
+    { id: "adicionales", label: "2. Adicionales y Plazos", icon: Scale },
+    { id: "liquidacion", label: "3. Recepción y Liquidación", icon: Award },
   ];
 
   return (
@@ -114,14 +111,6 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
           obra={obra}
           valorizaciones={valorizaciones}
           setValorizaciones={setValorizaciones}
-        />
-      )}
-
-      {currentSubTab === "cuaderno" && (
-        <WorksDigitalNotebook
-          obra={obra}
-          asientos={asientos}
-          setAsientos={setAsientos}
         />
       )}
 

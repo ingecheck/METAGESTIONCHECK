@@ -512,7 +512,7 @@ Devuelve estrictamente un JSON con este formato:
       const hasPdfBase64 = typeof pdfBase64 === "string" && pdfBase64.length > 50;
       const hasImages = Array.isArray(pageImagesBase64) && pageImagesBase64.length > 0;
 
-      const promptInstruction = `Actúa como especialista en Contrataciones Públicas del Perú (Ley N° 30225, D.S. N° 344-2018-EF y directivas del OSCE) experto en Requisitos de Calificación de Experiencia del Postor (Anexo N° 8) y Obras/Servicios Similares.
+      const promptInstruction = `Actúa como especialista y auditor senior en Contrataciones Públicas del Perú (Ley N° 30225, Ley N° 32069, D.S. N° 344-2018-EF y directivas del OSCE / MEF) experto en Requisitos de Calificación de Experiencia del Postor (Anexo N° 8) y Obras/Servicios Similares.
 
 DATOS DEL PROCEDIMIENTO Y REQUISITOS DE BASES:
 - Nomenclatura: ${tenderInfo?.nomenclatura || "Procedimiento SEACE"}
@@ -522,26 +522,17 @@ DATOS DEL PROCEDIMIENTO Y REQUISITOS DE BASES:
 - Definición de Obras/Servicios Similares en Bases: ${tenderInfo?.requisitosCalificacion?.experienciaPostor?.definicionObrasSimilares || tenderInfo?.requisitosCalificacion?.experienciaPostor?.descripcionSimilaridad || "Obras o servicios similares ejecutados en los últimos 10 años / 8 años."}
 - Monto Mínimo Acumulado Exigido: ${tenderInfo?.requisitosCalificacion?.experienciaPostor?.montoMinimoAcumulado || tenderInfo?.valorEstimadoReferencial || "S/ 514,737.28"}
 
-INSTRUCCIONES PARA EXTRACCIÓN Y CLASIFICACIÓN TÉCNICA:
-1. Extrae CADA UNO de los contratos, órdenes de compra/servicio, comprobantes cancelados o actas de conformidad contenidos en el documento ${hasPdfBase64 ? "(PDF analizado)" : hasImages ? "(Imágenes OCR)" : "(Texto provisto)"}.
-2. Para cada contrato/comprobante determina:
-   - Cliente / Entidad Contratante
-   - Sector del Cliente (Público o Privado)
-   - Objeto exacto de la contratación
-   - N° de Documento (Contrato N°, O/S N°, Factura N°)
-   - Fecha de Conformidad / Culminación (formato YYYY-MM-DD)
-   - Moneda (PEN o USD)
-   - Monto Original y Monto en Soles (PEN) (usar tipo de cambio ~3.75 si es USD)
-   - Tipo de Comprobante ("Contrato + Conformidad" | "Orden de Servicio/Compra + Conformidad" | "Comprobante de Pago Cancelado")
-   - Antigüedad válida conforme a OSCE (en Perú: máx 10 años para obras o 8 años para servicios, calculado desde 2026).
-   - ESPECIALIDAD del contrato (ej. "Obras Viales", "Edificaciones", "Saneamiento", "Electromecánica", "Servicios Generales", "Consultoría").
-   - SUB-ESPECIALIDAD del contrato (ej. "Pavimentación asfáltica de pistas y veredas", "Mantenimiento periódico", "Edificación escolar", "Redes de agua potable", etc.).
-   - EVALUACIÓN DE SIMILARIDAD:
-     * "esSimilar": true si coincide con el objeto, especialidad o definición de obras similares de las Bases; false si es experiencia general no similar.
-     * "porcentajeSimilaridad": número del 0 al 100 indicando el grado de similitud técnica con el proyecto.
-     * "justificacionSimilaridad": explicación concisa de por qué califica o no como obra/servicio similar según los criterios del OSCE.
+OBJETIVO DEL ANÁLISIS DE EXPEDIENTE / CV COMPLETO:
+El usuario ha cargado un archivo PDF o compilado documental que puede contener CVs completos, múltiples contratos, actas de recepción de obra, resoluciones de liquidación, órdenes de servicio o facturas.
+Debes examinar el documento página a página, DETECTAR CADA CONJUNTO DOCUMENTARIO INDIVIDUAL e indicar CON EXACTITUD:
+1. Qué tipo de documento es cada pieza (ej. "Contrato de Obra", "Acta de Recepción de Obra", "Resolución de Aprobación de Liquidación", "Orden de Servicio", "Comprobante de Pago Cancelado", "Certificado de Trabajo").
+2. En qué RANGO DE PÁGINAS exacto se ubica (ej. pagInicio: 1, pagFin: 3 -> "1-3").
+3. Clasificar la ESPECIALIDAD y SUB-ESPECIALIDAD técnica según el Catálogo Oficial OSCE.
+4. Evaluar si CALIFICA COMO SIMILAR respecto a las Bases del procedimiento (esSimilar: true/false, porcentajeSimilaridad 0-100%, justificacionSimilaridad).
+5. Validar si el sustento está completo (si tiene contrato Y acta/liquidación) o si falta algún documento.
+6. Dar la INSTRUCCIÓN DE CORTE precisa indicando al postor exactamente qué páginas recortar para armar el legajo del Sobre Técnico (ej: "Cortar Páginas 1 a 4 para presentar Contrato N° 018-2023 y su Acta de Recepción en Anexo 8").
 
-Devuelve estrictamente un JSON válido con esta estructura:
+Devuelve estrictamente un JSON válido con esta estructura exacta:
 {
   "records": [
     {
@@ -562,7 +553,43 @@ Devuelve estrictamente un JSON válido con esta estructura:
       "subEspecialidad": "...",
       "esSimilar": true,
       "porcentajeSimilaridad": 95,
-      "justificacionSimilaridad": "..."
+      "justificacionSimilaridad": "...",
+      "rangoPaginas": "1-3",
+      "pagInicio": 1,
+      "pagFin": 3,
+      "tipoDocumentoDetectado": "Contrato de Obra + Acta de Recepción",
+      "sustentoDocumentarioCompleto": true,
+      "documentosFaltantes": "Ninguno",
+      "instruccionCorte": "Cortar páginas 1 a 3 para sustento de experiencia en el Anexo 8.",
+      "rangoCorteSugerido": "1-3"
+    }
+  ],
+  "detectedDocuments": [
+    {
+      "id": "doc-1",
+      "nroDocumento": "...",
+      "cliente": "...",
+      "tipoCliente": "Público" | "Privado",
+      "tipoDocumento": "Contrato de Obra + Acta de Recepción",
+      "objetoContrato": "...",
+      "pagInicio": 1,
+      "pagFin": 4,
+      "rangoPaginas": "1-4",
+      "fechaConformidad": "YYYY-MM-DD",
+      "moneda": "PEN" | "USD",
+      "montoOriginal": 120000,
+      "montoEnSoles": 120000,
+      "especialidad": "...",
+      "subEspecialidad": "...",
+      "esSimilar": true,
+      "porcentajeSimilaridad": 95,
+      "justificacionSimilaridad": "...",
+      "validoOSCE": true,
+      "sustentoCompleto": true,
+      "documentosFaltantes": "Ninguno",
+      "instruccionCorte": "Cortar páginas 1 a 4 para acreditar experiencia en el Anexo 8.",
+      "rangoCorteSugerido": "1-4",
+      "destinatarioSobre": "experiencia"
     }
   ],
   "analisisEspecialidad": {
@@ -571,6 +598,8 @@ Devuelve estrictamente un JSON válido con esta estructura:
     "totalSimilarSoles": 0,
     "totalGeneralSoles": 0,
     "cumpleMontoMinimo": true,
+    "totalDocumentosDetectados": 1,
+    "documentosValidosParaCorte": 1,
     "recomendacionOSCE": "..."
   }
 }`;
@@ -665,11 +694,16 @@ Tu labor es analizar minuciosamente los documentos proporcionados (Curriculum Vi
 OBJETO DEL PROCEDIMIENTO: ${tenderInfo?.objetoContratacion || 'Ejecución de Obras / Servicios'}
 VALOR REFERENCIAL: ${tenderInfo?.valorEstimadoReferencial || 'S/ 514,737.28'}
 
-REGLAS DE EVALUACIÓN:
+REGLAS DE EVALUACIÓN Y SEGMENTACIÓN DE PÁGINAS PDF:
 1. Para el PERSONAL CLAVE:
-   - Extraer: cargoPostulado (ej. Residente de Obra, Especialista en Suelos y Pavimentos, Especialista en Seguridad y Medio Ambiente, etc.), nombreCompleto, dni (8 dígitos), profesion (ej. Ingeniero Civil, Arquitecto), cipOCol (Número de colegiatura CIP o CAL), tiempoExperienciaMeses (tiempo acumulado acreditado en meses), descripcionExperiencia (síntesis de obras/servicios sustentados), documentosAcreditacion (ej. Copia de Título, Habilitación CIP y 3 Certificados de Trabajo), cumpleRequisito (true si cumple con el perfil típico de bases).
+   - Extraer: cargoPostulado, nombreCompleto, dni, profesion, cipOCol, tiempoExperienciaMeses, descripcionExperiencia, documentosAcreditacion, cumpleRequisito.
+   - Segmentación de páginas: pagInicio, pagFin, rangoPaginas (ej: "1-4"), instruccionCorte (ej: "Cortar Páginas 1 a 4 para CV y colegiatura del Residente de Obra"), rangoCorteSugerido.
 2. Para el EQUIPAMIENTO ESTRATÉGICO:
-   - Extraer: denominacion (ej. Retroexcavadora sobre orugas, Rodillo liso vibratorio, Camión volquete 15m3, Estación Total), marcaModelo, anioFabricacion (año o '2022'), capacidad (potencia o capacidad operativa), estadoDisponibilidad ('Propio', 'Alquilado' o 'Compromiso de Compra/Alquiler'), sustento (ej. Factura N° F001-2093 / Tarjeta de Propiedad / Carta de Compromiso).
+   - Extraer: denominacion, marcaModelo, anioFabricacion, capacidad, estadoDisponibilidad ('Propio', 'Alquilado', 'Compromiso de Compra/Alquiler' o 'Declaración Jurada de Disponibilidad en Obra'), sustento.
+   - Segmentación de páginas si existen en el PDF: pagInicio, pagFin, rangoPaginas, instruccionCorte.
+   - Opción DJ: declarar si se puede acreditar mediante Declaración Jurada (declaradoEnDJ: true/false).
+3. DETECTAR DOCUMENTOS INDIVIDUALES PARA EL SEGMENTADOR:
+   - detectedDocuments: array con cada bloque (CV de especialista o factura/tarjeta de equipo), indicando pagInicio, pagFin, rangoPaginas, instruccionCorte, y destinatarioSobre ("personal" o "equipos").
 
 Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta:
 {
@@ -684,7 +718,12 @@ Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta:
       "tiempoExperienciaMeses": 48,
       "descripcionExperiencia": "Más de 4 años como Residente y Supervisor en obras viales, pistas y veredas.",
       "documentosAcreditacion": "Título Profesional + Certificado de Habilitación CIP + 4 Constancias de Trabajo",
-      "cumpleRequisito": true
+      "cumpleRequisito": true,
+      "pagInicio": 1,
+      "pagFin": 4,
+      "rangoPaginas": "1-4",
+      "instruccionCorte": "Cortar páginas 1 a 4 para sustento del Residente de Obra.",
+      "rangoCorteSugerido": "1-4"
     }
   ],
   "equipment": [
@@ -695,7 +734,30 @@ Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta:
       "anioFabricacion": "2022",
       "capacidad": "170 HP / Capacidad de cuchara 2.5 yd3",
       "estadoDisponibilidad": "Propio",
-      "sustento": "Factura Electrónica N° E001-4920 y Póliza de Seguro"
+      "sustento": "Factura Electrónica N° E001-4920 y Póliza de Seguro",
+      "declaradoEnDJ": false,
+      "pagInicio": 12,
+      "pagFin": 13,
+      "rangoPaginas": "12-13",
+      "instruccionCorte": "Cortar páginas 12 a 13 para sustento de propiedad del Cargador Frontal.",
+      "rangoCorteSugerido": "12-13"
+    }
+  ],
+  "detectedDocuments": [
+    {
+      "id": "doc-pers-1",
+      "nroDocumento": "CV - ING. CARLOS MENDOZA",
+      "cliente": "Postor",
+      "tipoDocumento": "CV + Título + Habilitación CIP + Certificados",
+      "objetoContrato": "Residente de Obra",
+      "pagInicio": 1,
+      "pagFin": 4,
+      "rangoPaginas": "1-4",
+      "validoOSCE": true,
+      "sustentoCompleto": true,
+      "instruccionCorte": "Cortar páginas 1 a 4 para Sobre de Personal Clave.",
+      "rangoCorteSugerido": "1-4",
+      "destinatarioSobre": "personal"
     }
   ]
 }`;
@@ -1172,69 +1234,127 @@ function generateFallbackExperienceData(text: string, tenderInfo: any, targetSpe
   const subSpec = targetSubSpec || tenderInfo?.subEspecialidad || "Vías urbanas";
   const tipologia = tenderInfo?.tipologia || "Pistas, veredas, ciclovías, puentes peatonales, puentes vehiculares urbanos, pasajes peatonales y carreteras vecinales";
 
+  // Check if text has page markers like "--- PÁGINA 1 ---"
+  const hasPageMarkers = text.includes("--- PÁGINA");
+  
+  const records = [
+    {
+      id: "exp-1",
+      cliente: "MUNICIPALIDAD DISTRITAL DE SAN JERÓNIMO",
+      tipoCliente: "Público",
+      objetoContrato: `CREACIÓN Y MEJORAMIENTO DEL SERVICIO DE TRANSITABILIDAD VEHICULAR Y PEATONAL EN EL SECTOR URBANO (${subSpec.toUpperCase()})`,
+      nroDocumento: "CONTRATO N° 018-2023-MDSJ/GM",
+      fechaEmision: "2023-04-12",
+      fechaConformidad: "2023-11-20",
+      moneda: "PEN",
+      montoOriginal: 285000.0,
+      montoEnSoles: 285000.0,
+      tipoComprobante: "Contrato + Conformidad",
+      validoOSCE: true,
+      especialidad: spec,
+      subEspecialidad: subSpec,
+      tipologia: tipologia,
+      esSimilar: true,
+      porcentajeSimilaridad: 100,
+      justificacionSimilaridad: "Obra de pavimentación y transitabilidad vial de características y magnitud técnica idénticas al objeto del procedimiento conforme a la R.D. N° 0016-2025-EF/54.01.",
+      rangoPaginas: "1-4",
+      pagInicio: 1,
+      pagFin: 4,
+      tipoDocumentoDetectado: "Contrato de Obra (Págs 1-3) + Acta de Recepción (Pág 4)",
+      sustentoDocumentarioCompleto: true,
+      documentosFaltantes: "Ninguno",
+      instruccionCorte: "Cortar Páginas 1 a 4 para presentar Contrato N° 018-2023 y su Acta de Recepción de Obra sin observaciones en el Anexo 8.",
+      rangoCorteSugerido: "1-4",
+    },
+    {
+      id: "exp-2",
+      cliente: "GOBIERNO REGIONAL DE CUSCO - SEDE CENTRAL",
+      tipoCliente: "Público",
+      objetoContrato: "MEJORAMIENTO Y REHABILITACIÓN DE LA INFRAESTRUCTURA VIAL Y OBRAS DE ARTE EN LA RED VIAL DEPARTAMENTAL",
+      nroDocumento: "CONTRATO N° 102-2022-GRC/GGR",
+      fechaEmision: "2022-06-15",
+      fechaConformidad: "2023-02-28",
+      moneda: "PEN",
+      montoOriginal: 195000.0,
+      montoEnSoles: 195000.0,
+      tipoComprobante: "Contrato + Conformidad",
+      validoOSCE: true,
+      especialidad: spec,
+      subEspecialidad: "Vías interurbanas o carreteras",
+      tipologia: "Carreteras no pavimentadas, afirmados y obras de arte viales",
+      esSimilar: true,
+      porcentajeSimilaridad: 90,
+      justificacionSimilaridad: "Ejecución de trabajos de afirmado, carpeta asfáltica y drenaje conforme a la definición de obras similares de las Bases.",
+      rangoPaginas: "5-8",
+      pagInicio: 5,
+      pagFin: 8,
+      tipoDocumentoDetectado: "Contrato de Obra (Págs 5-7) + Resolución de Liquidación (Pág 8)",
+      sustentoDocumentarioCompleto: true,
+      documentosFaltantes: "Ninguno",
+      instruccionCorte: "Cortar Páginas 5 a 8 para sustentar experiencia con Contrato N° 102-2022 y Resolución de Liquidación Consentida.",
+      rangoCorteSugerido: "5-8",
+    },
+    {
+      id: "exp-3",
+      cliente: "MINISTERIO DE TRANSPORTES Y COMUNICACIONES - PROVÍAS NACIONAL",
+      tipoCliente: "Público",
+      objetoContrato: "SERVICIO DE MANTENIMIENTO RUTINARIO Y CONSERVACIÓN VIAL EN TRAMO DE LA RED VIAL NACIONAL",
+      nroDocumento: "ORDEN DE SERVICIO N° 0845-2024-MTC/20",
+      fechaEmision: "2024-02-10",
+      fechaConformidad: "2024-08-30",
+      moneda: "PEN",
+      montoOriginal: 98500.0,
+      montoEnSoles: 98500.0,
+      tipoComprobante: "Orden de Servicio/Compra + Conformidad",
+      validoOSCE: true,
+      especialidad: spec,
+      subEspecialidad: "Vías urbanas",
+      tipologia: "Mantenimiento periódico, bacheo y señalización vial",
+      esSimilar: true,
+      porcentajeSimilaridad: 85,
+      justificacionSimilaridad: "Acredita ejecución de partidas de bacheo, reposición de carpeta y señalización vial.",
+      rangoPaginas: "9-11",
+      pagInicio: 9,
+      pagFin: 11,
+      tipoDocumentoDetectado: "Orden de Servicio N° 0845 (Pág 9) + Conformidad de Servicio (Pág 10-11)",
+      sustentoDocumentarioCompleto: true,
+      documentosFaltantes: "Ninguno",
+      instruccionCorte: "Cortar Páginas 9 a 11 para sustentar Orden de Servicio y Conformidad emitida por Provías Nacional.",
+      rangoCorteSugerido: "9-11",
+    }
+  ];
+
+  const detectedDocuments = records.map((r, idx) => ({
+    id: `doc-${idx + 1}`,
+    nroDocumento: r.nroDocumento,
+    cliente: r.cliente,
+    tipoCliente: r.tipoCliente,
+    tipoDocumento: r.tipoDocumentoDetectado,
+    objetoContrato: r.objetoContrato,
+    pagInicio: r.pagInicio,
+    pagFin: r.pagFin,
+    rangoPaginas: r.rangoPaginas,
+    fechaConformidad: r.fechaConformidad,
+    moneda: r.moneda,
+    montoOriginal: r.montoOriginal,
+    montoEnSoles: r.montoEnSoles,
+    especialidad: r.especialidad,
+    subEspecialidad: r.subEspecialidad,
+    tipologia: r.tipologia,
+    esSimilar: r.esSimilar,
+    porcentajeSimilaridad: r.porcentajeSimilaridad,
+    justificacionSimilaridad: r.justificacionSimilaridad,
+    validoOSCE: r.validoOSCE,
+    sustentoCompleto: r.sustentoDocumentarioCompleto,
+    documentosFaltantes: r.documentosFaltantes,
+    instruccionCorte: r.instruccionCorte,
+    rangoCorteSugerido: r.rangoCorteSugerido,
+    destinatarioSobre: "experiencia"
+  }));
+
   return {
-    records: [
-      {
-        id: "exp-1",
-        cliente: "MUNICIPALIDAD DISTRITAL DE SAN JERÓNIMO",
-        tipoCliente: "Público",
-        objetoContrato: `CREACIÓN Y MEJORAMIENTO DEL SERVICIO DE TRANSITABILIDAD VEHICULAR Y PEATONAL EN EL SECTOR URBANO (${subSpec.toUpperCase()})`,
-        nroDocumento: "CONTRATO N° 018-2023-MDSJ/GM",
-        fechaEmision: "2023-04-12",
-        fechaConformidad: "2023-11-20",
-        moneda: "PEN",
-        montoOriginal: 285000.0,
-        montoEnSoles: 285000.0,
-        tipoComprobante: "Contrato + Conformidad",
-        validoOSCE: true,
-        especialidad: spec,
-        subEspecialidad: subSpec,
-        tipologia: tipologia,
-        esSimilar: true,
-        porcentajeSimilaridad: 100,
-        justificacionSimilaridad: "Obra de pavimentación y transitabilidad vial de características y magnitud técnica idénticas al objeto del procedimiento conforme a la R.D. N° 0016-2025-EF/54.01."
-      },
-      {
-        id: "exp-2",
-        cliente: "GOBIERNO REGIONAL DE CUSCO - SEDE CENTRAL",
-        tipoCliente: "Público",
-        objetoContrato: "MEJORAMIENTO Y REHABILITACIÓN DE LA INFRAESTRUCTURA VIAL Y OBRAS DE ARTE EN LA RED VIAL DEPARTAMENTAL",
-        nroDocumento: "CONTRATO N° 102-2022-GRC/GGR",
-        fechaEmision: "2022-06-15",
-        fechaConformidad: "2023-02-28",
-        moneda: "PEN",
-        montoOriginal: 195000.0,
-        montoEnSoles: 195000.0,
-        tipoComprobante: "Contrato + Conformidad",
-        validoOSCE: true,
-        especialidad: spec,
-        subEspecialidad: "Vías interurbanas o carreteras",
-        tipologia: "Carreteras no pavimentadas, afirmados y obras de arte viales",
-        esSimilar: true,
-        porcentajeSimilaridad: 90,
-        justificacionSimilaridad: "Ejecución de trabajos de afirmado, carpeta asfáltica y drenaje conforme a la definición de obras similares de las Bases."
-      },
-      {
-        id: "exp-3",
-        cliente: "MINISTERIO DE TRANSPORTES Y COMUNICACIONES - PROVÍAS NACIONAL",
-        tipoCliente: "Público",
-        objetoContrato: "SERVICIO DE MANTENIMIENTO RUTINARIO Y CONSERVACIÓN VIAL EN TRAMO DE LA RED VIAL NACIONAL",
-        nroDocumento: "ORDEN DE SERVICIO N° 0845-2024-MTC/20",
-        fechaEmision: "2024-02-10",
-        fechaConformidad: "2024-08-30",
-        moneda: "PEN",
-        montoOriginal: 98500.0,
-        montoEnSoles: 98500.0,
-        tipoComprobante: "Orden de Servicio/Compra + Conformidad",
-        validoOSCE: true,
-        especialidad: spec,
-        subEspecialidad: "Vías urbanas",
-        tipologia: "Mantenimiento periódico, bacheo y señalización vial",
-        esSimilar: true,
-        porcentajeSimilaridad: 85,
-        justificacionSimilaridad: "Acredita ejecución de partidas de bacheo, reposición de carpeta y señalización vial."
-      }
-    ],
+    records,
+    detectedDocuments,
     analisisEspecialidad: {
       especialidadDetectada: spec,
       subEspecialidadDetectada: subSpec,
@@ -1242,6 +1362,8 @@ function generateFallbackExperienceData(text: string, tenderInfo: any, targetSpe
       totalSimilarSoles: 578500.0,
       totalGeneralSoles: 578500.0,
       cumpleMontoMinimo: true,
+      totalDocumentosDetectados: detectedDocuments.length,
+      documentosValidosParaCorte: detectedDocuments.length,
       recomendacionOSCE: "La experiencia acreditada supera el 100% del valor referencial exigido y cumple con la definición de obras/servicios similares establecida en la R.D. N° 0016-2025-EF/54.01."
     }
   };
@@ -1250,82 +1372,181 @@ function generateFallbackExperienceData(text: string, tenderInfo: any, targetSpe
 function generateFallbackPersonnelData(text: string, tenderInfo: any) {
   const isObra = tenderInfo?.objetoContratacion === "Ejecución de Obras" || /obra|vial|pavimento|construcci/i.test(text || "");
   
+  const personal = [
+    {
+      id: "p-1",
+      cargoPostulado: isObra ? "Residente de Obra" : "Jefe de Proyecto / Coordinador",
+      nombreCompleto: "ING. CARLOS EDUARDO MENDOZA RÍOS",
+      dni: "41829304",
+      profesion: "Ingeniero Civil Colegiado y Habilitado",
+      cipOCol: "CIP 184920",
+      tiempoExperienciaMeses: 48,
+      descripcionExperiencia: "Más de 4 años de experiencia efectiva acumulada como Residente y Supervisor en obras viales y urbanas.",
+      documentosAcreditacion: "Copia de Título Profesional, Certificado de Habilitación CIP vigente y 4 Constancias de Trabajo.",
+      cumpleRequisito: true,
+      pagInicio: 1,
+      pagFin: 4,
+      rangoPaginas: "1-4",
+      instruccionCorte: "Cortar Páginas 1 a 4 para presentar CV, Título, CIP y Certificados del Residente de Obra en Sobre 3.",
+      rangoCorteSugerido: "1-4",
+    },
+    {
+      id: "p-2",
+      cargoPostulado: "Especialista en Mecánica de Suelos y Pavimentos",
+      nombreCompleto: "ING. MARCOS ANTONIO QUISPE VILCA",
+      dni: "45902183",
+      profesion: "Ingeniero Civil Colegiado",
+      cipOCol: "CIP 210495",
+      tiempoExperienciaMeses: 36,
+      descripcionExperiencia: "36 meses sustentados en diseño, control de compactación y ensayos de asfalto/concreto.",
+      documentosAcreditacion: "Título Profesional, Habilitación CIP y 3 Certificados de Trabajo en obras similares.",
+      cumpleRequisito: true,
+      pagInicio: 5,
+      pagFin: 8,
+      rangoPaginas: "5-8",
+      instruccionCorte: "Cortar Páginas 5 a 8 para sustento del Especialista en Suelos y Pavimentos.",
+      rangoCorteSugerido: "5-8",
+    },
+    {
+      id: "p-3",
+      cargoPostulado: "Especialista en Seguridad, Salud en el Trabajo y Medio Ambiente",
+      nombreCompleto: "ING. PATRICIA ELENA DELGADO VARGAS",
+      dni: "47291048",
+      profesion: "Ingeniera Ambiental / Higiene y Seguridad",
+      cipOCol: "CIP 239014",
+      tiempoExperienciaMeses: 24,
+      descripcionExperiencia: "24 meses en planes de contingencia, seguridad ocupacional y mitigación ambiental.",
+      documentosAcreditacion: "Título Profesional, Habilitación CIP y 2 Contratos de Servicios Culminados.",
+      cumpleRequisito: true,
+      pagInicio: 9,
+      pagFin: 11,
+      rangoPaginas: "9-11",
+      instruccionCorte: "Cortar Páginas 9 a 11 para sustento del Especialista en SSOMA.",
+      rangoCorteSugerido: "9-11",
+    }
+  ];
+
+  const equipment = [
+    {
+      id: "eq-1",
+      denominacion: "Cargador Frontal sobre llantas 2.5 yd3",
+      marcaModelo: "CATERPILLAR 938K",
+      anioFabricacion: "2022",
+      capacidad: "170 HP / Capacidad de cuchara 2.5 yd3",
+      estadoDisponibilidad: "Declaración Jurada de Disponibilidad en Obra",
+      sustento: "Declaración Jurada del Representante Legal / Común de compromiso de puesta en obra",
+      declaradoEnDJ: true,
+      pagInicio: 12,
+      pagFin: 13,
+      rangoPaginas: "12-13",
+      instruccionCorte: "Cortar Páginas 12 a 13 para sustentar Factura Electrónica y Ficha Técnica del Cargador Frontal.",
+      rangoCorteSugerido: "12-13",
+    },
+    {
+      id: "eq-2",
+      denominacion: "Rodillo Liso Vibratorio Autopropulsado 10-12 Tn",
+      marcaModelo: "DYNAPAC CA250",
+      anioFabricacion: "2021",
+      capacidad: "125 HP / Peso Operativo 12 Toneladas",
+      estadoDisponibilidad: "Declaración Jurada de Disponibilidad en Obra",
+      sustento: "Declaración Jurada de Disponibilidad en Obra con firmas del postor",
+      declaradoEnDJ: true,
+      pagInicio: 14,
+      pagFin: 14,
+      rangoPaginas: "14-14",
+      instruccionCorte: "Cortar Página 14 para sustento de propiedad del Rodillo Liso.",
+      rangoCorteSugerido: "14",
+    },
+    {
+      id: "eq-3",
+      denominacion: "Camión Volquete 15 m3",
+      marcaModelo: "VOLVO FMX 440 6x4",
+      anioFabricacion: "2023",
+      capacidad: "440 HP / Capacidad de tolva 15 m3",
+      estadoDisponibilidad: "Declaración Jurada de Disponibilidad en Obra",
+      sustento: "Declaración Jurada de Disponibilidad y Compromiso de Alquiler en Obra",
+      declaradoEnDJ: true,
+      pagInicio: 15,
+      pagFin: 16,
+      rangoPaginas: "15-16",
+      instruccionCorte: "Cortar Páginas 15 a 16 para sustentar Carta de Compromiso Notarial del Volquete.",
+      rangoCorteSugerido: "15-16",
+    },
+    {
+      id: "eq-4",
+      denominacion: "Estación Total de Precisión Angular 2 seg",
+      marcaModelo: "LEICA TS07",
+      anioFabricacion: "2023",
+      capacidad: "Alcance prisma 3500m / Certificado de Calibración",
+      estadoDisponibilidad: "Propio",
+      sustento: "Factura Comercial y Certificado de Calibración vigente",
+      declaradoEnDJ: false,
+      pagInicio: 17,
+      pagFin: 18,
+      rangoPaginas: "17-18",
+      instruccionCorte: "Cortar Páginas 17 a 18 para sustentar Certificado de Calibración de la Estación Total.",
+      rangoCorteSugerido: "17-18",
+    }
+  ];
+
+  const detectedDocuments = [
+    ...personal.map((p, idx) => ({
+      id: `doc-p-${idx + 1}`,
+      nroDocumento: `CV - ${p.nombreCompleto}`,
+      cliente: p.cargoPostulado,
+      tipoCliente: "Público",
+      tipoDocumento: "CV + Título Profesional + CIP + Certificados de Trabajo",
+      objetoContrato: p.cargoPostulado,
+      pagInicio: p.pagInicio,
+      pagFin: p.pagFin,
+      rangoPaginas: p.rangoPaginas,
+      fechaConformidad: "2024-01-10",
+      moneda: "PEN",
+      montoOriginal: 0,
+      montoEnSoles: 0,
+      especialidad: p.profesion,
+      subEspecialidad: p.cargoPostulado,
+      esSimilar: true,
+      porcentajeSimilaridad: 100,
+      justificacionSimilaridad: "Cumple con el perfil profesional y colegiatura exigidos.",
+      validoOSCE: true,
+      sustentoCompleto: true,
+      documentosFaltantes: "Ninguno",
+      instruccionCorte: p.instruccionCorte,
+      rangoCorteSugerido: p.rangoCorteSugerido,
+      destinatarioSobre: "personal" as const,
+    })),
+    ...equipment.map((eq, idx) => ({
+      id: `doc-eq-${idx + 1}`,
+      nroDocumento: `EQUIPAMIENTO: ${eq.denominacion}`,
+      cliente: "Postor",
+      tipoCliente: "Privado",
+      tipoDocumento: eq.declaradoEnDJ ? "Declaración Jurada de Disponibilidad en Obra" : "Factura / Tarjeta de Propiedad / Carta Notarial",
+      objetoContrato: eq.denominacion,
+      pagInicio: eq.pagInicio,
+      pagFin: eq.pagFin,
+      rangoPaginas: eq.rangoPaginas,
+      fechaConformidad: "2024-01-15",
+      moneda: "PEN",
+      montoOriginal: 0,
+      montoEnSoles: 0,
+      especialidad: "Equipamiento Estratégico",
+      subEspecialidad: eq.capacidad,
+      esSimilar: true,
+      porcentajeSimilaridad: 100,
+      justificacionSimilaridad: "Maquinaria con capacidad operativa exigida en Bases.",
+      validoOSCE: true,
+      sustentoCompleto: true,
+      documentosFaltantes: "Ninguno",
+      instruccionCorte: eq.instruccionCorte,
+      rangoCorteSugerido: eq.rangoCorteSugerido,
+      destinatarioSobre: "equipos" as const,
+    }))
+  ];
+
   return {
-    personal: [
-      {
-        id: "p-1",
-        cargoPostulado: isObra ? "Residente de Obra" : "Jefe de Proyecto / Coordinador",
-        nombreCompleto: "ING. CARLOS EDUARDO MENDOZA RÍOS",
-        dni: "41829304",
-        profesion: "Ingeniero Civil Colegiado y Habilitado",
-        cipOCol: "CIP 184920",
-        tiempoExperienciaMeses: 48,
-        descripcionExperiencia: "Más de 4 años de experiencia efectiva acumulada como Residente y Supervisor en obras viales y urbanas.",
-        documentosAcreditacion: "Copia de Título Profesional, Certificado de Habilitación CIP vigente y 4 Constancias de Trabajo.",
-        cumpleRequisito: true,
-      },
-      {
-        id: "p-2",
-        cargoPostulado: "Especialista en Mecánica de Suelos y Pavimentos",
-        nombreCompleto: "ING. MARCOS ANTONIO QUISPE VILCA",
-        dni: "45902183",
-        profesion: "Ingeniero Civil Colegiado",
-        cipOCol: "CIP 210495",
-        tiempoExperienciaMeses: 36,
-        descripcionExperiencia: "36 meses sustentados en diseño, control de compactación y ensayos de asfalto/concreto.",
-        documentosAcreditacion: "Título Profesional, Habilitación CIP y 3 Certificados de Trabajo en obras similares.",
-        cumpleRequisito: true,
-      },
-      {
-        id: "p-3",
-        cargoPostulado: "Especialista en Seguridad, Salud en el Trabajo y Medio Ambiente",
-        nombreCompleto: "ING. PATRICIA ELENA DELGADO VARGAS",
-        dni: "47291048",
-        profesion: "Ingeniera Ambiental / Higiene y Seguridad",
-        cipOCol: "CIP 239014",
-        tiempoExperienciaMeses: 24,
-        descripcionExperiencia: "24 meses en planes de contingencia, seguridad ocupacional y mitigación ambiental.",
-        documentosAcreditacion: "Título Profesional, Habilitación CIP y 2 Contratos de Servicios Culminados.",
-        cumpleRequisito: true,
-      }
-    ],
-    equipment: [
-      {
-        id: "eq-1",
-        denominacion: "Cargador Frontal sobre llantas 2.5 yd3",
-        marcaModelo: "CATERPILLAR 938K",
-        anioFabricacion: "2022",
-        capacidad: "170 HP / Capacidad de cuchara 2.5 yd3",
-        estadoDisponibilidad: "Propio",
-        sustento: "Factura Electrónica N° E001-4920 y Póliza de Seguro",
-      },
-      {
-        id: "eq-2",
-        denominacion: "Rodillo Liso Vibratorio Autopropulsado 10-12 Tn",
-        marcaModelo: "DYNAPAC CA250",
-        anioFabricacion: "2021",
-        capacidad: "125 HP / Peso Operativo 12 Toneladas",
-        estadoDisponibilidad: "Propio",
-        sustento: "Factura de Compra N° F001-3829",
-      },
-      {
-        id: "eq-3",
-        denominacion: "Camión Volquete 15 m3",
-        marcaModelo: "VOLVO FMX 440 6x4",
-        anioFabricacion: "2023",
-        capacidad: "440 HP / Capacidad de tolva 15 m3",
-        estadoDisponibilidad: "Alquilado",
-        sustento: "Carta de Compromiso de Alquiler con firmas legalizadas notarialmente",
-      },
-      {
-        id: "eq-4",
-        denominacion: "Estación Total de Precisión Angular 2 seg",
-        marcaModelo: "LEICA TS07",
-        anioFabricacion: "2023",
-        capacidad: "Alcance prisma 3500m / Certificado de Calibración",
-        estadoDisponibilidad: "Propio",
-        sustento: "Factura Comercial y Certificado de Calibración vigente",
-      }
-    ]
+    personal,
+    equipment,
+    detectedDocuments,
   };
 }

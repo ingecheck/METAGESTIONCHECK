@@ -16,6 +16,7 @@ import {
   BookOpen,
   CheckCircle2,
   ShieldAlert,
+  ShieldCheck,
   ChevronRight,
   Gavel,
   Lightbulb,
@@ -30,24 +31,41 @@ interface ObservationsManagerProps {
   observations: ObservationItem[];
   setObservations: React.Dispatch<React.SetStateAction<ObservationItem[]>>;
   onNavigateToTab?: (tab: string) => void;
+  onOpenAudit?: () => void;
 }
 
 const COMMON_LEGAL_QUESTIONS = [
   {
-    title: "¿Es legal exigir experiencia en la misma región o provincia?",
+    title: "Subsanación de ofertas (Art. 60 RLCE)",
+    query: "¿Qué defectos u omisiones en la oferta son formalmente subsanables según el Artículo 60 del Reglamento de la Ley de Contrataciones?",
+  },
+  {
+    title: "Experiencia en Consorcio (Directiva OSCE)",
+    query: "¿Cómo se calcula y acredita la experiencia en consorcio según la Directiva N° 005-2019-OSCE/CD?",
+  },
+  {
+    title: "¿Exigir experiencia local/regional es legal?",
     query: "¿Puede una entidad exigir en las bases que el postor o su personal tengan experiencia exclusivamente en el departamento o provincia de la obra?",
   },
   {
-    title: "¿Es legal exigir marcas específicas en maquinaria?",
-    query: "¿Es legal que el Capítulo III de las Bases exija una marca o procedencia específica para el equipamiento estratégico?",
+    title: "¿Exigir marcas específicas en maquinaria?",
+    query: "¿Es legal que el Capítulo III de las Bases exija una marca o procedencia específica para el equipamiento estratégico sin proceso previo de estandarización?",
   },
   {
-    title: "¿Se puede descalificar por un error de foliación o de cálculo?",
-    query: "¿Constituye causal de descalificación o no admisión la falta de foliación o un error aritmético en la oferta económica?",
+    title: "Límites 90% y 110% en Obras (Art. 68)",
+    query: "¿Cuáles son las reglas exactas de los límites del 90% y 110% del valor referencial en licitaciones públicas de obras?",
   },
   {
-    title: "¿Cómo observar plazos de entrega desproporcionados?",
-    query: "¿Cómo sustentar jurídicamente una observación por un plazo de ejecución que resulta técnica y físicamente imposible de cumplir?",
+    title: "¿Descalificación por error de foliación o cálculo?",
+    query: "¿Constituye causal de descalificación o no admisión la falta de foliación o un error aritmético corregible en la oferta económica?",
+  },
+  {
+    title: "Recurso de Apelación (Tribunal vs Entidad)",
+    query: "¿Cuándo y ante quién se interpone el Recurso de Apelación según el monto del procedimiento de selección (Tribunal de Contrataciones vs Titular de la Entidad)?",
+  },
+  {
+    title: "Plazos de ejecución desproporcionados",
+    query: "¿Cómo sustentar jurídicamente una observación por un plazo de ejecución que resulta técnica y físicamente imposible de cumplir según el expediente técnico?",
   },
 ];
 
@@ -57,6 +75,7 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
   observations,
   setObservations,
   onNavigateToTab,
+  onOpenAudit,
 }) => {
   const [isFormulatingAI, setIsFormulatingAI] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -69,7 +88,7 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
   const [chatHistory, setChatHistory] = useState<Array<{ sender: "user" | "advisor"; text: string; time: string }>>([
     {
       sender: "advisor",
-      text: `Hola, soy su Asesor Legal Especializado en Contratación Pública del Perú. Estoy analizando las Bases del procedimiento "${tender.nomenclatura || 'Convocatoria'}". Puede consultarme cualquier duda normativa sobre la Ley N° 30225, D.S. N° 344-2018-EF, la nueva Ley N° 32069 y Pronunciamientos del Tribunal del OSCE para formular sus observaciones formales.`,
+      text: `¡Hola! Soy su Asesor Legal Especializado en Contratación Pública del Perú (Ley N° 30225, D.S. N° 344-2018-EF, Directivas y Pronunciamientos del Tribunal del OSCE).\n\nEstoy analizando las Bases del procedimiento **${tender.nomenclatura || 'Convocatoria'}** de **${tender.entidadConvocante || 'la Entidad'}** para la empresa **${company.razonSocial || 'Postor'}**.\n\nPuede formular consultas normativas sobre admisibilidad, causales de no admisión, experiencia en consorcio, o redactar observaciones vinculantes para el pliego formal.`,
       time: "En línea",
     },
   ]);
@@ -115,9 +134,15 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
     setIsSendingChat(true);
 
     try {
+      const history = chatHistory.map((m) => ({
+        role: m.sender === "user" ? ("user" as const) : ("model" as const),
+        parts: [{ text: m.text }],
+      }));
+
       const reply = await legalChatAPI({
         message: textToSend,
         tenderContext: tender,
+        chatHistory: history,
       });
 
       setChatHistory((prev) => [
@@ -148,7 +173,7 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
       id: "obs-" + Date.now(),
       numeralBases: "Capítulo III - Requisitos de Calificación",
       tipo: "Observación",
-      consultaObservacion: `Se observa la exigencia restrictiva formulada en las Bases por contravenir los Principios de la Contratación Estatal.`,
+      consultaObservacion: `Se observa la exigencia formulada en las Bases por contravenir los Principios de la Contratación Estatal.`,
       sustentoLegalTecnico: text.length > 300 ? text.substring(0, 300) + "..." : text,
       propuestaSolucion: "Se solicita que el Comité de Selección modifique las Bases conforme a los criterios jurisprudenciales del OSCE.",
     };
@@ -197,13 +222,13 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center space-x-2 text-amber-600 text-xs font-bold uppercase tracking-wider">
               <Scale className="w-4 h-4" />
-              <span>Paso 5 de 7 • Etapa de Absolución de Consultas y Observaciones • Art. 72 RLCE</span>
+              <span>Paso 5 de 6 • Consultas, Observaciones y Asesor Legal OSCE • Art. 72 RLCE</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Pliego de Consultas y Observaciones con Asesor Legal OSCE
+              Consultas, Observaciones y Asesor Legal OSCE
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 max-w-3xl">
-              Plantee consultas técnicas u observaciones jurídicas por vulneración a la Ley de Contrataciones. Consulte en vivo con el Asesor Legal Integrado y exporte el pliego en formato Word compatible con el SEACE.
+              Plantee consultas técnicas u observaciones jurídicas por vulneración a la Ley de Contrataciones. Consulte en vivo con el Asesor Legal Integrado, ejecute la auditoría preventiva de admisibilidad y exporte el pliego en formato Word para el SEACE.
             </p>
           </div>
 
@@ -217,6 +242,17 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
               <ArrowLeft className="w-4 h-4 text-slate-600" />
               <span>Paso 4: Personal / Equipos</span>
             </button>
+
+            {onOpenAudit && (
+              <button
+                onClick={onOpenAudit}
+                className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3.5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm"
+                title="Auditoría Preventiva de Admisibilidad y Cumplimiento de Bases"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                <span>Auditar Admisibilidad Bases</span>
+              </button>
+            )}
 
             <button
               onClick={handleFormulateAI}
@@ -250,9 +286,9 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
             <button
               onClick={() => (onNavigateToTab ? onNavigateToTab("builder") : null)}
               className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-              title="Continuar al Armado de Ofertas"
+              title="Continuar al Paso 6: Armado de Oferta Final"
             >
-              <span>Armado de Ofertas</span>
+              <span>Paso 6: Armador de Ofertas</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -280,9 +316,16 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
                 <span className="text-[10px] text-emerald-400 font-mono">● Especialista en Ley 30225 / 32069</span>
               </div>
             </div>
-            <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
-              Jurisprudencia OSCE
-            </span>
+            {onOpenAudit && (
+              <button
+                onClick={onOpenAudit}
+                className="text-[10.5px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2.5 py-1 rounded border border-amber-500/40 flex items-center gap-1 transition cursor-pointer font-bold"
+                title="Auditoría Preventiva de Admisibilidad"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Auditar Admisibilidad</span>
+              </button>
+            )}
           </div>
 
           {/* Preset Questions Chips */}
@@ -341,7 +384,7 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
           <div className="p-3 bg-white border-t border-slate-200 flex items-center space-x-2">
             <input
               type="text"
-              placeholder="Consulte sobre un requisito o artículo de las bases..."
+              placeholder="Consulte sobre un requisito, causal de descalificación o artículo..."
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
               onKeyDown={(e) => (e.key === "Enter" ? handleSendChatMessage() : null)}
@@ -544,10 +587,10 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-2xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-900/40 shadow-sm">
         <div>
           <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-            Paso 5 de 7 • Consultas y Observaciones Listas
+            Paso 5 de 6 • Consultas, Observaciones y Asesoría Legal Completadas
           </div>
           <h4 className="text-base font-bold text-white mt-0.5">
-            Siguiente Paso: Consolidación y Armado del Expediente de Oferta
+            Siguiente Paso: Consolidación y Armado del Expediente de Oferta Final
           </h4>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
             Genere todos los Anexos oficiales del OSCE y organice interactivamente sus PDFs y documentos de sustento en las carpetas de admisión, habilitación, calificación y propuesta económica.
@@ -559,7 +602,7 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
             onClick={() => (onNavigateToTab ? onNavigateToTab("builder") : null)}
             className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition shadow cursor-pointer flex items-center space-x-2"
           >
-            <span>Continuar al Armado de Ofertas (Paso 7)</span>
+            <span>Continuar al Armado de Ofertas (Paso 6)</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -567,3 +610,4 @@ export const ObservationsManager: React.FC<ObservationsManagerProps> = ({
     </div>
   );
 };
+

@@ -38,13 +38,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const tabs = [
     { id: "dashboard", label: "Dashboard Principal", icon: LayoutDashboard },
-    { id: "analyzer", label: "1. Bases y Análisis", icon: FileText },
-    { id: "builder", label: "2. Armador de Oferta", icon: FolderTree },
-    { id: "personnel", label: "3. Personal y Equipos", icon: Users },
-    { id: "experience", label: "4. Experiencia (Anexo 8)", icon: Award },
-    { id: "observations", label: "5. Consultas y Obs.", icon: HelpCircle },
-    { id: "legal-ai", label: "6. Consultor OSCE", icon: MessageSquare },
-    { id: "company", label: "Perfil Empresa", icon: Building2 },
+    { id: "analyzer", label: "1. Bases SEACE", icon: FileText },
+    { id: "company", label: "2. Perfil Empresa", icon: Building2 },
+    { id: "experience", label: "3. Experiencia", icon: Award },
+    { id: "personnel", label: "4. Personal y Equipos", icon: Users },
+    { id: "observations", label: "5. Consultas y Asesor OSCE", icon: HelpCircle },
+    { id: "builder", label: "6. Armador de Oferta", icon: FolderTree },
   ];
 
   return (

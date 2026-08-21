@@ -162,7 +162,7 @@ export const NewObraModal: React.FC<NewObraModalProps> = ({
                 {editingObra ? "Editar Proyecto de Obra" : "Registrar Nuevo Proyecto de Obra Pública"}
               </h3>
               <p className="text-xs text-indigo-200">
-                Se creará un panel independiente de Curva S, valorizaciones mensuales, cuaderno digital y liquidación
+                Se creará un panel independiente de Curva S, valorizaciones mensuales, adicionales y liquidación
               </p>
             </div>
           </div>
