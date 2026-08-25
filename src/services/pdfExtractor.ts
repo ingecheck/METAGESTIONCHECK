@@ -98,40 +98,38 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
   let pageImagesBase64: string[] = [];
   let pdfBase64: string | undefined = undefined;
 
-  // Only compute base64 if it's actually a scanned document to avoid heavy payload & memory lags
-  if (isScanned) {
-    if (file.size < 6 * 1024 * 1024) {
-      try {
-        pdfBase64 = arrayBufferToBase64(arrayBuffer.slice(0));
-      } catch (b64Err) {
-        console.warn("Could not convert buffer to base64:", b64Err);
-      }
+  // Always attach raw PDF base64 if under 12MB for native Gemini Multimodal PDF understanding
+  if (file.size < 12 * 1024 * 1024) {
+    try {
+      pdfBase64 = arrayBufferToBase64(arrayBuffer.slice(0));
+    } catch (b64Err) {
+      console.warn("Could not convert buffer to base64:", b64Err);
     }
+  }
 
-    if (pdfDoc && typeof document !== "undefined") {
-      try {
-        // Reuse the already loaded pdfDoc instance instead of re-opening the file
-        const pagesToSample = [1, 2, 3].filter((p) => p <= numPages);
+  // Generate sample page images for visual layout / OCR fallback
+  if (pdfDoc && typeof document !== "undefined") {
+    try {
+      const pagesToSample = [1, 2, 3, 4, 5].filter((p) => p <= numPages);
 
-        for (const p of pagesToSample) {
-          const page = await pdfDoc.getPage(p);
-          const viewport = page.getViewport({ scale: 1.0 });
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+      for (const p of pagesToSample) {
+        const page = await pdfDoc.getPage(p);
+        const viewport = page.getViewport({ scale: 1.2 });
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
 
-          if (ctx) {
-            await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
-            const base64Data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-            if (base64Data) {
-              pageImagesBase64.push(base64Data);
-            }
+        if (ctx) {
+          await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
+          const base64Data = canvas.toDataURL("image/jpeg", 0.75).split(",")[1];
+          if (base64Data) {
+            pageImagesBase64.push(base64Data);
           }
         }
-      } catch (renderErr) {
-        console.warn("Could not render sample pages to canvas:", renderErr);
       }
+    } catch (renderErr) {
+      console.warn("Could not render sample pages to canvas:", renderErr);
     }
   }
 

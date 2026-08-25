@@ -358,18 +358,23 @@ export const ContractDocumentUploader: React.FC<ContractDocumentUploaderProps> =
     const existingPkg = obrasList.find((o) => o.id === selectedTargetObraId);
     const baseObra = existingPkg?.obra || currentObra;
 
-    const cui = contratistaResult?.cui || supervisorResult?.cui || baseObra?.cui || "2548912";
-    const nombre = contratistaResult?.nombreObra || supervisorResult?.nombreObra || baseObra?.nombre || "PROYECTO DE OBRA PÚBLICA EN EJECUCIÓN";
-    const entidad = contratistaResult?.entidad || supervisorResult?.entidad || baseObra?.entidad || "MUNICIPALIDAD CONTRATANTE";
-    const contratista = contratistaResult?.razonSocial || baseObra?.contratista || "CONSORCIO CONTRATISTA";
-    const montoContractual = contratistaResult?.monto || baseObra?.montoContractual || 2500000;
-    const plazoDias = contratistaResult?.plazoDias || baseObra?.plazoDias || 180;
+    const cui = contratistaResult?.cui || supervisorResult?.cui || baseObra?.cui || "";
+    const nombre = contratistaResult?.nombreObra || supervisorResult?.nombreObra || baseObra?.nombre || "OBRA REGISTRADA DESDE DOCUMENTOS";
+    const entidad = contratistaResult?.entidad || supervisorResult?.entidad || baseObra?.entidad || "";
+    const contratista = contratistaResult?.razonSocial || baseObra?.contratista || "";
+    const montoContractual = contratistaResult?.monto !== undefined && contratistaResult?.monto > 0 ? contratistaResult.monto : (baseObra?.montoContractual || 0);
+    const plazoDias = contratistaResult?.plazoDias !== undefined && contratistaResult?.plazoDias > 0 ? contratistaResult.plazoDias : (baseObra?.plazoDias || 0);
     const fechaInicio = contratistaResult?.fechaSuscripcion || baseObra?.fechaInicio || new Date().toISOString().split("T")[0];
 
     // Compute end date
-    const d = new Date(fechaInicio);
-    d.setDate(d.getDate() + plazoDias);
-    const fechaFinProgramada = d.toISOString().split("T")[0];
+    let fechaFinProgramada = "";
+    if (plazoDias > 0 && fechaInicio) {
+      const d = new Date(fechaInicio);
+      d.setDate(d.getDate() + plazoDias);
+      fechaFinProgramada = d.toISOString().split("T")[0];
+    } else {
+      fechaFinProgramada = baseObra?.fechaFinProgramada || "";
+    }
 
     const updatedObraData: ObraProyecto = {
       ...baseObra,
@@ -378,21 +383,21 @@ export const ContractDocumentUploader: React.FC<ContractDocumentUploaderProps> =
       nombre,
       entidad,
       tipoDocumentoContratista: (contratistaResult?.tipoDocumento as any) || baseObra?.tipoDocumentoContratista || "Contrato de Obra",
-      numeroDocumentoContratista: contratistaResult?.numeroDocumento || baseObra?.numeroDocumentoContratista || "CONTRATO N° 001-2025",
+      numeroDocumentoContratista: contratistaResult?.numeroDocumento || baseObra?.numeroDocumentoContratista || "",
       fechaSuscripcionContratista: contratistaResult?.fechaSuscripcion || baseObra?.fechaSuscripcionContratista || fechaInicio,
       contratista,
-      rucContratista: contratistaResult?.ruc || baseObra?.rucContratista || "20600000001",
-      residente: contratistaResult?.residente?.nombre || baseObra?.residente || "Ing. Residente Colegiado",
-      dniResidente: contratistaResult?.residente?.dni || baseObra?.dniResidente || "40000001",
-      cipResidente: contratistaResult?.residente?.cip || baseObra?.cipResidente || "CIP 100001",
+      rucContratista: contratistaResult?.ruc || baseObra?.rucContratista || "",
+      residente: contratistaResult?.residente?.nombre || baseObra?.residente || "",
+      dniResidente: contratistaResult?.residente?.dni || baseObra?.dniResidente || "",
+      cipResidente: contratistaResult?.residente?.cip || baseObra?.cipResidente || "",
       tipoDocumentoSupervisor: (supervisorResult?.tipoDocumento as any) || baseObra?.tipoDocumentoSupervisor || "Contrato de Supervisión",
-      numeroDocumentoSupervisor: supervisorResult?.numeroDocumento || baseObra?.numeroDocumentoSupervisor || "CONTRATO N° 002-2025-CS",
+      numeroDocumentoSupervisor: supervisorResult?.numeroDocumento || baseObra?.numeroDocumentoSupervisor || "",
       fechaSuscripcionSupervisor: supervisorResult?.fechaSuscripcion || baseObra?.fechaSuscripcionSupervisor || fechaInicio,
-      montoSupervision: supervisorResult?.monto || baseObra?.montoSupervision || Math.round(montoContractual * 0.05),
-      supervisor: supervisorResult?.razonSocial || baseObra?.supervisor || "CONSORCIO SUPERVISOR",
-      rucSupervisor: supervisorResult?.ruc || baseObra?.rucSupervisor || "20600000002",
-      jefeSupervision: supervisorResult?.supervisor?.nombre || baseObra?.jefeSupervision || "Ing. Jefe de Supervisión",
-      cipJefeSupervision: supervisorResult?.supervisor?.cip || baseObra?.cipJefeSupervision || "CIP 100002",
+      montoSupervision: supervisorResult?.monto !== undefined && supervisorResult?.monto > 0 ? supervisorResult.monto : (baseObra?.montoSupervision || 0),
+      supervisor: supervisorResult?.razonSocial || baseObra?.supervisor || "",
+      rucSupervisor: supervisorResult?.ruc || baseObra?.rucSupervisor || "",
+      jefeSupervision: supervisorResult?.supervisor?.nombre || baseObra?.jefeSupervision || "",
+      cipJefeSupervision: supervisorResult?.supervisor?.cip || baseObra?.cipJefeSupervision || "",
       montoContractual,
       plazoDias,
       fechaInicio,
@@ -401,8 +406,8 @@ export const ContractDocumentUploader: React.FC<ContractDocumentUploaderProps> =
       adelantoMaterialesOtorgado: contratistaResult?.adelantoMaterialesPactado !== undefined ? contratistaResult.adelantoMaterialesPactado : (baseObra?.adelantoMaterialesOtorgado || 0),
       sistemaContratacion: contratistaResult?.sistemaContratacion || baseObra?.sistemaContratacion || "A Precios Unitarios",
       estado: "En Ejecución",
-      ubicacion: contratistaResult?.ubicacion || supervisorResult?.ubicacion || baseObra?.ubicacion || "Distrito, Provincia, Departamento",
-      tipologia: contratistaResult?.tipologia || supervisorResult?.tipologia || baseObra?.tipologia || "Edificaciones y Obras Civiles",
+      ubicacion: contratistaResult?.ubicacion || supervisorResult?.ubicacion || baseObra?.ubicacion || "",
+      tipologia: contratistaResult?.tipologia || supervisorResult?.tipologia || baseObra?.tipologia || "Edificaciones / Escuelas / Hospitales",
     };
 
     if (isCreatingNew) {

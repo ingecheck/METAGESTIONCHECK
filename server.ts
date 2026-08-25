@@ -907,7 +907,11 @@ Responde con precisión jurídica, citas de artículos de la Ley 30225, el Regla
       }
 
       const promptInstruction = `Actúa como especialista legal y auditor en Contrataciones Públicas del Perú (Ley N° 30225, Ley N° 32069, D.S. N° 344-2018-EF, D.S. N° 009-2025-EF, Directivas del OSCE / MEF y Contraloría General de la República).
-Tu misión es analizar con la máxima precisión técnica y jurídica este documento contractual de Obra Pública (puede ser Contrato Principal de Obra, Orden de Servicio < 8 UIT / Menores, Contrato de Supervisión, Orden de Servicio de Consultoría de Supervisión o Resolución de Designación de Inspector).
+Tu misión es analizar con la máxima fidelidad técnica y jurídica este documento contractual de Obra Pública (puede ser Contrato Principal de Obra, Orden de Servicio < 8 UIT / Menores, Contrato de Supervisión, Orden de Servicio de Consultoría de Supervisión o Resolución de Designación de Inspector).
+PROHIBICIÓN ESTRICTA DE INVENTAR O ALUCINAR DATOS:
+- Todos los campos DEBEN ser extraídos LITERALMENTE del texto o imágenes del documento suministrado.
+- Si un dato no figura en el documento (por ejemplo si no menciona residente, adelantos, CUI o supervisor), NO LO INVENTES, deja el campo vacío "" o 0.
+- El CUI, Nombre de la Obra, Entidad, Contratista/Supervisor, Monto y Plazo DEBEN corresponder estrictamente al contrato u orden de servicio analizado.
 
 TIPO DE LECTURA ESPERADA: ${documentType === "supervisor" ? "SUPERVISIÓN / INSPECTORÍA DE OBRA" : documentType === "contratista" ? "CONTRATISTA EJECUTOR DE OBRA" : "AUTODETECCIÓN SEGÚN DOCUMENTO"}
 NOMBRE DEL ARCHIVO: ${fileName}
@@ -995,15 +999,11 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta:
   "advertencias": ["..."]
 }`;
 
-      // High-speed payload priority: if textual content is extracted from PDF, use text prompt directly for instant speed
+      // Multimodal payload setup identical to SEACE Bases analysis
       let contentsPayload: any[];
 
-      if (inputContent.length > 150) {
-        // Direct fast-path: text extracted digitally
-        contentsPayload = [
-          `${promptInstruction}\n\n--- CONTENIDO DEL DOCUMENTO DE CONTRATO / ORDEN DE SERVICIO ---\n${inputContent.substring(0, 70000)}`,
-        ];
-      } else if (hasPdfBase64) {
+      if (hasPdfBase64) {
+        // Native Multimodal PDF OCR with Gemini
         contentsPayload = [
           promptInstruction,
           {
@@ -1012,10 +1012,11 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta:
               data: pdfBase64,
             },
           },
-          `Texto complementario: ${inputContent.substring(0, 10000)}`,
+          `Texto auxiliar o metadatos detectados: ${inputContent.substring(0, 15000)}`,
         ];
       } else if (hasImages) {
-        const imageParts = pageImagesBase64.slice(0, 3).map((b64: string) => ({
+        // Multimodal Gemini Vision OCR on rendered canvas images
+        const imageParts = pageImagesBase64.slice(0, 5).map((b64: string) => ({
           inlineData: {
             mimeType: "image/jpeg",
             data: b64,
@@ -1025,11 +1026,17 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta:
         contentsPayload = [
           promptInstruction,
           ...imageParts,
-          `Texto complementario: ${inputContent.substring(0, 10000)}`,
+          `Texto auxiliar o complementario detectado: ${inputContent.substring(0, 15000)}`,
         ];
       } else {
+        // Plain text fallback
+        const safeText =
+          inputContent.length > 90000
+            ? inputContent.substring(0, 90000) + "\n...[Texto truncado]..."
+            : inputContent;
+
         contentsPayload = [
-          `${promptInstruction}\n\n--- CONTENIDO DEL DOCUMENTO DE CONTRATO / ORDEN DE SERVICIO ---\n${inputContent.substring(0, 70000)}`,
+          `${promptInstruction}\n\n--- CONTENIDO DEL DOCUMENTO DE CONTRATO / ORDEN DE SERVICIO ---\n${safeText || "Documento contractual"}`,
         ];
       }
 
@@ -1789,7 +1796,7 @@ function extractContractDataFallback(
   }
 
   // 3. Extract CUI
-  let cui = "2548912";
+  let cui = "";
   const cuiMatch = text.match(/(?:CUI|SNIP|CÓDIGO ÚNICO|CODIGO UNICO|PROYECTO N[°º]|INVERSI[ÓO]N)[\s:\.]*([0-9]{6,8})/i);
   if (cuiMatch && cuiMatch[1]) {
     cui = cuiMatch[1];
@@ -1802,10 +1809,10 @@ function extractContractDataFallback(
 
   // 4. Extract Contract / O.S. Number
   let numeroDocumento = isOrdenServicio
-    ? "ORDEN DE SERVICIO N° 00124-2025"
+    ? ""
     : docType === "contratista"
-    ? "CONTRATO DE OBRA N° 045-2025-MDR/GAF"
-    : "CONTRATO DE CONSULTORÍA N° 012-2025-CS";
+    ? ""
+    : "";
 
   const numDocMatch = text.match(
     /(?:CONTRATO|ORDEN DE SERVICIO|ORDEN DE COMPRA Y SERVICIO|RESOLUCI[ÓO]N DE ALCALD[ÍI]A|RESOLUCI[ÓO]N GERENCIAL|O\.S\.)[\s\wº°]*N[°º\.\s]*([0-9]{1,5}-[\d]{4}-[\w\d\/-]+)/i
@@ -1815,7 +1822,7 @@ function extractContractDataFallback(
   }
 
   // 5. Extract Entidad
-  let entidad = "MUNICIPALIDAD DISTRITAL DE SAN JERÓNIMO";
+  let entidad = "";
   const entidadMatch = text.match(
     /(?:MUNICIPALIDAD\s+DISTRITAL\s+DE\s+[A-ZÁÉÍÓÚÑ\s]+|MUNICIPALIDAD\s+PROVINCIAL\s+DE\s+[A-ZÁÉÍÓÚÑ\s]+|GOBIERNO\s+REGIONAL\s+DE\s+[A-ZÁÉÍÓÚÑ\s]+|MINISTERIO\s+DE\s+[A-ZÁÉÍÓÚÑ\s]+|PROGRAMA\s+NACIONAL\s+[A-ZÁÉÍÓÚÑ\s]+)/i
   );
@@ -1824,22 +1831,24 @@ function extractContractDataFallback(
   }
 
   // 6. Extract Project Name
-  let nombreObra = "MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE MOVILIDAD URBANA EN LAS VÍAS LOCALES DEL DISTRITO DE SAN JERÓNIMO - PROVINCIA DE CUSCO - DEPARTAMENTO DE CUSCO";
+  let nombreObra = "";
   const obraMatch = text.match(
-    /(?:MEJORAMIENTO|CREACI[ÓO]N|CONSTRUCCI[ÓO]N|REHABILITACI[ÓO]N|AMPLIACI[ÓO]N|INSTALACI[ÓO]N|RENOVACI[ÓO]N)[\s\S]{20,250}?(?=(?:CON\s+CUI|CUI|POR\s+UN\s+MONTO|EN\s+EL\s+DISTRITO|PLAZO|CL[ÁA]USULA))/i
+    /(?:MEJORAMIENTO|CREACI[ÓO]N|CONSTRUCCI[ÓO]N|REHABILITACI[ÓO]N|AMPLIACI[ÓO]N|INSTALACI[ÓO]N|RENOVACI[ÓO]N)[\s\S]{15,250}?(?=(?:CON\s+CUI|CUI|POR\s+UN\s+MONTO|EN\s+EL\s+DISTRITO|PLAZO|CL[ÁA]USULA|\.\s))/i
   );
   if (obraMatch && obraMatch[0]) {
     nombreObra = obraMatch[0].trim().replace(/\s+/g, " ").replace(/[\r\n]+/g, " ");
+  } else {
+    nombreObra = fileName.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").toUpperCase();
   }
 
   // 7. Extract RUC and Business Name
-  let ruc = docType === "contratista" ? "20608945123" : "20549812401";
+  let ruc = "";
   const rucMatch = text.match(/(?:RUC|R\.U\.C\.)[\s:\.]*([12][0-9]{10})/i);
   if (rucMatch && rucMatch[1]) {
     ruc = rucMatch[1];
   }
 
-  let razonSocial = docType === "contratista" ? "CONSORCIO VIAL DEL SUR" : "CONSORCIO SUPERVISOR LOS ANDES";
+  let razonSocial = "";
   const contratistaMatch = text.match(
     /(?:EL\s+CONTRATISTA|EL\s+CONSULTOR|EL\s+PROVEEDOR|LA\s+EMPRESA|A\s+FAVOR\s+DE|CONSORCIO)[\s:\.,]+([A-ZÁÉÍÓÚÑ\s\.\-&]{5,70}?)(?=(?:CON\s+RUC|RUC|CON\s+DOMICILIO|REPRESENTAD[OA]|DNI))/i
   );
@@ -1851,7 +1860,7 @@ function extractContractDataFallback(
   }
 
   // 8. Extract Amount (S/.)
-  let monto = isOrdenServicio ? 39800 : docType === "contratista" ? 2845720.5 : 142500;
+  let monto = 0;
   const montoMatch = text.match(/(?:MONTO|IMPORTE|VALOR|TOTAL|PRECIO)[\s:\w\(\)]*S\/\.?\s*([\d,]+(?:\.\d{2})?)/i);
   if (montoMatch && montoMatch[1]) {
     const parsedMonto = parseFloat(montoMatch[1].replace(/,/g, ""));
@@ -1861,7 +1870,7 @@ function extractContractDataFallback(
   }
 
   // 9. Extract Execution Time in Days
-  let plazoDias = isOrdenServicio ? 45 : docType === "contratista" ? 180 : 180;
+  let plazoDias = 0;
   const plazoMatch = text.match(/(?:PLAZO\s+DE\s+EJECUCI[ÓO]N|PLAZO|VIGENCIA)[\s:\w]*?(\d{1,4})\s*(?:D[ÍI]AS\s+CALENDARIO|D[ÍI]AS)/i);
   if (plazoMatch && plazoMatch[1]) {
     const parsedPlazo = parseInt(plazoMatch[1], 10);
@@ -1871,28 +1880,28 @@ function extractContractDataFallback(
   }
 
   // 10. Extract Personnel
-  let residente = {
-    nombre: "ING. MARCO ANTONIO QUISPE FLORES",
-    dni: "42891054",
-    cip: "CIP 142890",
-  };
+  let residente: { nombre: string; dni: string; cip: string } | undefined = undefined;
   const resMatch = text.match(/(?:RESIDENTE\s+DE\s+OBRA|INGENIERO\s+RESIDENTE)[\s:\.,]*([A-ZÁÉÍÓÚÑ\s\.]+?)(?=(?:CON\s+CIP|CIP|DNI|COLEGIATURA|\.))/i);
   if (resMatch && resMatch[1]) {
     const cleanRes = resMatch[1].trim().replace(/\s+/g, " ");
     if (cleanRes.length > 5) {
-      residente.nombre = cleanRes;
+      residente = {
+        nombre: cleanRes,
+        dni: "",
+        cip: "",
+      };
     }
   }
 
-  let supervisor = {
-    nombre: "ING. CARLOS EDUARDO MENDOZA RÍOS",
-    cip: "CIP 184920",
-  };
+  let supervisor: { nombre: string; cip: string } | undefined = undefined;
   const supMatch = text.match(/(?:SUPERVISOR\s+DE\s+OBRA|JEFE\s+DE\s+SUPERVISI[ÓO]N|INSPECTOR)[\s:\.,]*([A-ZÁÉÍÓÚÑ\s\.]+?)(?=(?:CON\s+CIP|CIP|DNI|COLEGIATURA|\.))/i);
   if (supMatch && supMatch[1]) {
     const cleanSup = supMatch[1].trim().replace(/\s+/g, " ");
     if (cleanSup.length > 5) {
-      supervisor.nombre = cleanSup;
+      supervisor = {
+        nombre: cleanSup,
+        cip: "",
+      };
     }
   }
 
