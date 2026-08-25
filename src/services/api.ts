@@ -398,3 +398,27 @@ export async function analyzePersonnelAPI(params: {
     detectedDocuments: parsedDetectedDocs,
   };
 }
+
+export async function analyzeContractDocumentAPI(params: {
+  documentType: "contratista" | "supervisor" | "auto";
+  contractText?: string;
+  pdfBase64?: string;
+  pageImagesBase64?: string[];
+  isScanned?: boolean;
+  fileName?: string;
+  fileSizeBytes?: number;
+}): Promise<any> {
+  const response = await fetch("/api/gemini/analyze-contract-document", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "Error al procesar el documento contractual con IA");
+  }
+
+  const data = await response.json();
+  return data.data;
+}

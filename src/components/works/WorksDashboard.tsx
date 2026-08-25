@@ -25,6 +25,10 @@ import {
   Trash2,
   Edit3,
   Check,
+  FileText,
+  Shield,
+  Briefcase,
+  BadgeCheck,
 } from "lucide-react";
 import {
   ObraProyecto,
@@ -76,7 +80,9 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
       ob.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ob.cui.includes(searchTerm) ||
       ob.entidad.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ob.contratista.toLowerCase().includes(searchTerm.toLowerCase());
+      ob.contratista.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ob.obra.numeroDocumentoContratista && ob.obra.numeroDocumentoContratista.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ob.obra.numeroDocumentoSupervisor && ob.obra.numeroDocumentoSupervisor.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus =
       statusFilter === "all" ||
@@ -111,7 +117,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
-      {/* SECCIÓN 1: BANDEJA EXCLUSIVA DE PROYECTOS DE OBRA (APARTADO 2)           */}
+      {/* SECCIÓN 1: BANDEJA EXCLUSIVA DE PROYECTOS DE OBRA (CARTERA)               */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -124,21 +130,34 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                 Cartera de Proyectos de Obra Pública en Ejecución
               </h2>
               <p className="text-xs text-slate-500">
-                Seleccione el proyecto de obra para gestionar sus valorizaciones, adicionales y liquidación
+                Gestión técnica fundamentada en los Contratos / Órdenes de Servicio (&lt; 8 UIT) del Contratista y de la Supervisión
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              setEditingObra(null);
-              setIsNewObraModalOpen(true);
-            }}
-            className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Registrar Nuevo Proyecto de Obra</span>
-          </button>
+          <div className="flex items-center space-x-2 shrink-0">
+            {onNavigateSubtab ? (
+              <button
+                onClick={() => onNavigateSubtab("obras-lector")}
+                className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+                title="Subir y analizar PDFs de Contratos u Órdenes de Servicio (< 8 UIT) para generar la obra automáticamente"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nuevo Proyecto desde Contratos / O.S.</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditingObra(null);
+                  setIsNewObraModalOpen(true);
+                }}
+                className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nuevo Proyecto</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filters & Search */}
@@ -187,11 +206,11 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
           </div>
 
           {/* Search Input */}
-          <div className="relative w-full md:w-72">
+          <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Buscar por CUI, Obra o Entidad..."
+              placeholder="Buscar por CUI, Contrato, O.S., Obra o RUC..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-indigo-500 focus:outline-none"
@@ -202,12 +221,34 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
         {/* Obras Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
           {filteredObras.length === 0 ? (
-            <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
-              No se encontraron obras con los filtros seleccionados. Haga clic en "+ Registrar Nuevo Proyecto de Obra" para dar de alta uno.
+            <div className="col-span-full py-10 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center space-y-3">
+              <div className="p-3 bg-indigo-50 text-indigo-700 rounded-2xl">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div className="max-w-md space-y-1">
+                <h4 className="text-sm font-bold text-slate-800">
+                  No hay proyectos registrados con los filtros seleccionados
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Suba los documentos de Contrato u Órdenes de Servicio (&lt; 8 UIT) para extraer CUI, montos, plazos y generar automáticamente el proyecto.
+                </p>
+              </div>
+              {onNavigateSubtab && (
+                <button
+                  onClick={() => onNavigateSubtab("obras-lector")}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Subir Contratos y Generar Proyecto</span>
+                </button>
+              )}
             </div>
           ) : (
             filteredObras.map((ob) => {
               const isActive = ob.id === activeObraId || ob.obra.id === obra.id;
+              const isMenor8UitContratista = ob.obra.tipoDocumentoContratista?.includes("< 8 UIT");
+              const isMenor8UitSupervisor = ob.obra.tipoDocumentoSupervisor?.includes("< 8 UIT");
+
               return (
                 <div
                   key={ob.id}
@@ -217,11 +258,11 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                       : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
                   }`}
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {/* Header line */}
                     <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center space-x-1.5">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className="bg-indigo-900 text-indigo-100 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded">
                             CUI {ob.cui}
                           </span>
@@ -247,6 +288,41 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                       >
                         {ob.estado}
                       </span>
+                    </div>
+
+                    {/* Technical Document Badges (Contrato / Orden de Servicio < 8 UIT) */}
+                    <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200/80 text-[10px]">
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block truncate">
+                          Contratista:
+                        </span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`px-1.5 py-0.2 rounded font-semibold text-[9px] truncate ${
+                            isMenor8UitContratista ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                          }`}>
+                            {isMenor8UitContratista ? "O.S. < 8 UIT" : "Contrato Obra"}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[9px] text-slate-700 font-medium truncate mt-0.5" title={ob.obra.numeroDocumentoContratista}>
+                          {ob.obra.numeroDocumentoContratista || "Doc. s/n"}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 border-l border-slate-200 pl-2">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block truncate">
+                          Supervisión:
+                        </span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`px-1.5 py-0.2 rounded font-semibold text-[9px] truncate ${
+                            isMenor8UitSupervisor ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
+                          }`}>
+                            {isMenor8UitSupervisor ? "O.S. < 8 UIT" : "Contrato Sup."}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[9px] text-slate-700 font-medium truncate mt-0.5" title={ob.obra.numeroDocumentoSupervisor}>
+                          {ob.obra.numeroDocumentoSupervisor || "Doc. s/n"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Name */}
@@ -283,7 +359,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                           setEditingObra(ob);
                           setIsNewObraModalOpen(true);
                         }}
-                        title="Editar datos del proyecto"
+                        title="Editar datos preliminares y contratos del proyecto"
                         className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -336,7 +412,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 shadow-md border border-slate-700">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/80 pb-4">
           <div className="space-y-1">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="bg-indigo-500/30 text-indigo-200 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded border border-indigo-400/30">
                 CUI N° {obra.cui}
               </span>
@@ -352,14 +428,27 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             </h2>
           </div>
 
-          <div className="text-right shrink-0">
-            <div className="text-[11px] text-slate-400 uppercase font-semibold">Monto Contractual Vigente</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
-              S/ {(obra.montoContractual + adicionalesAprobados - deductivosAprobados).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+          <div className="text-right shrink-0 flex flex-col sm:items-end justify-between">
+            <div>
+              <div className="text-[11px] text-slate-400 uppercase font-semibold">Monto Contractual Vigente</div>
+              <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
+                S/ {(obra.montoContractual + adicionalesAprobados - deductivosAprobados).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                Contrato Base: S/ {obra.montoContractual.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+              </div>
             </div>
-            <div className="text-[10px] text-slate-400">
-              Contrato Base: S/ {obra.montoContractual.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
-            </div>
+            <button
+              onClick={() => {
+                const currentPkg = obrasList.find((o) => o.id === activeObraId || o.obra.id === obra.id);
+                setEditingObra(currentPkg || null);
+                setIsNewObraModalOpen(true);
+              }}
+              className="mt-2 text-xs text-indigo-300 hover:text-white flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Editar Contratos y Datos</span>
+            </button>
           </div>
         </div>
 
@@ -384,7 +473,9 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             <span className="text-slate-400 font-semibold block text-[10px] uppercase">Supervisión de Obra:</span>
             <div className="font-bold text-slate-200 truncate mt-0.5">{obra.supervisor}</div>
             <span className="text-[10px] text-slate-400 block mt-1 font-mono">RUC: {obra.rucSupervisor}</span>
-            <span className="text-[10px] text-indigo-300 font-medium block truncate mt-0.5">Supervisión Certificada</span>
+            <span className="text-[10px] text-indigo-300 font-medium block truncate mt-0.5">
+              Jefe Sup.: {obra.jefeSupervision || "Supervisor Colegiado"} ({obra.cipJefeSupervision || "CIP"})
+            </span>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
@@ -397,6 +488,202 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             </div>
             <div className="text-[10px] text-emerald-300 font-semibold">
               Término Reprog.: {obra.fechaFinReprogramada || obra.fechaFinProgramada}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECCIÓN 3: DOCUMENTOS TÉCNICOS CONTRACTUALES DE ORIGEN (DATOS PRELIMINARES) */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 bg-blue-100 text-blue-800 rounded-xl">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                Documentos Técnicos y Contractuales de Origen (Datos Preliminares de Obra)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Los datos iniciales de control de obra se sustentan en el Contrato u Orden de Servicio (&lt; 8 UIT) del Contratista y de la Supervisión
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              const currentPkg = obrasList.find((o) => o.id === activeObraId || o.obra.id === obra.id);
+              setEditingObra(currentPkg || null);
+              setIsNewObraModalOpen(true);
+            }}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>Editar Datos de Contratos / O.S.</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Tarjeta 1: Documento Técnico del Contratista Ejecutor */}
+          <div className="bg-gradient-to-br from-blue-50/70 to-slate-50 border border-blue-200 rounded-xl p-4.5 space-y-3 relative">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 bg-blue-600 text-white rounded-lg">
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-blue-950 uppercase tracking-wide">
+                    1° Documento: Contratista Ejecutor
+                  </h4>
+                  <span className="text-[11px] font-semibold text-blue-700">
+                    {obra.tipoDocumentoContratista || "Contrato de Obra"}
+                  </span>
+                </div>
+              </div>
+
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                obra.tipoDocumentoContratista?.includes("< 8 UIT")
+                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                  : "bg-blue-100 text-blue-800 border-blue-300"
+              }`}>
+                {obra.tipoDocumentoContratista?.includes("< 8 UIT") ? "Orden de Servicio (< 8 UIT)" : "Contrato Principal"}
+              </span>
+            </div>
+
+            {/* Document Details Grid */}
+            <div className="space-y-2 text-xs pt-1">
+              <div className="bg-white p-2.5 rounded-lg border border-blue-100 shadow-2xs space-y-1">
+                <div className="text-[10px] font-bold text-slate-500 uppercase">N° de Documento / Notificación:</div>
+                <div className="font-mono font-bold text-slate-900 text-xs">
+                  {obra.numeroDocumentoContratista || "CONTRATO DE OBRA N° 045-2025-MDR/GAF"}
+                </div>
+                <div className="text-[10px] text-slate-500 flex items-center justify-between pt-0.5">
+                  <span>Fecha Suscripción/Notificación:</span>
+                  <strong className="text-slate-800 font-mono">{obra.fechaSuscripcionContratista || obra.fechaInicio}</strong>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Monto Contratado:</span>
+                  <span className="font-bold text-emerald-800 font-mono text-xs">
+                    S/ {obra.montoContractual.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Plazo y Sistema:</span>
+                  <span className="font-bold text-slate-800 text-xs">
+                    {obra.plazoDias} Días • {obra.sistemaContratacion === "A Precios Unitarios" ? "Precios Unit." : obra.sistemaContratacion}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">Contratista:</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[180px]" title={obra.contratista}>{obra.contratista}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">RUC Contratista:</span>
+                  <span className="font-mono font-semibold text-slate-800">{obra.rucContratista}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                  <span className="text-slate-500 font-medium">Residente Designado:</span>
+                  <span className="font-bold text-indigo-700 truncate max-w-[180px]">
+                    {obra.residente} ({obra.cipResidente})
+                  </span>
+                </div>
+              </div>
+
+              {/* Adelantos otorgados en contrato */}
+              <div className="bg-blue-100/60 p-2 rounded-lg border border-blue-200 flex items-center justify-between text-[11px]">
+                <span className="text-blue-900 font-medium">Adelantos Pactados:</span>
+                <div className="text-right font-mono text-[10px] text-blue-950 font-bold">
+                  Directo: S/ {(obra.adelantoDirectoOtorgado || 0).toLocaleString("es-PE")} | Mat: S/ {(obra.adelantoMaterialesOtorgado || 0).toLocaleString("es-PE")}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta 2: Documento Técnico de la Supervisión / Inspectoría */}
+          <div className="bg-gradient-to-br from-purple-50/70 to-slate-50 border border-purple-200 rounded-xl p-4.5 space-y-3 relative">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 bg-purple-600 text-white rounded-lg">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wide">
+                    2° Documento: Supervisión / Inspectoría
+                  </h4>
+                  <span className="text-[11px] font-semibold text-purple-700">
+                    {obra.tipoDocumentoSupervisor || "Contrato de Supervisión"}
+                  </span>
+                </div>
+              </div>
+
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                obra.tipoDocumentoSupervisor?.includes("< 8 UIT")
+                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                  : "bg-purple-100 text-purple-800 border-purple-300"
+              }`}>
+                {obra.tipoDocumentoSupervisor?.includes("< 8 UIT") ? "Orden de Servicio (< 8 UIT)" : "Consultoría / Inspector"}
+              </span>
+            </div>
+
+            {/* Document Details Grid */}
+            <div className="space-y-2 text-xs pt-1">
+              <div className="bg-white p-2.5 rounded-lg border border-purple-100 shadow-2xs space-y-1">
+                <div className="text-[10px] font-bold text-slate-500 uppercase">N° de Documento / Notificación:</div>
+                <div className="font-mono font-bold text-slate-900 text-xs">
+                  {obra.numeroDocumentoSupervisor || "CONTRATO DE CONSULTORÍA N° 012-2025-CS"}
+                </div>
+                <div className="text-[10px] text-slate-500 flex items-center justify-between pt-0.5">
+                  <span>Fecha Suscripción/Notificación:</span>
+                  <strong className="text-slate-800 font-mono">{obra.fechaSuscripcionSupervisor || obra.fechaInicio}</strong>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Monto Supervisión:</span>
+                  <span className="font-bold text-purple-900 font-mono text-xs">
+                    S/ {(obra.montoSupervision || 125000).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Condición Técnica:</span>
+                  <span className="font-bold text-slate-800 text-xs">
+                    Supervisión Externa
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">Empresa / Inspector:</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[180px]" title={obra.supervisor}>{obra.supervisor}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">RUC / DNI Supervisión:</span>
+                  <span className="font-mono font-semibold text-slate-800">{obra.rucSupervisor}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                  <span className="text-slate-500 font-medium">Jefe de Supervisión:</span>
+                  <span className="font-bold text-purple-700 truncate max-w-[180px]">
+                    {obra.jefeSupervision || "Ing. Supervisor"} ({obra.cipJefeSupervision || "CIP"})
+                  </span>
+                </div>
+              </div>
+
+              {/* Responsabilidad Técnica */}
+              <div className="bg-purple-100/60 p-2 rounded-lg border border-purple-200 text-[10px] text-purple-950">
+                <strong>Responsabilidad en Obra:</strong> Control permanente de calidad, revisión y aprobación de valorizaciones mensuales y emisión de pronunciamientos técnicos ante la Entidad.
+              </div>
             </div>
           </div>
         </div>
@@ -451,7 +738,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             {valorizaciones.length} Valorizaciones mensuales registradas
           </div>
           <button
-            onClick={() => onNavigateSubtab("valorizaciones")}
+            onClick={() => onNavigateSubtab("obras-valorizaciones")}
             className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-1 cursor-pointer"
           >
             <span>Ver Curva S y Desglose</span> <ArrowRight className="w-3 h-3" />
@@ -476,7 +763,7 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             Adicionales Netos: S/ {(adicionalesAprobados - deductivosAprobados).toLocaleString("es-PE")}
           </div>
           <button
-            onClick={() => onNavigateSubtab("modificaciones")}
+            onClick={() => onNavigateSubtab("obras-adicionales")}
             className="text-[11px] font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 pt-1 cursor-pointer"
           >
             <span>Ver Adicionales y Plazos</span> <ArrowRight className="w-3 h-3" />
@@ -492,7 +779,9 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-amber-900">{obra.plazoEjecucionDias} Días</span>
+            <span className="text-2xl font-black text-amber-900">
+              {obra.plazoDias + diasAmpliacionTotal} Días
+            </span>
             <span className="text-xs text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
               {obra.estado}
             </span>
@@ -501,74 +790,11 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
             Término: {obra.fechaFinReprogramada || obra.fechaFinProgramada}
           </div>
           <button
-            onClick={() => onNavigateSubtab("modificaciones")}
+            onClick={() => onNavigateSubtab("obras-adicionales")}
             className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 pt-1 cursor-pointer"
           >
             <span>Ver Ampliaciones</span> <ArrowRight className="w-3 h-3" />
           </button>
-        </div>
-      </div>
-
-      {/* Modules Quick Navigation */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-          Módulos de Ejecución y Supervisión Técnica
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div
-            onClick={() => onNavigateSubtab("valorizaciones")}
-            className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white transition cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition">
-                <FileSpreadsheet className="w-5 h-5" />
-              </div>
-              <span className="text-xs text-indigo-600 font-bold group-hover:translate-x-0.5 transition">
-                Entrar &rarr;
-              </span>
-            </div>
-            <h4 className="font-bold text-slate-900 text-sm">Valorizaciones y Curva S</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Cálculo de Fórmula Polinómica (K), amortizaciones de adelantos y retenciones.
-            </p>
-          </div>
-
-          <div
-            onClick={() => onNavigateSubtab("modificaciones")}
-            className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white transition cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition">
-                <Scale className="w-5 h-5" />
-              </div>
-              <span className="text-xs text-indigo-600 font-bold group-hover:translate-x-0.5 transition">
-                Entrar &rarr;
-              </span>
-            </div>
-            <h4 className="font-bold text-slate-900 text-sm">Adicionales y Ampliaciones</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Cálculo de Incidencia &le; 15% (Art. 205 RLCE) y sustento de ruta crítica.
-            </p>
-          </div>
-
-          <div
-            onClick={() => onNavigateSubtab("liquidacion")}
-            className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white transition cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition">
-                <Award className="w-5 h-5" />
-              </div>
-              <span className="text-xs text-indigo-600 font-bold group-hover:translate-x-0.5 transition">
-                Entrar &rarr;
-              </span>
-            </div>
-            <h4 className="font-bold text-slate-900 text-sm">Liquidación Final y Cierre</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Balance económico final, saldo a favor y acta de recepción de obra.
-            </p>
-          </div>
         </div>
       </div>
 

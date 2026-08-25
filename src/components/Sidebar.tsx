@@ -94,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Sub-items for Module 2: Control de Obras / Entidades
   const obrasNavItems = [
     { id: "obras-dashboard", label: "Panel General de Obra", icon: HardHat },
+    { id: "obras-lector", label: "Análisis de Contratos / O.S.", icon: FileText },
     { id: "obras-valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
     { id: "obras-partidas", label: "2. Cuadro Partidas Ejecutadas", icon: ListTree },
     { id: "obras-auditoria", label: "3. Auditoría Excel vs Escaneado", icon: ShieldAlert },

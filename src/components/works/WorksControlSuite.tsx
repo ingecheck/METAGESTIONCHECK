@@ -9,7 +9,7 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
-  Sparkles,
+  FileText,
 } from "lucide-react";
 import {
   ObraProyecto,
@@ -22,6 +22,7 @@ import { WorksDashboard } from "./WorksDashboard";
 import { WorksValuations } from "./WorksValuations";
 import { WorksModificationsManager } from "./WorksModificationsManager";
 import { WorksSettlementManager } from "./WorksSettlementManager";
+import { ContractDocumentUploader } from "./ContractDocumentUploader";
 
 interface WorksControlSuiteProps {
   obra: ObraProyecto;
@@ -65,6 +66,7 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
 
   const navSubItems = [
     { id: "dashboard-obras", label: "Panel Principal", icon: Building2 },
+    { id: "lector-contratos", label: "Análisis de Contratos / O.S.", icon: FileText },
     { id: "valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
     { id: "adicionales", label: "2. Adicionales y Plazos", icon: Scale },
     { id: "liquidacion", label: "3. Recepción y Liquidación", icon: Award },
@@ -106,6 +108,14 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
         />
       )}
 
+      {currentSubTab === "lector-contratos" && (
+        <ContractDocumentUploader
+          currentObra={obra}
+          onApplyToActiveObra={(updated) => setObra((prev) => ({ ...prev, ...updated }))}
+          onNavigateToDashboard={() => handleSubTabChange("dashboard-obras")}
+        />
+      )}
+
       {currentSubTab === "valorizaciones" && (
         <WorksValuations
           obra={obra}
@@ -132,3 +142,4 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
     </div>
   );
 };
+

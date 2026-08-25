@@ -58,6 +58,7 @@ import {
 } from "./data/sampleObras";
 import { WorksItemsExecutedTable } from "./components/works/WorksItemsExecutedTable";
 import { WorksValuationAuditor } from "./components/works/WorksValuationAuditor";
+import { ContractDocumentUploader } from "./components/works/ContractDocumentUploader";
 import {
   generateAnexo1Docx,
   generateAnexo2Docx,
@@ -404,6 +405,48 @@ export default function App() {
     setLiquidacion(obraPkg.liquidacion || EMPTY_LIQUIDACION);
     setPartidas(obraPkg.partidas || []);
     setAuditoria(obraPkg.auditorias?.[0]);
+  };
+
+  const handleSaveObraFromAnalysis = (
+    updatedData: Partial<ObraProyecto>,
+    completePkg?: UserObraPackage,
+    targetObraId?: string
+  ) => {
+    if (completePkg) {
+      handleSaveObra(completePkg);
+      return;
+    }
+
+    const currentPkgId = targetObraId || activeObraId || (obrasList.length > 0 ? obrasList[0].id : `obra-${Date.now()}`);
+    const existingPkg = obrasList.find((o) => o.id === currentPkgId);
+
+    const baseObra = existingPkg?.obra || obra;
+    const mergedObra: ObraProyecto = {
+      ...baseObra,
+      ...updatedData,
+      id: currentPkgId,
+    };
+
+    const pkgToSave: UserObraPackage = {
+      id: currentPkgId,
+      cui: mergedObra.cui || existingPkg?.cui || "2548912",
+      nombre: mergedObra.nombre || existingPkg?.nombre || "PROYECTO DE OBRA EN EJECUCIÓN",
+      entidad: mergedObra.entidad || existingPkg?.entidad || "ENTIDAD CONTRATANTE",
+      contratista: mergedObra.contratista || existingPkg?.contratista || "CONSORCIO CONTRATISTA",
+      montoContractual: mergedObra.montoContractual || existingPkg?.montoContractual || 0,
+      estado: mergedObra.estado || existingPkg?.estado || "En Ejecución",
+      createdAt: existingPkg?.createdAt || new Date().toISOString().split("T")[0],
+      updatedAt: new Date().toISOString().split("T")[0],
+      obra: mergedObra,
+      valorizaciones: existingPkg?.valorizaciones || valorizaciones || [],
+      asientos: existingPkg?.asientos || asientos || [],
+      modificaciones: existingPkg?.modificaciones || modificaciones || [],
+      liquidacion: existingPkg?.liquidacion || liquidacion || EMPTY_LIQUIDACION,
+      partidas: existingPkg?.partidas || partidas || [],
+      auditorias: existingPkg?.auditorias || (auditoria ? [auditoria] : []),
+    };
+
+    handleSaveObra(pkgToSave);
   };
 
   const handleDeleteObra = (obraId: string) => {
@@ -904,6 +947,29 @@ export default function App() {
               onSaveObra={handleSaveObra}
               onDeleteObra={handleDeleteObra}
               onDuplicateObra={handleDuplicateObra}
+            />
+          )}
+
+          {activeTab === "obras-lector" && (
+            <ContractDocumentUploader
+              currentObra={obra}
+              obrasList={obrasList}
+              activeObraId={activeObraId}
+              onSelectObra={handleSelectObra}
+              onSaveProject={(updatedObraData, completePkg, targetObraId) => {
+                if (completePkg) {
+                  handleSaveObra(completePkg);
+                } else {
+                  handleSaveObraFromAnalysis(updatedObraData, undefined, targetObraId);
+                }
+              }}
+              onApplyToActiveObra={(updated, targetObraId) => {
+                handleSaveObraFromAnalysis(updated, undefined, targetObraId);
+              }}
+              onCreateNewObra={(newPkg) => {
+                handleSaveObra(newPkg);
+              }}
+              onNavigateToDashboard={() => setActiveTab("obras-dashboard")}
             />
           )}
 

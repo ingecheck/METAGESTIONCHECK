@@ -3,13 +3,30 @@ export interface ObraProyecto {
   cui: string; // Código Único de Inversiones (SNIP / invierte.pe)
   nombre: string;
   entidad: string;
+  
+  // Documentos Técnicos Preliminares de Origen
+  // 1. Instrumento Contractual del Contratista Ejecutor
+  tipoDocumentoContratista?: "Contrato de Obra" | "Orden de Servicio (< 8 UIT)" | "Contratación Directa";
+  numeroDocumentoContratista?: string; // e.g. "Contrato N° 045-2025-MDR/GAF" o "O.S. N° 00124-2025"
+  fechaSuscripcionContratista?: string; // Fecha de firma de contrato o notificación de O.S.
+  
   contratista: string;
   rucContratista: string;
-  supervisor: string;
-  rucSupervisor: string;
   residente: string;
   dniResidente: string;
   cipResidente: string;
+
+  // 2. Instrumento Contractual de la Supervisión / Inspectoría
+  tipoDocumentoSupervisor?: "Contrato de Supervisión" | "Orden de Servicio (< 8 UIT)" | "Resolución de Designación de Inspector";
+  numeroDocumentoSupervisor?: string; // e.g. "Contrato N° 012-2025-CS" o "O.S. N° 00088-2025" o "R.A. N° 045-2025"
+  fechaSuscripcionSupervisor?: string;
+  montoSupervision?: number;
+
+  supervisor: string;
+  rucSupervisor: string;
+  jefeSupervision?: string;
+  cipJefeSupervision?: string;
+
   montoContractual: number;
   plazoDias: number;
   fechaInicio: string;
@@ -209,6 +226,61 @@ export interface UserObraPackage {
   liquidacion: LiquidacionResumen;
   partidas?: PartidaEjecutada[];
   auditorias?: AuditoriaValorizacion[];
+}
+
+export interface ContractAnalysisResult {
+  documentType: "contratista" | "supervisor";
+  tipoDocumento: "Contrato de Obra" | "Orden de Servicio (< 8 UIT)" | "Contratación Directa" | "Contrato de Supervisión" | "Resolución de Designación de Inspector";
+  esMenor8Uit: boolean;
+  confidence: number;
+  fileName?: string;
+  fileSizeBytes?: number;
+  
+  // General Inversión
+  cui?: string;
+  nombreObra?: string;
+  entidad?: string;
+  ubicacion?: string;
+  tipologia?: ObraProyecto["tipologia"];
+  sistemaContratacion?: ObraProyecto["sistemaContratacion"];
+  
+  // Document Contractual Data
+  numeroDocumento: string;
+  fechaSuscripcion: string;
+  monto: number;
+  plazoDias: number;
+  razonSocial: string;
+  ruc: string;
+  representanteLegal?: string;
+  
+  // Key Personnel
+  residente?: {
+    nombre: string;
+    dni: string;
+    cip: string;
+  };
+  supervisor?: {
+    nombre: string;
+    cip: string;
+  };
+  
+  // Advances
+  adelantoDirectoPactado?: number;
+  adelantoMaterialesPactado?: number;
+  
+  // Legal & Clauses
+  clausulasClave: {
+    penalidadesMora?: string;
+    garantiaFielCumplimiento?: string;
+    solucionControversias?: string;
+    plazoRevisionValorizaciones?: string;
+    plazoInformesAdicionales?: string;
+    obligacionesPrincipales?: string[];
+    normativaCitada?: string;
+  };
+  
+  resumenEjecutivo: string;
+  advertencias: string[];
 }
 
 

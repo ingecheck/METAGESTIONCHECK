@@ -15,8 +15,8 @@ export interface ExtractedPdfResult {
   fileName: string;
   fileSizeBytes: number;
   isScannedImage?: boolean;
-  pageImagesBase64?: string[]; // Samples for Gemini Vision OCR
-  pdfBase64?: string; // Full raw PDF base64 for direct Gemini Multimodal document OCR
+  pageImagesBase64?: string[]; // Samples for visual processing
+  pdfBase64?: string; // Raw PDF base64 only when needed for scanned docs
 }
 
 /**
@@ -35,30 +35,33 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * Extracts textual content from an uploaded PDF File object in the browser.
- * If the PDF is a scanned document (contains no selectable digital text layer),
- * it captures the raw PDF base64 and renders pages so Gemini Multimodal Vision OCR can process it directly.
+ * Fast and optimized extraction of textual content from an uploaded PDF File.
+ * Extracts digital text layer instantly. If the document is scanned, renders only key sample pages.
  */
 export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfResult> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdfBase64 = arrayBufferToBase64(arrayBuffer);
   
   let fullText = "";
   let numPages = 1;
+  let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
 
   try {
+    // Pass a cloned buffer slice to prevent detaching the original buffer
     const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(arrayBuffer),
+      data: new Uint8Array(arrayBuffer.slice(0)),
       useSystemFonts: true,
       disableFontFace: false,
     });
 
-    const pdf = await loadingTask.promise;
-    numPages = pdf.numPages;
+    pdfDoc = await loadingTask.promise;
+    numPages = pdfDoc.numPages;
 
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    // Process up to 30 pages max to ensure fast speed on large files
+    const pagesToRead = Math.min(numPages, 30);
+
+    for (let pageNum = 1; pageNum <= pagesToRead; pageNum++) {
       try {
-        const page = await pdf.getPage(pageNum);
+        const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent({
           includeMarkedContent: false,
         });
@@ -69,7 +72,6 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
         for (const item of textContent.items as any[]) {
           if (!item.str) continue;
           
-          // Add newlines between vertical blocks for better structured reading
           if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
             pageText += "\n";
           } else if (pageText.length > 0 && !pageText.endsWith(" ") && !pageText.endsWith("\n")) {
@@ -91,48 +93,50 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
   }
 
   const cleanText = fullText.trim();
-  // If extracted text is less than 150 characters for the entire document, it is a scanned image
   const isScanned = cleanText.length < 150;
 
   let pageImagesBase64: string[] = [];
+  let pdfBase64: string | undefined = undefined;
 
-  // If it's a scanned PDF, render key pages (cover + TDR/spec pages) to canvas for image fallback
-  if (isScanned && typeof document !== "undefined") {
-    try {
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(arrayBuffer),
-        useSystemFonts: true,
-      });
-      const pdf = await loadingTask.promise;
-      
-      // Render sample pages (first pages and middle section where TDR/Budgets are)
-      const pagesToSample = [1, 2, 3, Math.min(10, numPages), Math.min(15, numPages)].filter(
-        (p, idx, self) => p <= numPages && self.indexOf(p) === idx
-      );
+  // Only compute base64 if it's actually a scanned document to avoid heavy payload & memory lags
+  if (isScanned) {
+    if (file.size < 6 * 1024 * 1024) {
+      try {
+        pdfBase64 = arrayBufferToBase64(arrayBuffer.slice(0));
+      } catch (b64Err) {
+        console.warn("Could not convert buffer to base64:", b64Err);
+      }
+    }
 
-      for (const p of pagesToSample) {
-        const page = await pdf.getPage(p);
-        const viewport = page.getViewport({ scale: 1.2 });
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+    if (pdfDoc && typeof document !== "undefined") {
+      try {
+        // Reuse the already loaded pdfDoc instance instead of re-opening the file
+        const pagesToSample = [1, 2, 3].filter((p) => p <= numPages);
 
-        if (ctx) {
-          await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
-          const base64Data = canvas.toDataURL("image/jpeg", 0.75).split(",")[1];
-          if (base64Data) {
-            pageImagesBase64.push(base64Data);
+        for (const p of pagesToSample) {
+          const page = await pdfDoc.getPage(p);
+          const viewport = page.getViewport({ scale: 1.0 });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          if (ctx) {
+            await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
+            const base64Data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+            if (base64Data) {
+              pageImagesBase64.push(base64Data);
+            }
           }
         }
+      } catch (renderErr) {
+        console.warn("Could not render sample pages to canvas:", renderErr);
       }
-    } catch (renderErr) {
-      console.warn("Could not render scanned pages to canvas:", renderErr);
     }
   }
 
   return {
-    text: cleanText || `[Documento PDF Escaneado: "${file.name}" (${numPages} páginas). Se aplicará OCR Multimodal con Visión Inteligente para digitalizar tablas, montos de obra, personal y requisitos].`,
+    text: cleanText || `[Documento PDF: "${file.name}" (${numPages} páginas). Digitalización y extracción de metadatos de obra, montos, plazos y cláusulas contractuales].`,
     pageCount: numPages,
     fileName: file.name,
     fileSizeBytes: file.size,
