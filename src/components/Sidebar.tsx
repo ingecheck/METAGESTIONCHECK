@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Sparkles,
   ListTree,
+  FileCheck2,
 } from "lucide-react";
 import { TenderInfo, CompanyProfile } from "../types/osce";
 import { LicenseSession } from "../types/auth";
@@ -95,11 +96,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const obrasNavItems = [
     { id: "obras-dashboard", label: "Panel General de Obra", icon: HardHat },
     { id: "obras-lector", label: "Análisis de Contratos / O.S.", icon: FileText },
-    { id: "obras-valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "obras-partidas", label: "2. Cuadro Partidas Ejecutadas", icon: ListTree },
-    { id: "obras-auditoria", label: "3. Auditoría Excel vs Escaneado", icon: ShieldAlert },
-    { id: "obras-adicionales", label: "4. Adicionales y Plazos", icon: Scale },
-    { id: "obras-liquidacion", label: "5. Recepción y Liquidación", icon: Award },
+    { id: "obras-inicio", label: "1. Procedimiento Inicio de Obra", icon: FileCheck2 },
+    { id: "obras-valorizaciones", label: "2. Curva S y Valorizaciones", icon: TrendingUp },
+    { id: "obras-partidas", label: "3. Cuadro Partidas Ejecutadas", icon: ListTree },
+    { id: "obras-auditoria", label: "4. Auditoría Excel vs Escaneado", icon: ShieldAlert },
+    { id: "obras-adicionales", label: "5. Adicionales y Plazos", icon: Scale },
+    { id: "obras-liquidacion", label: "6. Recepción y Liquidación", icon: Award },
   ];
 
   return (

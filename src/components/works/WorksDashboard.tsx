@@ -689,6 +689,37 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* SECCIÓN 4: ETAPA 1 • PROCEDIMIENTO PARA INICIO DE OBRA (ART. 176 RLCE)     */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-2xl border border-indigo-700/50 p-5 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="flex items-center gap-2">
+            <span className="bg-indigo-500/30 text-indigo-300 border border-indigo-400/40 text-[10px] font-black uppercase px-2 py-0.5 rounded">
+              Punto 1 de Control de Obras
+            </span>
+            <span className="text-[11px] text-slate-300 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Art. 176 D.S. 344-2018-EF / D.S. 009-2025-EF
+            </span>
+          </div>
+          <h3 className="text-base font-bold text-white tracking-tight">
+            1. Procedimiento para Inicio de Obra y Cumplimiento de Condiciones Previas
+          </h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Verifique la entrega de terreno (15 d.c.), designación de supervisor, acreditación de residente con CIP, habilitación de Cuaderno de Obra Digital y genere actas oficiales de inicio y suspensión.
+          </p>
+        </div>
+
+        <button
+          onClick={() => onNavigateSubtab("obras-inicio")}
+          className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shrink-0 cursor-pointer shadow-md"
+        >
+          <FileCheck2 className="w-4 h-4" />
+          <span>Gestionar Inicio de Obra</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Avance Físico */}

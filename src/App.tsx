@@ -20,6 +20,7 @@ import { DashboardOverview } from "./components/DashboardOverview";
 import { AdminPanel } from "./components/AdminPanel";
 import { LoginModal } from "./components/LoginModal";
 import { WorksDashboard } from "./components/works/WorksDashboard";
+import { WorksCommencementProcedure } from "./components/works/WorksCommencementProcedure";
 import { WorksValuations } from "./components/works/WorksValuations";
 import { WorksModificationsManager } from "./components/works/WorksModificationsManager";
 import { WorksSettlementManager } from "./components/works/WorksSettlementManager";
@@ -970,6 +971,28 @@ export default function App() {
                 handleSaveObra(newPkg);
               }}
               onNavigateToDashboard={() => setActiveTab("obras-dashboard")}
+            />
+          )}
+
+          {activeTab === "obras-inicio" && (
+            <WorksCommencementProcedure
+              obra={obra}
+              onUpdateObra={(updatedObra) => {
+                setObra(updatedObra);
+                // Also update in obrasList and local storage
+                setObrasList((prev) =>
+                  prev.map((pkg) =>
+                    pkg.id === activeObraId || pkg.obra.id === updatedObra.id
+                      ? {
+                          ...pkg,
+                          obra: updatedObra,
+                          updatedAt: new Date().toISOString(),
+                        }
+                      : pkg
+                  )
+                );
+              }}
+              onNavigateSubtab={setActiveTab}
             />
           )}
 

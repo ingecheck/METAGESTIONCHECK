@@ -38,6 +38,77 @@ export interface ObraProyecto {
   estado: "En Ejecución" | "Atrasada (>20%)" | "Adelantada" | "Paralizada" | "En Recepción" | "Liquidada";
   ubicacion: string;
   tipologia: "Carreteras y Vías" | "Edificaciones / Escuelas / Hospitales" | "Saneamiento y Agua Potable" | "Defensa Ribereña / Puentes";
+  procedimientoInicio?: ProcedimientoInicioObra;
+}
+
+export interface CondicionInicioItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  articuloLegal: string; // e.g. "Art. 176.1 literal a) RLCE D.S. 344-2018-EF"
+  obligatorio: boolean;
+  responsable: "Entidad Contratante" | "Contratista Ejecutor" | "Supervisión / Inspectoría" | "Conjunto";
+  cumplido: boolean;
+  noCorresponde?: boolean;
+  fechaCumplimiento?: string;
+  fechaLimiteLegal?: string;
+  documentoSustento?: string;
+  observaciones?: string;
+  estadoAlerta: "CONFORME" | "EN_TRAMITE" | "PENDIENTE_CRITICO" | "VENCIDO" | "NO_APLICA" | "NO_CORRESPONDE";
+}
+
+export interface ProcedimientoInicioObra {
+  id: string;
+  fechaFirmaContrato: string;
+  fechaEntregaTerrenoProgramada: string;
+  fechaEntregaTerrenoReal?: string;
+  tipoEntregaTerreno: "Total" | "Parcial con Cronograma de Disponibilidad";
+  actaEntregaTerrenoNumero?: string;
+  
+  // Designación Supervisor
+  supervisorDesignado: boolean;
+  documentoDesignacionSupervisor?: string;
+  fechaNotificacionSupervisor?: string;
+  
+  // Expediente Técnico
+  expedienteEntregadoCompleto: boolean;
+  fechaEntregaExpediente?: string;
+  incluyeAbsolucionConsultas: boolean;
+  
+  // Adelanto Directo
+  solicitoAdelantoDirecto: boolean;
+  montoAdelantoDirectoSolicitado: number;
+  porcentajeAdelantoDirectoSolicitado: number; // hasta 10%
+  fechaSolicitudAdelantoDirecto?: string;
+  fechaLimiteSolicitudAdelanto?: string; // 8 días hábiles
+  fechaPagoAdelantoDirecto?: string;
+  fechaLimitePagoEntidad?: string; // 7 días calendario
+  entidadEntregoAdelantoDirecto: boolean;
+  bancoGarantia?: string;
+  numeroCartaFianza?: string;
+  
+  // Residente & COD
+  residenteAcreditado: boolean;
+  fechaAcreditacionResidente?: string;
+  cuadernoObraDigitalHabilitado: boolean;
+  fechaAperturaCOD?: string;
+  codigoCOD?: string;
+  
+  // Calendarios y Planes
+  calendarioCVAOPresentado: boolean;
+  calendarioCAMPresentado: boolean;
+  calendarioEquiposPresentado: boolean;
+  planSSTPresentado: boolean;
+  fechaAprobacionCalendarios?: string;
+  
+  // Cómputo Final
+  condicionesCompletas: boolean;
+  fechaInicioComputada: string;
+  fechaFinProgramadaComputada: string;
+  estadoInicio: "Inicio de Plazo Vigente" | "En Proceso de Cumplimiento de Condiciones" | "Inicio Suspendido (Art. 176.7)" | "Riesgo de Resolución (Art. 176.8)";
+  observacionSuspension?: string;
+  
+  condicionesDetalladas: CondicionInicioItem[];
 }
 
 export interface ValorizacionMensual {
