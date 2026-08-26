@@ -132,9 +132,25 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                       <span>{currentUser.companyName || company.razonSocial}</span>
                     </div>
                     <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                      <span className="text-emerald-600 font-semibold">{currentUser.userName}</span>
-                      <span>•</span>
-                      <span>RUC {currentUser.ruc || company.ruc}</span>
+                      {currentUser.activeMemberId && currentUser.teamMembers ? (
+                        (() => {
+                          const mem = currentUser.teamMembers.find(
+                            (m) => m.id === currentUser.activeMemberId
+                          );
+                          return (
+                            <>
+                              <span className="text-blue-600 font-bold">{mem?.name || currentUser.userName}</span>
+                              <span className="text-slate-500 font-medium truncate">({mem?.cargoText || mem?.role?.replace("_", " ")})</span>
+                            </>
+                          );
+                        })()
+                      ) : (
+                        <>
+                          <span className="text-emerald-600 font-semibold">{currentUser.userName}</span>
+                          <span>•</span>
+                          <span>RUC {currentUser.ruc || company.ruc}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

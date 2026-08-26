@@ -25,6 +25,7 @@ import {
   Sparkles,
   ListTree,
   FileCheck2,
+  Box,
 } from "lucide-react";
 import { TenderInfo, CompanyProfile } from "../types/osce";
 import { LicenseSession } from "../types/auth";
@@ -41,6 +42,7 @@ interface SidebarProps {
   onDownloadAllZip: () => void;
   isDownloadingZip: boolean;
   onOpenThemeSelector: () => void;
+  onOpenTeamManagement?: () => void;
   onLogout: () => void;
   isCollapsed: boolean;
   setIsCollapsed: (c: boolean) => void;
@@ -57,11 +59,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDownloadAllZip,
   isDownloadingZip,
   onOpenThemeSelector,
+  onOpenTeamManagement,
   onLogout,
   isCollapsed,
   setIsCollapsed,
 }) => {
   const isAdmin = currentUser?.role === "admin";
+
+  const activeMember = currentUser?.activeMemberId && currentUser?.teamMembers
+    ? currentUser.teamMembers.find((m) => m.id === currentUser.activeMemberId)
+    : null;
 
   // Accordion open/close state for both main modules
   const isObrasTab = activeTab.startsWith("obras-");
@@ -95,13 +102,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Sub-items for Module 2: Control de Obras / Entidades
   const obrasNavItems = [
     { id: "obras-dashboard", label: "Panel General de Obra", icon: HardHat },
-    { id: "obras-lector", label: "Análisis de Contratos / O.S.", icon: FileText },
-    { id: "obras-inicio", label: "1. Procedimiento Inicio de Obra", icon: FileCheck2 },
-    { id: "obras-valorizaciones", label: "2. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "obras-partidas", label: "3. Cuadro Partidas Ejecutadas", icon: ListTree },
-    { id: "obras-auditoria", label: "4. Auditoría Excel vs Escaneado", icon: ShieldAlert },
-    { id: "obras-adicionales", label: "5. Adicionales y Plazos", icon: Scale },
-    { id: "obras-liquidacion", label: "6. Recepción y Liquidación", icon: Award },
+    { id: "obras-lector", label: "1. Análisis de Contratos / O.S.", icon: FileText },
+    { id: "obras-inicio", label: "2. Procedimiento Inicio de Obra", icon: FileCheck2 },
+    { id: "obras-auditoria", label: "3. Auditoría Excel vs Escaneado", icon: ShieldAlert },
+    { id: "obras-valorizaciones", label: "4. Curva S y Valorizaciones", icon: TrendingUp },
+    { id: "obras-partidas", label: "5. Cuadro Partidas Ejecutadas", icon: ListTree },
+    { id: "obras-adicionales", label: "6. Adicionales y Plazos", icon: Scale },
+    { id: "obras-liquidacion", label: "7. Recepción y Liquidación", icon: Award },
+    { id: "obras-bim", label: "8. Experiencia BIM 3D y 4D", icon: Box },
   ];
 
   return (
@@ -145,28 +153,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* User Session Badge */}
       {!isCollapsed && currentUser && (
-        <div className="px-3 pt-3">
+        <div className="px-3 pt-3 space-y-2">
           <div
-            className={`p-2 rounded-xl border text-xs flex items-center justify-between ${
+            className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
               isAdmin
                 ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                : activeMember
+                ? "bg-blue-950/60 border-blue-800/60 text-slate-200"
                 : "bg-slate-950/60 border-slate-800 text-slate-300"
             }`}
           >
-            <div className="truncate">
-              <div className="font-bold truncate text-[11px]">{currentUser.userName}</div>
-              <div className="text-[9px] opacity-80 truncate">
-                {isAdmin ? "ADMINISTRADOR MASTER" : `Licencia: ${currentUser.licenseKey}`}
+            <div className="truncate min-w-0 pr-1">
+              <div className="font-bold truncate text-[11px] flex items-center gap-1">
+                <span>{activeMember ? activeMember.name : currentUser.userName}</span>
               </div>
+              <div className="text-[9px] text-slate-400 truncate flex items-center gap-1">
+                {isAdmin ? (
+                  <span className="text-amber-400 font-semibold">ADMINISTRADOR MASTER</span>
+                ) : activeMember ? (
+                  <span className="text-blue-300 font-semibold capitalize">
+                    {activeMember.cargoText || activeMember.role.replace("_", " ")}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-medium">
+                    Titular: {currentUser.companyName}
+                  </span>
+                )}
+              </div>
+              {!isAdmin && (
+                <div className="text-[8px] font-mono text-slate-500 truncate">
+                  {currentUser.licenseKey}
+                </div>
+              )}
             </div>
             <button
               onClick={onLogout}
-              className="p-1 text-slate-400 hover:text-rose-400 transition cursor-pointer"
-              title="Cerrar sesión"
+              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 rounded-lg transition cursor-pointer shrink-0"
+              title="Cerrar sesión / Cambiar perfil"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Team Management quick trigger for Titular or Admin */}
+          {!isAdmin && onOpenTeamManagement && (
+            <button
+              type="button"
+              onClick={onOpenTeamManagement}
+              className="w-full py-1.5 px-2 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 rounded-lg text-[10px] font-semibold flex items-center justify-between transition cursor-pointer"
+            >
+              <div className="flex items-center space-x-1.5">
+                <Users className="w-3 h-3 text-blue-400" />
+                <span>Gestionar Mi Equipo</span>
+              </div>
+              <span className="bg-blue-900/60 text-blue-300 px-1.5 py-0.2 rounded font-mono text-[9px] border border-blue-700/50">
+                {currentUser.teamMembers?.length || 0}/{currentUser.maxTeamMembers || 5}
+              </span>
+            </button>
+          )}
         </div>
       )}
 

@@ -60,9 +60,7 @@ export const WorksItemsExecutedTable: React.FC<WorksItemsExecutedTableProps> = (
   };
 
   const handleClearPartidas = () => {
-    if (window.confirm("¿Desea limpiar todas las partidas de la planilla actual?")) {
-      setPartidas([]);
-    }
+    setPartidas([]);
   };
 
   // Filtered partidas
@@ -218,9 +216,7 @@ export const WorksItemsExecutedTable: React.FC<WorksItemsExecutedTableProps> = (
   };
 
   const handleDeletePartida = (id: string) => {
-    if (window.confirm("¿Está seguro de eliminar esta partida de la planilla?")) {
-      setPartidas((prev) => prev.filter((p) => p.id !== id));
-    }
+    setPartidas((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleExportCSV = () => {

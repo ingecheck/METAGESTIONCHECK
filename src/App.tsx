@@ -24,6 +24,7 @@ import { WorksCommencementProcedure } from "./components/works/WorksCommencement
 import { WorksValuations } from "./components/works/WorksValuations";
 import { WorksModificationsManager } from "./components/works/WorksModificationsManager";
 import { WorksSettlementManager } from "./components/works/WorksSettlementManager";
+import { WorksBimViewer } from "./components/works/WorksBimViewer";
 
 import {
   TenderInfo,
@@ -57,6 +58,7 @@ import {
   EMPTY_OBRA,
   EMPTY_LIQUIDACION,
 } from "./data/sampleObras";
+import { INITIAL_AUDITORIAS_OBRA } from "./data/sampleIncongruencias";
 import { WorksItemsExecutedTable } from "./components/works/WorksItemsExecutedTable";
 import { WorksValuationAuditor } from "./components/works/WorksValuationAuditor";
 import { ContractDocumentUploader } from "./components/works/ContractDocumentUploader";
@@ -87,12 +89,14 @@ import {
   saveUserCompany,
   clearUserWorkspace,
 } from "./services/userStorage";
+import { TeamManagementModal } from "./components/team/TeamManagementModal";
 
 const SESSIONS_STORAGE_KEY = "osce_license_sessions_free_v1";
 const ACTIVE_USER_STORAGE_KEY = "osce_current_user_free_v1";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   // License Sessions & Authentication State - 100% Local & Free
   const [sessions, setSessions] = useState<LicenseSession[]>(() => {
@@ -295,7 +299,9 @@ export default function App() {
   const [modificaciones, setModificaciones] = useState<ModificacionObra[]>(() => activeObraPkg?.modificaciones || []);
   const [liquidacion, setLiquidacion] = useState<LiquidacionResumen>(() => activeObraPkg?.liquidacion || EMPTY_LIQUIDACION);
   const [partidas, setPartidas] = useState<PartidaEjecutada[]>(() => activeObraPkg?.partidas || []);
-  const [auditoria, setAuditoria] = useState<AuditoriaValorizacion | undefined>(() => activeObraPkg?.auditorias?.[0]);
+  const [auditorias, setAuditorias] = useState<AuditoriaValorizacion[]>(
+    () => activeObraPkg?.auditorias || INITIAL_AUDITORIAS_OBRA
+  );
 
   // Save obras list to user-isolated localStorage
   useEffect(() => {
@@ -336,13 +342,34 @@ export default function App() {
     setModificaciones(activeOb?.modificaciones || []);
     setLiquidacion(activeOb?.liquidacion || EMPTY_LIQUIDACION);
     setPartidas(activeOb?.partidas || []);
-    setAuditoria(activeOb?.auditorias?.[0]);
+    setAuditorias(activeOb?.auditorias || INITIAL_AUDITORIAS_OBRA);
 
     // Admin security check
     if (currentUser.role !== "admin" && currentUser.userEmail !== ADMIN_MASTER_EMAIL) {
       setActiveTab((prev) => (prev === "admin-panel" ? "dashboard" : prev));
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.activeMemberId]);
+
+  // Real-time synchronization listener across tabs sharing the Entity database
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key && e.key.includes("_obras_v1")) {
+        const { obras: syncedObras, activeId } = loadUserObras(currentUser);
+        setObrasList(syncedObras);
+        if (activeId && activeId !== activeObraId) {
+          setActiveObraId(activeId);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageEvent);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageEvent);
+    };
+  }, [currentUser?.id, currentUser?.activeMemberId, activeObraId]);
 
   // Sync active obra changes into obrasList
   useEffect(() => {
@@ -365,13 +392,13 @@ export default function App() {
             modificaciones,
             liquidacion,
             partidas,
-            auditorias: auditoria ? [auditoria] : ob.auditorias,
+            auditorias: auditorias,
           };
         }
         return ob;
       })
     );
-  }, [obra, valorizaciones, asientos, modificaciones, liquidacion, partidas, auditoria, activeObraId]);
+  }, [obra, valorizaciones, asientos, modificaciones, liquidacion, partidas, auditorias, activeObraId]);
 
   // Handlers for Obra selection & management
   const handleSelectObra = (obraId: string) => {
@@ -385,7 +412,7 @@ export default function App() {
     setModificaciones(target.modificaciones || []);
     setLiquidacion(target.liquidacion || EMPTY_LIQUIDACION);
     setPartidas(target.partidas || []);
-    setAuditoria(target.auditorias?.[0]);
+    setAuditorias(target.auditorias || INITIAL_AUDITORIAS_OBRA);
   };
 
   const handleSaveObra = (obraPkg: UserObraPackage) => {
@@ -405,7 +432,7 @@ export default function App() {
     setModificaciones(obraPkg.modificaciones || []);
     setLiquidacion(obraPkg.liquidacion || EMPTY_LIQUIDACION);
     setPartidas(obraPkg.partidas || []);
-    setAuditoria(obraPkg.auditorias?.[0]);
+    setAuditorias(obraPkg.auditorias || INITIAL_AUDITORIAS_OBRA);
   };
 
   const handleSaveObraFromAnalysis = (
@@ -444,7 +471,7 @@ export default function App() {
       modificaciones: existingPkg?.modificaciones || modificaciones || [],
       liquidacion: existingPkg?.liquidacion || liquidacion || EMPTY_LIQUIDACION,
       partidas: existingPkg?.partidas || partidas || [],
-      auditorias: existingPkg?.auditorias || (auditoria ? [auditoria] : []),
+      auditorias: existingPkg?.auditorias || auditorias || [],
     };
 
     handleSaveObra(pkgToSave);
@@ -462,7 +489,7 @@ export default function App() {
       setModificaciones([]);
       setLiquidacion(EMPTY_LIQUIDACION);
       setPartidas([]);
-      setAuditoria(undefined);
+      setAuditorias([]);
     } else if (activeObraId === obraId) {
       handleSelectObra(remaining[0].id);
     }
@@ -615,7 +642,7 @@ export default function App() {
     setModificaciones([]);
     setLiquidacion(EMPTY_LIQUIDACION);
     setPartidas([]);
-    setAuditoria(undefined);
+    setAuditorias([]);
 
     setActiveTab("dashboard");
   };
@@ -785,6 +812,7 @@ export default function App() {
         onDownloadAllZip={handleDownloadAllZip}
         isDownloadingZip={isDownloadingZip}
         onOpenThemeSelector={() => setIsThemeModalOpen(true)}
+        onOpenTeamManagement={() => setIsTeamModalOpen(true)}
         onLogout={handleLogout}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
@@ -951,6 +979,16 @@ export default function App() {
             />
           )}
 
+          {activeTab === "obras-bim" && (
+            <WorksBimViewer
+              obra={obra}
+              setObra={setObra}
+              valorizaciones={valorizaciones}
+              partidas={partidas}
+              currentUser={currentUser}
+            />
+          )}
+
           {activeTab === "obras-lector" && (
             <ContractDocumentUploader
               currentObra={obra}
@@ -1003,8 +1041,8 @@ export default function App() {
               setValorizaciones={setValorizaciones}
               partidas={partidas}
               setPartidas={setPartidas}
-              auditoria={auditoria}
-              setAuditoria={setAuditoria}
+              auditorias={auditorias}
+              setAuditorias={setAuditorias}
               initialSubTab="curva-s"
             />
           )}
@@ -1021,8 +1059,13 @@ export default function App() {
           {activeTab === "obras-auditoria" && (
             <WorksValuationAuditor
               obra={obra}
-              auditoriaData={auditoria}
-              onSaveAudit={(newAudit) => setAuditoria(newAudit)}
+              valorizaciones={valorizaciones}
+              setValorizaciones={setValorizaciones}
+              partidas={partidas}
+              setPartidas={setPartidas}
+              auditorias={auditorias}
+              onSaveAuditorias={(newAudits) => setAuditorias(newAudits)}
+              onNavigateToTab={(tab) => setActiveTab(tab)}
             />
           )}
 
@@ -1083,6 +1126,30 @@ export default function App() {
           onRequestLicense={handleRequestLicense}
           onClose={() => setIsLoginModalOpen(false)}
         />
+
+        {/* Team Management Modal for Titular or Admin */}
+        {isTeamModalOpen && currentUser && (
+          <TeamManagementModal
+            isOpen={isTeamModalOpen}
+            onClose={() => setIsTeamModalOpen(false)}
+            license={currentUser}
+            onSaveLicense={(updated) => {
+              setSessions((prev) =>
+                prev.map((s) => (s.id === updated.id ? updated : s))
+              );
+              setCurrentUser((prev) =>
+                prev && prev.id === updated.id
+                  ? {
+                      ...prev,
+                      teamMembers: updated.teamMembers,
+                      maxTeamMembers: updated.maxTeamMembers,
+                    }
+                  : prev
+              );
+            }}
+            isAdmin={currentUser.role === "admin"}
+          />
+        )}
       </div>
     </div>
   );

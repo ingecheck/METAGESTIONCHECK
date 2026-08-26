@@ -10,6 +10,7 @@ import {
   ArrowRight,
   ShieldCheck,
   FileText,
+  Box,
 } from "lucide-react";
 import {
   ObraProyecto,
@@ -17,12 +18,15 @@ import {
   AsientoCuadernoObra,
   ModificacionObra,
   LiquidacionResumen,
+  PartidaEjecutada,
 } from "../../types/obras";
+import { LicenseSession } from "../../types/auth";
 import { WorksDashboard } from "./WorksDashboard";
 import { WorksValuations } from "./WorksValuations";
 import { WorksModificationsManager } from "./WorksModificationsManager";
 import { WorksSettlementManager } from "./WorksSettlementManager";
 import { ContractDocumentUploader } from "./ContractDocumentUploader";
+import { WorksBimViewer } from "./WorksBimViewer";
 
 interface WorksControlSuiteProps {
   obra: ObraProyecto;
@@ -35,6 +39,8 @@ interface WorksControlSuiteProps {
   setModificaciones: React.Dispatch<React.SetStateAction<ModificacionObra[]>>;
   liquidacion: LiquidacionResumen;
   setLiquidacion: React.Dispatch<React.SetStateAction<LiquidacionResumen>>;
+  partidas?: PartidaEjecutada[];
+  currentUser?: LicenseSession | null;
   subTab?: string;
   onNavigateSubtab?: (subtab: string) => void;
 }
@@ -50,6 +56,8 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
   setModificaciones,
   liquidacion,
   setLiquidacion,
+  partidas = [],
+  currentUser = null,
   subTab = "dashboard-obras",
   onNavigateSubtab,
 }) => {
@@ -66,10 +74,11 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
 
   const navSubItems = [
     { id: "dashboard-obras", label: "Panel Principal", icon: Building2 },
-    { id: "lector-contratos", label: "Análisis de Contratos / O.S.", icon: FileText },
-    { id: "valorizaciones", label: "1. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "adicionales", label: "2. Adicionales y Plazos", icon: Scale },
-    { id: "liquidacion", label: "3. Recepción y Liquidación", icon: Award },
+    { id: "lector-contratos", label: "1. Análisis de Contratos / O.S.", icon: FileText },
+    { id: "valorizaciones", label: "2. Curva S y Valorizaciones", icon: TrendingUp },
+    { id: "adicionales", label: "3. Adicionales y Plazos", icon: Scale },
+    { id: "liquidacion", label: "4. Recepción y Liquidación", icon: Award },
+    { id: "bim", label: "5. Experiencia BIM 3D y 4D", icon: Box },
   ];
 
   return (
@@ -78,7 +87,7 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
       <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-1.5 overflow-x-auto flex items-center gap-1.5">
         {navSubItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentSubTab === item.id;
+          const isActive = currentSubTab === item.id || (item.id === "bim" && currentSubTab === "obras-bim");
           return (
             <button
               key={item.id}
@@ -105,6 +114,16 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
           asientos={asientos}
           modificaciones={modificaciones}
           onNavigateSubtab={handleSubTabChange}
+        />
+      )}
+
+      {(currentSubTab === "bim" || currentSubTab === "obras-bim") && (
+        <WorksBimViewer
+          obra={obra}
+          setObra={setObra}
+          valorizaciones={valorizaciones}
+          partidas={partidas}
+          currentUser={currentUser}
         />
       )}
 

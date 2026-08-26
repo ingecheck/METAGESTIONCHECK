@@ -8,33 +8,60 @@ import { SAMPLE_AUDITORIA_DATA } from "../data/sampleIncongruencias";
 
 const STORAGE_PREFIX = "mgc_account_";
 
-export function getUserStorageKey(user: LicenseSession | null): string {
+/**
+ * Returns the unique Entity Database Key.
+ * All members of the technical staff (Titular, Residente, Supervisor, Costos, Asistente)
+ * share this single unified database so any added/modified obra or BIM model is instantly
+ * visible and synchronized across the entire entity in real time.
+ */
+export function getEntityStorageKey(user: LicenseSession | null): string {
   if (!user) return "guest_default";
   return user.id || user.licenseKey.toLowerCase().replace(/[^a-z0-9]/g, "_");
 }
 
+export function getUserStorageKey(user: LicenseSession | null): string {
+  return getEntityStorageKey(user);
+}
+
 export function getOffersStorageKey(user: LicenseSession | null): string {
-  return `${STORAGE_PREFIX}${getUserStorageKey(user)}_offers_v1`;
+  return `${STORAGE_PREFIX}${getEntityStorageKey(user)}_offers_v1`;
 }
 
 export function getActiveOfferIdStorageKey(user: LicenseSession | null): string {
-  return `${STORAGE_PREFIX}${getUserStorageKey(user)}_active_offer_id_v1`;
+  return `${STORAGE_PREFIX}${getEntityStorageKey(user)}_active_offer_id_v1`;
 }
 
 export function getObrasStorageKey(user: LicenseSession | null): string {
-  return `${STORAGE_PREFIX}${getUserStorageKey(user)}_obras_v1`;
+  return `${STORAGE_PREFIX}${getEntityStorageKey(user)}_obras_v1`;
 }
 
 export function getActiveObraIdStorageKey(user: LicenseSession | null): string {
-  return `${STORAGE_PREFIX}${getUserStorageKey(user)}_active_obra_id_v1`;
+  return `${STORAGE_PREFIX}${getEntityStorageKey(user)}_active_obra_id_v1`;
 }
 
 export function getCompanyStorageKey(user: LicenseSession | null): string {
-  return `${STORAGE_PREFIX}${getUserStorageKey(user)}_company_v1`;
+  return `${STORAGE_PREFIX}${getEntityStorageKey(user)}_company_v1`;
 }
 
 /**
- * Creates default starter data tailored to a specific user account if no stored projects exist.
+ * Real-time event broadcaster for synchronized multi-member BIM & Obra collaboration
+ */
+export function broadcastEntitySync(changeType: "obras" | "offers" | "company" | "bim", payload?: any) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("osce_entity_realtime_sync", {
+        detail: {
+          changeType,
+          payload,
+          timestamp: Date.now(),
+        },
+      })
+    );
+  }
+}
+
+/**
+ * Creates default starter data tailored to a specific user account or team member if no stored projects exist.
  * All initial workspaces start 100% clean and empty without fake or mock projects.
  */
 function createInitialUserWorkspace(user: LicenseSession | null): {
@@ -44,8 +71,14 @@ function createInitialUserWorkspace(user: LicenseSession | null): {
 } {
   const companyName = user?.companyName || "";
   const ruc = user?.ruc || "";
-  const userName = user?.userName || "";
-  const email = user?.userEmail || "";
+  
+  // Identify active team member if present
+  const activeMember = user?.activeMemberId && user?.teamMembers
+    ? user.teamMembers.find((m) => m.id === user.activeMemberId)
+    : null;
+
+  const userName = activeMember?.name || user?.userName || "";
+  const email = activeMember?.email || user?.userEmail || "";
 
   const baseCompany: CompanyProfile = {
     ...EMPTY_COMPANY,
@@ -119,6 +152,7 @@ export function saveUserOffers(
   try {
     localStorage.setItem(key, JSON.stringify(offers));
     localStorage.setItem(activeKey, activeId);
+    broadcastEntitySync("offers", { count: offers.length, activeId });
   } catch (e) {
     console.warn("Error saving user offers:", e);
   }
@@ -166,7 +200,7 @@ export function loadUserObras(user: LicenseSession | null): {
 }
 
 /**
- * Save user obras list and active ID
+ * Save user obras list and active ID with author metadata
  */
 export function saveUserObras(
   user: LicenseSession | null,
@@ -177,8 +211,14 @@ export function saveUserObras(
   const activeKey = getActiveObraIdStorageKey(user);
 
   try {
-    localStorage.setItem(key, JSON.stringify(obras));
-    localStorage.setItem(activeKey, activeId);
+    const serialized = JSON.stringify(obras);
+    const existing = localStorage.getItem(key);
+    const existingActive = localStorage.getItem(activeKey);
+
+    if (existing !== serialized || existingActive !== activeId) {
+      localStorage.setItem(key, serialized);
+      localStorage.setItem(activeKey, activeId);
+    }
   } catch (e) {
     console.warn("Error saving user obras:", e);
   }

@@ -29,6 +29,7 @@ import {
   Shield,
   Briefcase,
   BadgeCheck,
+  Box,
 } from "lucide-react";
 import {
   ObraProyecto,
@@ -73,6 +74,8 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isNewObraModalOpen, setIsNewObraModalOpen] = useState(false);
   const [editingObra, setEditingObra] = useState<UserObraPackage | null>(null);
+  const [obraToDelete, setObraToDelete] = useState<UserObraPackage | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Filtered obras list
   const filteredObras = obrasList.filter((ob) => {
@@ -371,19 +374,16 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
-                      {obrasList.length > 1 && (
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`¿Está seguro de eliminar el proyecto "${ob.nombre}"?`)) {
-                              onDeleteObra(ob.id);
-                            }
-                          }}
-                          title="Eliminar proyecto"
-                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => {
+                          setObraToDelete(ob);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        title="Eliminar este proyecto"
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <button
@@ -438,17 +438,40 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
                 Contrato Base: S/ {obra.montoContractual.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
               </div>
             </div>
-            <button
-              onClick={() => {
-                const currentPkg = obrasList.find((o) => o.id === activeObraId || o.obra.id === obra.id);
-                setEditingObra(currentPkg || null);
-                setIsNewObraModalOpen(true);
-              }}
-              className="mt-2 text-xs text-indigo-300 hover:text-white flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition cursor-pointer"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Editar Contratos y Datos</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <button
+                onClick={() => onNavigateSubtab("obras-bim")}
+                className="text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer ring-1 ring-white/20"
+              >
+                <Box className="w-4 h-4 text-cyan-300" />
+                <span>Experiencia BIM 3D / 4D</span>
+              </button>
+              <button
+                onClick={() => {
+                  const currentPkg = obrasList.find((o) => o.id === activeObraId || o.obra.id === obra.id);
+                  setEditingObra(currentPkg || null);
+                  setIsNewObraModalOpen(true);
+                }}
+                className="text-xs text-indigo-200 hover:text-white flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Editar Contratos y Datos</span>
+              </button>
+              <button
+                onClick={() => {
+                  const currentPkg = obrasList.find((o) => o.id === activeObraId || o.obra.id === obra.id);
+                  if (currentPkg) {
+                    setObraToDelete(currentPkg);
+                    setIsDeleteModalOpen(true);
+                  }
+                }}
+                title="Eliminar este proyecto activo"
+                className="text-xs text-red-300 hover:text-white flex items-center gap-1 bg-red-500/20 hover:bg-red-600/80 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -689,37 +712,6 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* SECCIÓN 4: ETAPA 1 • PROCEDIMIENTO PARA INICIO DE OBRA (ART. 176 RLCE)     */}
-      {/* ========================================================================= */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-2xl border border-indigo-700/50 p-5 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1.5 max-w-2xl">
-          <div className="flex items-center gap-2">
-            <span className="bg-indigo-500/30 text-indigo-300 border border-indigo-400/40 text-[10px] font-black uppercase px-2 py-0.5 rounded">
-              Punto 1 de Control de Obras
-            </span>
-            <span className="text-[11px] text-slate-300 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Art. 176 D.S. 344-2018-EF / D.S. 009-2025-EF
-            </span>
-          </div>
-          <h3 className="text-base font-bold text-white tracking-tight">
-            1. Procedimiento para Inicio de Obra y Cumplimiento de Condiciones Previas
-          </h3>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Verifique la entrega de terreno (15 d.c.), designación de supervisor, acreditación de residente con CIP, habilitación de Cuaderno de Obra Digital y genere actas oficiales de inicio y suspensión.
-          </p>
-        </div>
-
-        <button
-          onClick={() => onNavigateSubtab("obras-inicio")}
-          className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shrink-0 cursor-pointer shadow-md"
-        >
-          <FileCheck2 className="w-4 h-4" />
-          <span>Gestionar Inicio de Obra</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Avance Físico */}
@@ -839,6 +831,83 @@ export const WorksDashboard: React.FC<WorksDashboardProps> = ({
         onSaveObra={onSaveObra}
         editingObra={editingObra}
       />
+
+      {/* Delete Obra Confirmation Modal (Eliminación Segura sin window.confirm) */}
+      {isDeleteModalOpen && obraToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden text-left">
+            <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-red-50 to-amber-50 flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 text-red-600 rounded-xl">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">¿Eliminar Proyecto de Obra?</h3>
+                <p className="text-xs text-slate-500">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-slate-600">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-slate-800 text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded">
+                    CUI {obraToDelete.cui}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-700">
+                    {obraToDelete.estado}
+                  </span>
+                </div>
+                <div className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-2">
+                  {obraToDelete.nombre}
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Contratista:</span>
+                    <span className="font-medium text-slate-800 truncate block">{obraToDelete.contratista || "No especificado"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Monto Contractual:</span>
+                    <span className="font-bold text-slate-900 font-mono">S/ {obraToDelete.montoContractual.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-relaxed">
+                  Se eliminarán permanentemente todos los datos asociados: valorizaciones mensuales, planilla de partidas, asientos del Cuaderno de Obra Digital y adicionales de este proyecto.
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setObraToDelete(null);
+                }}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (obraToDelete) {
+                    onDeleteObra(obraToDelete.id);
+                    setIsDeleteModalOpen(false);
+                    setObraToDelete(null);
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sí, Eliminar Proyecto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

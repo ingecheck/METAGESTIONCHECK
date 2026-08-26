@@ -78,6 +78,92 @@ export const SAMPLE_INCONGRUENCIAS_TEST: IncongruenciaValorizacion[] = [
   },
 ];
 
+export const SAMPLE_AUDITORIA_VAL_01: AuditoriaValorizacion = {
+  id: "audit-val-01",
+  numeroValorizacion: 1,
+  mesPeriodo: "Mes 1 - Enero 2025",
+  fechaAuditoria: "2025-02-03",
+  nombreArchivoExcel: "VALORIZACION_N01_CONTRATISTA.xlsx",
+  nombreArchivoEscaneado: "VAL_01_EXPEDIENTE_FIRMADO_SUPERVISION.pdf",
+  estadoAuditoria: "Conforme y Cuadrada",
+  totalDiferenciaBrutaSoles: 0,
+  totalPartidasAuditadas: 14,
+  partidasConDiscrepancia: 0,
+  firmasValidadas: {
+    residenteObra: true,
+    supervisorObra: true,
+    jefeSupervision: true,
+    colegiaturaVigenteCIP: true,
+  },
+  incongruencias: [
+    {
+      id: "inc-val1-01",
+      partidaItem: "01.01.01",
+      seccion: "Planilla de Metrados",
+      descripcion: "Cartel de Identificación de Obra 3.60m x 2.40m",
+      valorExcel: "1.00 und (S/ 2,450.00)",
+      valorEscaneado: "1.00 und (S/ 2,450.00)",
+      diferenciaMetrado: 0,
+      diferenciaSoles: 0,
+      gravedad: "CONFORME",
+      baseLegal: "Art. 194 RLCE",
+      impacto: "Metrado verificado e instalado en campo conforme a especificaciones.",
+      recomendacionTecnica: "Conforme para trámite de pago.",
+    },
+    {
+      id: "inc-val1-02",
+      partidaItem: "01.02.01",
+      seccion: "Planilla de Metrados",
+      descripcion: "Campamento Provisional y Oficinas de Supervisión",
+      valorExcel: "1.00 glb (S/ 18,500.00)",
+      valorEscaneado: "1.00 glb (S/ 18,500.00)",
+      diferenciaMetrado: 0,
+      diferenciaSoles: 0,
+      gravedad: "CONFORME",
+      baseLegal: "Art. 194 RLCE",
+      impacto: "Instalaciones verificadas por la supervisión.",
+      recomendacionTecnica: "Conforme.",
+    },
+  ],
+  resumenEjecutivo: "Auditoría conforme sin discrepancias aritméticas ni de metrados en la Valorización N° 01. Se verificaron las firmas de Residente y Supervisor colegiados habilitados en el CIP.",
+};
+
+export const SAMPLE_AUDITORIA_VAL_02: AuditoriaValorizacion = {
+  id: "audit-val-02",
+  numeroValorizacion: 2,
+  mesPeriodo: "Mes 2 - Febrero 2025",
+  fechaAuditoria: "2025-03-04",
+  nombreArchivoExcel: "VALORIZACION_N02_CALCULOS.xlsx",
+  nombreArchivoEscaneado: "VAL_02_SUPERVISION_SELLADO.pdf",
+  estadoAuditoria: "Con Observaciones Subsanables",
+  totalDiferenciaBrutaSoles: 1250.0,
+  totalPartidasAuditadas: 18,
+  partidasConDiscrepancia: 1,
+  firmasValidadas: {
+    residenteObra: true,
+    supervisorObra: true,
+    jefeSupervision: false,
+    colegiaturaVigenteCIP: true,
+  },
+  incongruencias: [
+    {
+      id: "inc-val2-01",
+      partidaItem: "02.01.03",
+      seccion: "Planilla de Metrados",
+      descripcion: "Corte Masivo de Terreno con Maquinaria en Roca Suelta",
+      valorExcel: "450.00 m3 (S/ 15,750.00)",
+      valorEscaneado: "414.28 m3 (S/ 14,500.00)",
+      diferenciaMetrado: 35.72,
+      diferenciaSoles: 1250.0,
+      gravedad: "ADVERTENCIA",
+      baseLegal: "Art. 194 del RLCE",
+      impacto: "Ajuste menor en celdas de cálculo topográfico en Excel.",
+      recomendacionTecnica: "Rectificar el volumen de corte a 414.28 m3 en la carátula resumen del mes.",
+    },
+  ],
+  resumenEjecutivo: "Se detectó 1 observación subsanable de arrastre topográfico por S/ 1,250.00. Requiere reemisión de la planilla corregida para conformidad.",
+};
+
 export const SAMPLE_AUDITORIA_DATA: AuditoriaValorizacion = {
   id: "audit-val-05",
   numeroValorizacion: 5,
@@ -98,3 +184,10 @@ export const SAMPLE_AUDITORIA_DATA: AuditoriaValorizacion = {
   incongruencias: SAMPLE_INCONGRUENCIAS_TEST,
   resumenEjecutivo: "Se detectaron 3 incongruencias críticas de carácter monetario (S/ 14,697.35 de descuadre total entre Excel y Escaneado) y 3 observaciones técnicas relativas a sobre-metrados sin resolución y falta de deducción de reajustes. Se recomienda subsanar la carátula y el metrado de vigas antes del trámite de pago.",
 };
+
+export const INITIAL_AUDITORIAS_OBRA: AuditoriaValorizacion[] = [
+  SAMPLE_AUDITORIA_VAL_01,
+  SAMPLE_AUDITORIA_VAL_02,
+  SAMPLE_AUDITORIA_DATA,
+];
+

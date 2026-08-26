@@ -31,8 +31,18 @@ import {
   Mail,
   UserCheck,
   ArrowRight,
+  HardHat,
+  Briefcase,
+  Sliders,
+  UserPlus,
 } from "lucide-react";
-import { LicenseSession, LicenseRequest, ADMIN_MASTER_EMAIL } from "../types/auth";
+import {
+  LicenseSession,
+  LicenseRequest,
+  ADMIN_MASTER_EMAIL,
+  EntityType,
+  TeamMember,
+} from "../types/auth";
 import {
   createFirebaseUserLicense,
   updateFirebaseLicenseStatus,
@@ -42,6 +52,7 @@ import {
   updateLicenseRequestStatus,
   deleteLicenseRequest,
 } from "../services/firebaseSync";
+import { TeamManagementModal } from "./team/TeamManagementModal";
 
 interface AdminPanelProps {
   sessions: LicenseSession[];
@@ -64,8 +75,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onImportSessions,
   adminUser,
 }) => {
-  const [activeAdminTab, setActiveAdminTab] = useState<"licenses" | "requests">("requests");
+  const [activeAdminTab, setActiveAdminTab] = useState<"licenses" | "requests">("licenses");
   const [searchTerm, setSearchTerm] = useState("");
+  const [entityFilter, setEntityFilter] = useState<"all" | EntityType>("all");
   const [requestsSearchTerm, setRequestsSearchTerm] = useState("");
   const [requestsFilter, setRequestsFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -74,6 +86,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [issuedLicenseModal, setIssuedLicenseModal] = useState<LicenseSession | null>(null);
+  const [inspectTeamLicense, setInspectTeamLicense] = useState<LicenseSession | null>(null);
 
   // License Requests list from cloud
   const [requestsList, setRequestsList] = useState<LicenseRequest[]>([]);
@@ -86,9 +99,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newRuc, setNewRuc] = useState("");
-  const [newRole, setNewRole] = useState<"postor" | "consultor">("postor");
-  const [newMaxTenders, setNewMaxTenders] = useState(30);
-  const [newExpiryDays, setNewExpiryDays] = useState(90);
+  const [newEntityType, setNewEntityType] = useState<EntityType>("empresa");
+  const [newRole, setNewRole] = useState<"postor" | "entidad" | "consultor">("postor");
+  const [newMaxTenders, setNewMaxTenders] = useState(50);
+  const [newMaxTeamMembers, setNewMaxTeamMembers] = useState(10);
+  const [newExpiryDays, setNewExpiryDays] = useState(365);
+  const [newCustomKey, setNewCustomKey] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [linkedRequestId, setLinkedRequestId] = useState<string | null>(null);
 
@@ -109,15 +125,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleCopyInviteMessage = (sess: LicenseSession) => {
-    const message = `🏛️ *METAGESTIONCHECK - CREDENCIALES DE ACCESO*
-Hola *${sess.userName}*, se ha emitido tu licencia oficial para la empresa *${sess.companyName}* (RUC: ${sess.ruc}):
+    const isPublic = sess.entityType === "municipalidad" || sess.entityType === "gobierno_regional" || sess.entityType === "ministerio";
+    const entityLabel = isPublic ? "Entidad Pública" : "Empresa / Contratista";
 
-🔑 *Clave de Licencia:* \`${sess.licenseKey}\`
-👤 *Usuario Registrado:* ${sess.userEmail}
+    const message = `🏛️ *METAGESTIONCHECK - CREDENCIALES OFICIALES DE ACCESO*
+Hola *${sess.userName}*, se ha emitido la Licencia Institucional para la ${entityLabel} *${sess.companyName}* (RUC: ${sess.ruc}):
+
+🔑 *Clave de Licencia Titular:* \`${sess.licenseKey}\`
+👤 *Usuario Administrador:* ${sess.userEmail}
 📅 *Vigencia hasta:* ${sess.expiresAt}
-📑 *Límite de Expedientes:* ${sess.maxTenders}
+📑 *Cupo de Expedientes / Obras:* ${sess.maxTenders}
+👥 *Cupo de Miembros de Equipo:* ${sess.maxTeamMembers || 10} colaboradores
 
-Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propuestas técnicas y económicas conforme a la normativa OSCE.`;
+💼 *Mesa de Trabajo Limpia:*
+Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su equipo de trabajo (Ingeniero Residente, Supervisor de Obra, Especialistas en Costos y Licitaciones). Cada uno tendrá su propio PIN de acceso y firma técnica para operar en la cartera institucional.
+
+🌐 *Portal de Acceso:* ${window.location.origin}`;
 
     navigator.clipboard.writeText(message);
     setCopiedInvite(sess.id);
@@ -131,12 +154,146 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
     setNewUserEmail(req.userEmail);
     setNewCompanyName(req.companyName);
     setNewRuc(req.ruc);
-    setNewExpiryDays(90);
-    setNewMaxTenders(30);
-    setNewNotes(`Solicitud aprobada: ${req.intendedUse || "Uso general SEACE"}`);
+    const suggestedType: EntityType = req.companyName.toLowerCase().includes("muni")
+      ? "municipalidad"
+      : req.companyName.toLowerCase().includes("gobierno regional") || req.companyName.toLowerCase().includes("gore")
+      ? "gobierno_regional"
+      : req.companyName.toLowerCase().includes("consorcio")
+      ? "consorcio"
+      : "empresa";
+    setNewEntityType(suggestedType);
+    setNewRole(suggestedType === "municipalidad" || suggestedType === "gobierno_regional" ? "entidad" : "postor");
+    setNewExpiryDays(365);
+    setNewMaxTenders(50);
+    setNewMaxTeamMembers(10);
+    setNewNotes(`Solicitud aprobada: ${req.intendedUse || "Uso general SEACE y Obras"}`);
     setShowCreateForm(true);
-    // Smooth scroll to top
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleGenerateKeySuggestion = () => {
+    const cleanCompanyTag = (newCompanyName || "TITULAR")
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .substring(0, 8)
+      .toUpperCase();
+    const prefix = newEntityType === "municipalidad" ? "LIC-MUNI" : newEntityType === "gobierno_regional" ? "LIC-GORE" : "LIC-CORP";
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    setNewCustomKey(`${prefix}-${cleanCompanyTag}-2026-${randomSuffix}`);
+  };
+
+  const handleGenerateCustomLicense = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newUserName || !newCompanyName || !newRuc) {
+      alert("Por favor complete los campos obligatorios (*).");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let finalKey = newCustomKey.trim().toUpperCase();
+      if (!finalKey) {
+        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const cleanCompanyTag = newCompanyName
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .substring(0, 8)
+          .toUpperCase();
+        const prefix = newEntityType === "municipalidad" ? "LIC-MUNI" : newEntityType === "gobierno_regional" ? "LIC-GORE" : "LIC-CORP";
+        finalKey = `${prefix}-${cleanCompanyTag}-2026-${randomSuffix}`;
+      }
+
+      const expDate = new Date();
+      expDate.setDate(expDate.getDate() + newExpiryDays);
+
+      // Create starter team members with Titular
+      const initialTeamMembers: TeamMember[] = [
+        {
+          id: `tm-${Date.now()}-1`,
+          name: newUserName.trim(),
+          email: (newUserEmail || `${newRuc}@titular.pe`).trim().toLowerCase(),
+          role: "titular",
+          cargoText: "Titular / Administrador General",
+          accessPin: String(Math.floor(1000 + Math.random() * 9000)),
+          status: "active",
+          createdAt: new Date().toISOString().split("T")[0],
+          allowedModules: ["all"],
+        },
+      ];
+
+      const newSession: LicenseSession = {
+        id: `lic-${Date.now()}`,
+        userName: newUserName.trim(),
+        userEmail: (newUserEmail || `${newRuc}@titular.pe`).trim().toLowerCase(),
+        companyName: newCompanyName.trim().toUpperCase(),
+        ruc: newRuc.trim(),
+        licenseKey: finalKey,
+        role: newRole,
+        entityType: newEntityType,
+        status: "active",
+        createdAt: new Date().toISOString().split("T")[0],
+        expiresAt: expDate.toISOString().split("T")[0],
+        maxTenders: newMaxTenders,
+        maxTeamMembers: newMaxTeamMembers,
+        teamMembers: initialTeamMembers,
+        currentTendersCount: 0,
+        issuedBy: adminUser.userEmail || ADMIN_MASTER_EMAIL,
+        notes: newNotes,
+        firebaseSynced: false,
+      };
+
+      // 1. Add to local storage & state
+      onAddSession(newSession);
+
+      // 2. Save to Firebase in Cloud Firestore
+      try {
+        await createFirebaseUserLicense(newSession);
+        newSession.firebaseSynced = true;
+      } catch (err) {
+        console.log("Firebase sync fallback:", err);
+      }
+
+      // 3. If this was from a pending request, mark it as approved
+      if (linkedRequestId) {
+        try {
+          await updateLicenseRequestStatus(linkedRequestId, "approved", {
+            assignedKey: finalKey,
+            processedBy: adminUser.userEmail || ADMIN_MASTER_EMAIL,
+          });
+        } catch (e) {
+          console.warn("Could not update request status in cloud:", e);
+        }
+      }
+
+      setIssuedLicenseModal(newSession);
+      setSaveSuccessMsg(`¡Licencia para ${newUserName} (${newCompanyName}) generada exitosamente con cupo para ${newMaxTeamMembers} miembros!`);
+
+      // Reset Form
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewCompanyName("");
+      setNewRuc("");
+      setNewCustomKey("");
+      setNewNotes("");
+      setLinkedRequestId(null);
+      setSelectedRequestForApproval(null);
+      setShowCreateForm(false);
+    } catch (err: any) {
+      console.error("Error creating license:", err);
+      alert("Error al registrar licencia: " + (err.message || "Verifique los datos"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateSessionTeam = (updatedSession: LicenseSession) => {
+    // Update locally
+    const updatedSessions = sessions.map((s) => (s.id === updatedSession.id ? updatedSession : s));
+    if (onImportSessions) {
+      onImportSessions(updatedSessions);
+    }
+    // Also save in cloud
+    createFirebaseUserLicense(updatedSession).catch((e) => console.log("Firebase team sync:", e));
+    setInspectTeamLicense(updatedSession);
   };
 
   const handleRejectRequest = async (reqId: string, name: string) => {
@@ -159,87 +316,6 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
       await deleteLicenseRequest(reqId);
     } catch (e) {
       alert("Error al eliminar la solicitud.");
-    }
-  };
-
-  const handleGenerateCustomLicense = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!newUserName || !newCompanyName || !newRuc) {
-      alert("Por favor complete los campos obligatorios (*).");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const cleanCompanyTag = newCompanyName
-        .replace(/[^a-zA-Z0-9]/g, "")
-        .substring(0, 6)
-        .toUpperCase();
-      const generatedKey = `LIC-${cleanCompanyTag}-2026-${randomSuffix}`;
-
-      const expDate = new Date();
-      expDate.setDate(expDate.getDate() + newExpiryDays);
-
-      const newSession: LicenseSession = {
-        id: `lic-${Date.now()}`,
-        userName: newUserName.trim(),
-        userEmail: (newUserEmail || `${newRuc}@licitaciones.pe`).trim().toLowerCase(),
-        companyName: newCompanyName.trim().toUpperCase(),
-        ruc: newRuc.trim(),
-        licenseKey: generatedKey,
-        role: newRole,
-        status: "active",
-        createdAt: new Date().toISOString().split("T")[0],
-        expiresAt: expDate.toISOString().split("T")[0],
-        maxTenders: newMaxTenders,
-        currentTendersCount: 0,
-        issuedBy: adminUser.userEmail || ADMIN_MASTER_EMAIL,
-        notes: newNotes,
-        firebaseSynced: false,
-      };
-
-      // 1. Add to local storage & state
-      onAddSession(newSession);
-
-      // 2. Save to Firebase in Cloud Firestore
-      try {
-        await createFirebaseUserLicense(newSession);
-        newSession.firebaseSynced = true;
-      } catch (err) {
-        console.log("Firebase sync fallback:", err);
-      }
-
-      // 3. If this was from a pending request, mark it as approved!
-      if (linkedRequestId) {
-        try {
-          await updateLicenseRequestStatus(linkedRequestId, "approved", {
-            assignedKey: generatedKey,
-            processedBy: adminUser.userEmail || ADMIN_MASTER_EMAIL,
-          });
-        } catch (e) {
-          console.warn("Could not update request status in cloud:", e);
-        }
-      }
-
-      setIssuedLicenseModal(newSession);
-      setSaveSuccessMsg(`¡Licencia para ${newUserName} generada y activada exitosamente!`);
-
-      // Reset Form
-      setNewUserName("");
-      setNewUserEmail("");
-      setNewCompanyName("");
-      setNewRuc("");
-      setNewNotes("");
-      setLinkedRequestId(null);
-      setSelectedRequestForApproval(null);
-      setShowCreateForm(false);
-    } catch (err: any) {
-      console.error("Error creating license:", err);
-      alert("Error al registrar licencia: " + (err.message || "Verifique los datos"));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -318,14 +394,21 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
     reader.readAsText(file);
   };
 
-  const filteredSessions = sessions.filter(
-    (s) =>
-      s.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.ruc.includes(searchTerm) ||
-      s.licenseKey.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.userEmail.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSessions = sessions.filter((s) => {
+    if (entityFilter !== "all") {
+      const matchEntity = s.entityType === entityFilter;
+      if (!matchEntity) return false;
+    }
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      s.userName.toLowerCase().includes(term) ||
+      s.companyName.toLowerCase().includes(term) ||
+      s.ruc.includes(term) ||
+      s.licenseKey.toLowerCase().includes(term) ||
+      s.userEmail.toLowerCase().includes(term)
+    );
+  });
 
   const filteredRequests = requestsList.filter((r) => {
     if (requestsFilter !== "all" && r.status !== requestsFilter) return false;
@@ -513,13 +596,13 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
       {/* 3. New User / License Registration Form */}
       {showCreateForm && (
         <div className="bg-white rounded-2xl border border-blue-200 shadow-md p-6 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
             <div className="flex items-center space-x-2 text-blue-700 font-bold text-sm">
               <Key className="w-4 h-4" />
               <span>
                 {selectedRequestForApproval
                   ? `Aprobando Solicitud de: ${selectedRequestForApproval.userName}`
-                  : "Registrar Nuevo Usuario y Emitir Licencia Oficial"}
+                  : "Emitir Nueva Licencia Institucional (Titular & Equipo)"}
               </span>
             </div>
             {selectedRequestForApproval && (
@@ -530,10 +613,36 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
           </div>
 
           <form onSubmit={handleGenerateCustomLicense} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nombre del Titular / Ingeniero Responsable *
+                  Tipo de Entidad / Titular *
+                </label>
+                <select
+                  value={newEntityType}
+                  onChange={(e) => {
+                    const type = e.target.value as EntityType;
+                    setNewEntityType(type);
+                    setNewRole(
+                      type === "municipalidad" || type === "gobierno_regional" || type === "ministerio"
+                        ? "entidad"
+                        : "postor"
+                    );
+                  }}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+                >
+                  <option value="municipalidad">🏛️ Municipalidad Provincial / Distrital</option>
+                  <option value="gobierno_regional">🏢 Gobierno Regional (GORE)</option>
+                  <option value="ministerio">🏛️ Ministerio / Organismo Nacional</option>
+                  <option value="empresa">🏢 Empresa Constructora / Contratista</option>
+                  <option value="consorcio">🤝 Consorcio Ejecutor</option>
+                  <option value="consultor_supervisor">📐 Consultoría & Supervisión de Obras</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nombre del Titular / Responsable Principal *
                 </label>
                 <input
                   type="text"
@@ -541,41 +650,41 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                   placeholder="Ej: Ing. Carlos Mendoza Ramos"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Correo Electrónico del Usuario *
+                  Correo Electrónico del Titular *
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="usuario@constructora.pe"
+                  placeholder="titular@constructora.pe"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Razón Social de la Empresa *
+                  Razón Social de la Entidad o Empresa *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej: CONSULTORES & CONTRATISTAS DEL PERÚ S.A.C."
+                  placeholder="Ej: MUNICIPALIDAD PROVINCIAL DE CUSCO"
                   value={newCompanyName}
                   onChange={(e) => setNewCompanyName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase font-medium"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  RUC de la Empresa (11 Dígitos) *
+                  RUC Institucional (11 Dígitos) *
                 </label>
                 <input
                   type="text"
@@ -584,7 +693,21 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                   placeholder="20601234567"
                   value={newRuc}
                   onChange={(e) => setNewRuc(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Cupo de Miembros de Equipo (Colaboradores)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={newMaxTeamMembers}
+                  onChange={(e) => setNewMaxTeamMembers(Number(e.target.value))}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-indigo-700"
                 />
               </div>
 
@@ -600,20 +723,42 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                   <option value={30}>30 Días (1 Mes - Prueba)</option>
                   <option value={90}>90 Días (Trimestral)</option>
                   <option value={180}>180 Días (Semestral)</option>
-                  <option value={365}>365 Días (1 Año Corporativo)</option>
-                  <option value={1825}>5 Años (Licencia Ilimitada)</option>
+                  <option value={365}>365 Días (1 Año Institucional)</option>
+                  <option value={1825}>5 Años (Licencia Multianual)</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Límite de Expedientes / Licitaciones
+                  Límite de Obras / Expedientes SEACE
                 </label>
                 <input
                   type="number"
                   value={newMaxTenders}
                   onChange={(e) => setNewMaxTenders(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Clave de Licencia (Personalizada o Auto)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateKeySuggestion}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold"
+                  >
+                    Generar Clave
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Dejar vacío para autogenerar o click en 'Generar'"
+                  value={newCustomKey}
+                  onChange={(e) => setNewCustomKey(e.target.value.toUpperCase())}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold uppercase"
                 />
               </div>
             </div>
@@ -624,7 +769,7 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
               </label>
               <input
                 type="text"
-                placeholder="Ej: Licencia autorizada con soporte técnico para SEACE"
+                placeholder="Ej: Licencia institucional para Gerencia de Obras e Infraestructura"
                 value={newNotes}
                 onChange={(e) => setNewNotes(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
@@ -658,7 +803,7 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                     <Key className="w-3.5 h-3.5" />
                     <span>
                       {selectedRequestForApproval
-                        ? "Aprobar y Emitir Clave Oficial"
+                        ? "Aprobar y Emitir Clave Institucional"
                         : "Generar y Activar Licencia"}
                     </span>
                   </>
@@ -671,6 +816,18 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
 
       {/* Sub-Tab Navigation */}
       <div className="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-2 gap-2 text-xs font-semibold">
+        <button
+          onClick={() => setActiveAdminTab("licenses")}
+          className={`py-3 px-4 flex items-center gap-2 border-b-2 transition cursor-pointer ${
+            activeAdminTab === "licenses"
+              ? "border-blue-600 text-blue-700 font-bold bg-blue-50/50 rounded-t-lg"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Licencias y Titulares ({sessions.length})</span>
+        </button>
+
         <button
           onClick={() => setActiveAdminTab("requests")}
           className={`py-3 px-4 flex items-center gap-2 border-b-2 transition cursor-pointer ${
@@ -687,239 +844,51 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
             </span>
           )}
         </button>
-
-        <button
-          onClick={() => setActiveAdminTab("licenses")}
-          className={`py-3 px-4 flex items-center gap-2 border-b-2 transition cursor-pointer ${
-            activeAdminTab === "licenses"
-              ? "border-blue-600 text-blue-700 font-bold bg-blue-50/50 rounded-t-lg"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Licencias y Postores Emitidos</span>
-          <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.2 rounded-full">
-            {sessions.length}
-          </span>
-        </button>
       </div>
-
-      {/* TAB 1: SOLICITUDES DE ACCESO */}
-      {activeAdminTab === "requests" && (
-        <div className="bg-white rounded-b-2xl rounded-t-none border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Inbox className="w-4 h-4 text-amber-600" />
-                <span>Bandeja de Solicitudes de Licencia</span>
-                <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                  {requestsList.length} solicitudes en total
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Revise a los postulantes que solicitaron acceso desde el portal. Al aprobarlos, se emitirá su clave de licencia.
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              {/* Filter by status */}
-              <select
-                value={requestsFilter}
-                onChange={(e) => setRequestsFilter(e.target.value as any)}
-                className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium"
-              >
-                <option value="pending">Solo Pendientes ({pendingRequestsCount})</option>
-                <option value="approved">Solo Aprobadas</option>
-                <option value="rejected">Solo Rechazadas</option>
-                <option value="all">Ver Todas</option>
-              </select>
-
-              {/* Search bar */}
-              <div className="relative w-full sm:w-56">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Buscar solicitante..."
-                  value={requestsSearchTerm}
-                  onChange={(e) => setRequestsSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {filteredRequests.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 space-y-2">
-              <Inbox className="w-10 h-10 mx-auto text-slate-300" />
-              <p className="text-xs font-semibold text-slate-600">
-                No hay solicitudes en esta categoría
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Cuando los postulantes envíen sus datos desde la pantalla de login, aparecerán aquí en tiempo real.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                    <th className="py-3 px-4">Postulante / Contacto</th>
-                    <th className="py-3 px-4">Empresa & RUC</th>
-                    <th className="py-3 px-4">Fecha & Uso Solicitado</th>
-                    <th className="py-3 px-4">Estado</th>
-                    <th className="py-3 px-4 text-right">Acciones de Administración</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredRequests.map((req) => {
-                    const isPending = req.status === "pending";
-                    const isApproved = req.status === "approved";
-                    const isRejected = req.status === "rejected";
-
-                    return (
-                      <tr key={req.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900">{req.userName}</div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Mail className="w-3 h-3 text-slate-400" />
-                            <span>{req.userEmail}</span>
-                          </div>
-                          {req.phone && (
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-emerald-600" />
-                              <span>{req.phone}</span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-800 max-w-[220px] truncate">
-                            {req.companyName}
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            RUC: {req.ruc}
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <div className="text-slate-700 text-[11px]">
-                            {new Date(req.createdAt).toLocaleDateString("es-PE", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 italic">
-                            {req.intendedUse || "Formulación de Ofertas"}
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          {isPending && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                              <Clock className="w-3 h-3 mr-1" /> Pendiente
-                            </span>
-                          )}
-                          {isApproved && (
-                            <div>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle className="w-3 h-3 mr-1" /> Aprobada
-                              </span>
-                              {req.assignedKey && (
-                                <div className="text-[10px] font-mono text-slate-500 mt-1 select-all">
-                                  Clave: {req.assignedKey}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {isRejected && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                              <XCircle className="w-3 h-3 mr-1" /> Rechazada
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end space-x-1.5">
-                            {isPending ? (
-                              <>
-                                <button
-                                  onClick={() => handleOpenApprovalForRequest(req)}
-                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs"
-                                >
-                                  <Key className="w-3.5 h-3.5" />
-                                  <span>Aprobar y Emitir Clave</span>
-                                </button>
-                                <button
-                                  onClick={() => handleRejectRequest(req.id, req.userName)}
-                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer"
-                                  title="Rechazar solicitud"
-                                >
-                                  Rechazar
-                                </button>
-                              </>
-                            ) : isApproved && req.assignedKey ? (
-                              <button
-                                onClick={() => handleCopyKey(req.assignedKey!)}
-                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer"
-                              >
-                                {copiedKey === req.assignedKey ? (
-                                  <Check className="w-3 h-3 text-emerald-600" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                                <span>Copiar Clave</span>
-                              </button>
-                            ) : null}
-
-                            <button
-                              onClick={() => handleDeleteRequest(req.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                              title="Eliminar solicitud"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* TAB 2: LICENCIAS EMITIDAS */}
       {activeAdminTab === "licenses" && (
         <div className="bg-white rounded-b-2xl rounded-t-none border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="p-5 border-b border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-600" />
-                <span>Usuarios y Licencias Emitidas</span>
+                <span>Titulares, Municipalidades y Empresas Registradas</span>
                 <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
                   {filteredSessions.length} cuentas
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Administre las claves, suspenda o autorice el acceso de cada postor en tiempo real.
+                Cada titular administra su propia cartera de obras y su equipo de trabajo con permisos y firmas independientes.
               </p>
             </div>
 
-            {/* Search bar */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Buscar por RUC, nombre o clave..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none"
-              />
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              {/* Filter by Entity Type */}
+              <select
+                value={entityFilter}
+                onChange={(e) => setEntityFilter(e.target.value as any)}
+                className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700"
+              >
+                <option value="all">Todas las Entidades</option>
+                <option value="municipalidad">🏛️ Municipalidades</option>
+                <option value="gobierno_regional">🏢 Gobiernos Regionales</option>
+                <option value="empresa">🏢 Empresas Contratistas</option>
+                <option value="consorcio">🤝 Consorcios</option>
+                <option value="consultor_supervisor">📐 Consultorías / Supervisión</option>
+              </select>
+
+              {/* Search bar */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Buscar por RUC, titular o clave..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -928,9 +897,9 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                  <th className="py-3 px-4">Postor / Titular</th>
-                  <th className="py-3 px-4">Clave de Licencia (Key)</th>
-                  <th className="py-3 px-4">Empresa & RUC</th>
+                  <th className="py-3 px-4">Titular / Entidad</th>
+                  <th className="py-3 px-4">Clave de Licencia</th>
+                  <th className="py-3 px-4">Equipo de Trabajo</th>
                   <th className="py-3 px-4">Vencimiento</th>
                   <th className="py-3 px-4">Estado</th>
                   <th className="py-3 px-4 text-right">Acciones de Administrador</th>
@@ -939,23 +908,54 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
               <tbody className="divide-y divide-slate-100">
                 {filteredSessions.map((sess) => {
                   const isMasterAdmin = sess.role === "admin" || sess.userEmail === ADMIN_MASTER_EMAIL;
+                  const teamCount = sess.teamMembers?.length || 0;
+                  const maxTeam = sess.maxTeamMembers || 10;
+                  const isPublic = sess.entityType === "municipalidad" || sess.entityType === "gobierno_regional" || sess.entityType === "ministerio";
+
                   return (
                     <tr key={sess.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                          {sess.userName}
-                          {isMasterAdmin && (
-                            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                              ADMIN MASTER
-                            </span>
-                          )}
+                        <div className="flex items-start gap-2">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                              <span>{sess.companyName}</span>
+                              {sess.entityType === "municipalidad" && (
+                                <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.2 rounded border border-emerald-200">
+                                  🏛️ MUNICIPALIDAD
+                                </span>
+                              )}
+                              {sess.entityType === "gobierno_regional" && (
+                                <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.2 rounded border border-blue-200">
+                                  🏢 GORE
+                                </span>
+                              )}
+                              {sess.entityType === "empresa" && (
+                                <span className="bg-indigo-100 text-indigo-800 text-[9px] font-bold px-1.5 py-0.2 rounded border border-indigo-200">
+                                  🏢 EMPRESA
+                                </span>
+                              )}
+                              {sess.entityType === "consorcio" && (
+                                <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.2 rounded border border-amber-200">
+                                  🤝 CONSORCIO
+                                </span>
+                              )}
+                              {isMasterAdmin && (
+                                <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                  ADMIN MASTER
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-medium">
+                              Titular: {sess.userName} • <span className="font-mono text-slate-500">RUC: {sess.ruc}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{sess.userEmail}</div>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500">{sess.userEmail}</div>
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-[11px]">
                         <div className="flex items-center space-x-1.5">
-                          <span className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 rounded border border-slate-200 select-all">
+                          <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded border border-slate-200 select-all">
                             {sess.licenseKey}
                           </span>
                           <button
@@ -972,7 +972,7 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                           <button
                             onClick={() => handleCopyInviteMessage(sess)}
                             className="p-1 text-slate-400 hover:text-emerald-600 transition cursor-pointer"
-                            title="Copiar mensaje de bienvenida para WhatsApp"
+                            title="Copiar credenciales completas para WhatsApp"
                           >
                             {copiedInvite === sess.id ? (
                               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -984,10 +984,15 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-800 truncate max-w-[200px]">
-                          {sess.companyName}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono">RUC: {sess.ruc}</div>
+                        <button
+                          type="button"
+                          onClick={() => setInspectTeamLicense(sess)}
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                          title="Ver y administrar colaboradores de este titular"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>{teamCount} / {maxTeam} Colaboradores</span>
+                        </button>
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -1138,6 +1143,17 @@ Ingresa al sistema y coloca tu Clave de Licencia para comenzar a armar tus propu
             </div>
           </div>
         </div>
+      )}
+      {/* 5. Team Management Inspector Modal for Admin */}
+      {inspectTeamLicense && (
+        <TeamManagementModal
+          session={inspectTeamLicense}
+          onClose={() => setInspectTeamLicense(null)}
+          onUpdateSession={(updatedSession) => {
+            onAddSession(updatedSession);
+            setInspectTeamLicense(updatedSession);
+          }}
+        />
       )}
     </div>
   );

@@ -1,8 +1,72 @@
+export interface BimElement {
+  id: string;
+  name: string;
+  category: "Cimentación" | "Columnas" | "Vigas" | "Losas" | "Muros" | "Sanitarias" | "Eléctricas" | "Acabados" | "Cubierta";
+  discipline: "Estructuras" | "Arquitectura" | "Instalaciones Sanitarias" | "Instalaciones Eléctricas" | "Cimentación";
+  level: "Cimentación" | "Nivel 1" | "Nivel 2" | "Nivel 3" | "Azotea / Techo";
+  partidaItemLink?: string; // e.g. "02.01.01"
+  partidaNombre?: string;
+  metradoBIM: number;
+  unidad: string;
+  costoEstimado?: number;
+  mesValorizacionProgramado: number; // e.g. 1 = Mes 1, 2 = Mes 2
+  mesValorizacionEjecutado?: number;
+  status4D: "Ejecutado" | "En Proceso" | "Atrasado" | "Programado" | "No Iniciado";
+  position: [number, number, number]; // [x, y, z] in Three.js coords
+  size: [number, number, number]; // [width, height, depth]
+  rotation?: [number, number, number];
+  color?: string;
+  material?: string;
+  propiedades?: Record<string, string | number>;
+}
+
+export interface BimBcfIssue {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  creadoPor: string;
+  cargo: string;
+  tipo: "Interferencia / Clash" | "Observación de Residente" | "Conformidad de Supervisor" | "Consulta Técnica RFI" | "Alerta de Calidad / Seguridad";
+  prioridad: "Alta" | "Media" | "Baja" | "Crítica";
+  estado: "Abierto" | "En Revisión" | "Subsanado / Aprobado" | "Cerrado";
+  fecha: string;
+  elementoId?: string;
+  punto3D?: { x: number; y: number; z: number };
+  disciplinaAfectada?: string;
+  solucionPropuesta?: string;
+}
+
+export interface BimModelData {
+  id: string;
+  obraId: string;
+  nombreModelo: string;
+  formato: "IFC 4" | "IFC 2x3" | "Revit RVT (Metadata)" | "Digital Twin 4D/5D";
+  lodNivel: "LOD 200" | "LOD 300" | "LOD 350" | "LOD 400";
+  fechaActualizacion: string;
+  modificadoPor?: string;
+  elementos: BimElement[];
+  incidenciasBCF: BimBcfIssue[];
+  origenArchivo?: string;
+  totalElementos: number;
+  volumenConcretoM3?: number;
+  areaConstruidaM2?: number;
+  pesoAceroKg?: number;
+}
+
 export interface ObraProyecto {
   id: string;
   cui: string; // Código Único de Inversiones (SNIP / invierte.pe)
   nombre: string;
   entidad: string;
+  
+  // BIM Digital Twin & Modelo 3D Integrado
+  bimModel?: BimModelData;
+  lastModifiedBy?: {
+    memberId?: string;
+    name: string;
+    role: string;
+    timestamp: string;
+  };
   
   // Documentos Técnicos Preliminares de Origen
   // 1. Instrumento Contractual del Contratista Ejecutor
@@ -297,6 +361,7 @@ export interface UserObraPackage {
   liquidacion: LiquidacionResumen;
   partidas?: PartidaEjecutada[];
   auditorias?: AuditoriaValorizacion[];
+  bimModel?: BimModelData;
 }
 
 export interface ContractAnalysisResult {

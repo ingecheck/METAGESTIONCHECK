@@ -34,6 +34,8 @@ interface WorksValuationsProps {
   setValorizaciones: React.Dispatch<React.SetStateAction<ValorizacionMensual[]>>;
   partidas?: PartidaEjecutada[];
   setPartidas?: React.Dispatch<React.SetStateAction<PartidaEjecutada[]>>;
+  auditorias?: AuditoriaValorizacion[];
+  setAuditorias?: React.Dispatch<React.SetStateAction<AuditoriaValorizacion[]>>;
   auditoria?: AuditoriaValorizacion;
   setAuditoria?: React.Dispatch<React.SetStateAction<AuditoriaValorizacion | undefined>>;
   initialSubTab?: "curva-s" | "partidas" | "auditoria";
@@ -45,6 +47,8 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
   setValorizaciones,
   partidas: externalPartidas,
   setPartidas: externalSetPartidas,
+  auditorias: externalAuditorias,
+  setAuditorias: externalSetAuditorias,
   auditoria: externalAuditoria,
   setAuditoria: externalSetAuditoria,
   initialSubTab = "curva-s",
@@ -55,14 +59,14 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
 
   // Local fallback states if not provided externally
   const [localPartidas, setLocalPartidas] = useState<PartidaEjecutada[]>(SAMPLE_PARTIDAS_OBRA);
-  const [localAuditoria, setLocalAuditoria] = useState<AuditoriaValorizacion | undefined>(
-    SAMPLE_AUDITORIA_DATA
-  );
+  const [localAuditorias, setLocalAuditorias] = useState<AuditoriaValorizacion[]>([
+    SAMPLE_AUDITORIA_DATA,
+  ]);
 
   const currentPartidas = externalPartidas ?? localPartidas;
   const currentSetPartidas = externalSetPartidas ?? setLocalPartidas;
-  const currentAuditoria = externalAuditoria ?? localAuditoria;
-  const currentSetAuditoria = externalSetAuditoria ?? setLocalAuditoria;
+  const currentAuditorias = externalAuditorias ?? localAuditorias;
+  const currentSetAuditorias = externalSetAuditorias ?? setLocalAuditorias;
 
   const [selectedValId, setSelectedValId] = useState<string>(
     valorizaciones[4]?.id || valorizaciones[0]?.id || ""
@@ -626,10 +630,15 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
       {activeSubTab === "auditoria" && (
         <WorksValuationAuditor
           obra={obra}
-          auditoriaData={currentAuditoria}
-          onSaveAudit={(newAudit) => {
-            currentSetAuditoria(newAudit);
+          valorizaciones={valorizaciones}
+          setValorizaciones={setValorizaciones}
+          partidas={currentPartidas}
+          setPartidas={currentSetPartidas}
+          auditorias={currentAuditorias}
+          onSaveAuditorias={(newAudits) => {
+            currentSetAuditorias(newAudits);
           }}
+          onNavigateToSubTab={(sub) => setActiveSubTab(sub)}
         />
       )}
     </div>
