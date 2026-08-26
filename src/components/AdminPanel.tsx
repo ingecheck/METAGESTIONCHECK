@@ -35,6 +35,8 @@ import {
   Briefcase,
   Sliders,
   UserPlus,
+  MessageCircle,
+  ExternalLink,
 } from "lucide-react";
 import {
   LicenseSession,
@@ -124,27 +126,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
-  const handleCopyInviteMessage = (sess: LicenseSession) => {
+  const buildLicenseWhatsAppMessage = (sess: LicenseSession) => {
     const isPublic = sess.entityType === "municipalidad" || sess.entityType === "gobierno_regional" || sess.entityType === "ministerio";
     const entityLabel = isPublic ? "Entidad Pública" : "Empresa / Contratista";
 
-    const message = `🏛️ *METAGESTIONCHECK - CREDENCIALES OFICIALES DE ACCESO*
-Hola *${sess.userName}*, se ha emitido la Licencia Institucional para la ${entityLabel} *${sess.companyName}* (RUC: ${sess.ruc}):
+    return `🏛️ *METAGESTIONCHECK - CREDENCIALES OFICIALES DE ACCESO*
+Hola estimado(a) *${sess.userName}*, se ha emitido y habilitado la Licencia Institucional para la ${entityLabel} *${sess.companyName}* (RUC: ${sess.ruc}):
 
-🔑 *Clave de Licencia Titular:* \`${sess.licenseKey}\`
-👤 *Usuario Administrador:* ${sess.userEmail}
-📅 *Vigencia hasta:* ${sess.expiresAt}
-📑 *Cupo de Expedientes / Obras:* ${sess.maxTenders}
-👥 *Cupo de Miembros de Equipo:* ${sess.maxTeamMembers || 10} colaboradores
+━━━━━━━━━━━━━━━━━━━━━
+🔑 *DATOS DE LICENCIA TITULAR:*
+• *Clave Institucional:* \`${sess.licenseKey}\`
+• *Usuario Administrador:* ${sess.userEmail}
+• *Vigencia:* Hasta el ${sess.expiresAt}
+• *Cupo de Expedientes:* ${sess.maxTenders} obras
+• *Cupo de Equipo:* ${sess.maxTeamMembers || 10} colaboradores técnicos
+━━━━━━━━━━━━━━━━━━━━━
+💼 *MESA DE TRABAJO & EQUIPO TÉCNICO:*
+Como Titular, puede registrar a su Ingeniero Residente, Supervisor de Obra y Especialistas. Cada uno tendrá su propio PIN de acceso y firma técnica para operar en la cartera institucional con aislamiento seguro.
 
-💼 *Mesa de Trabajo Limpia:*
-Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su equipo de trabajo (Ingeniero Residente, Supervisor de Obra, Especialistas en Costos y Licitaciones). Cada uno tendrá su propio PIN de acceso y firma técnica para operar en la cartera institucional.
+📲 *CÓMO INGRESAR:*
+1️⃣ Ingrese al portal: ${window.location.origin}
+2️⃣ Digite su Clave Institucional \`${sess.licenseKey}\`
+3️⃣ En el menú superior "👥 Gestionar Mi Equipo", registre a sus colaboradores y asígneles su PIN.`;
+  };
 
-🌐 *Portal de Acceso:* ${window.location.origin}`;
-
+  const handleCopyInviteMessage = (sess: LicenseSession) => {
+    const message = buildLicenseWhatsAppMessage(sess);
     navigator.clipboard.writeText(message);
     setCopiedInvite(sess.id);
     setTimeout(() => setCopiedInvite(null), 3000);
+  };
+
+  const handleOpenWhatsAppLicenseDirect = (sess: LicenseSession, phone?: string) => {
+    const message = buildLicenseWhatsAppMessage(sess);
+    const rawPhone = (phone || "").replace(/\D/g, "");
+    let phoneParam = "";
+    if (rawPhone) {
+      phoneParam = rawPhone.length === 9 ? `51${rawPhone}` : rawPhone;
+    }
+    const encoded = encodeURIComponent(message);
+    const waUrl = phoneParam
+      ? `https://api.whatsapp.com/send?phone=${phoneParam}&text=${encoded}`
+      : `https://api.whatsapp.com/send?text=${encoded}`;
+    window.open(waUrl, "_blank");
   };
 
   const handleOpenApprovalForRequest = (req: LicenseRequest) => {
@@ -994,14 +1018,21 @@ Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su 
                             )}
                           </button>
                           <button
+                            onClick={() => handleOpenWhatsAppLicenseDirect(sess)}
+                            className="p-1 text-slate-400 hover:text-emerald-600 transition cursor-pointer"
+                            title="Abrir WhatsApp para enviar credenciales"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600 fill-emerald-100" />
+                          </button>
+                          <button
                             onClick={() => handleCopyInviteMessage(sess)}
                             className="p-1 text-slate-400 hover:text-emerald-600 transition cursor-pointer"
-                            title="Copiar credenciales completas para WhatsApp"
+                            title="Copiar texto formateado para WhatsApp"
                           >
                             {copiedInvite === sess.id ? (
                               <Check className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <Send className="w-3.5 h-3.5" />
+                              <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </div>
@@ -1150,13 +1181,21 @@ Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su 
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-2">
+            <div className="flex items-center justify-end space-x-2 pt-2 flex-wrap gap-y-2">
               <button
                 onClick={() => handleCopyInviteMessage(issuedLicenseModal)}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Copiar Mensaje para WhatsApp</span>
+                <Copy className="w-3.5 h-3.5" />
+                <span>{copiedInvite === issuedLicenseModal.id ? "¡Texto Copiado!" : "Copiar Mensaje"}</span>
+              </button>
+              <button
+                onClick={() => handleOpenWhatsAppLicenseDirect(issuedLicenseModal)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <MessageCircle className="w-4 h-4 fill-white" />
+                <span>Abrir WhatsApp</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
               </button>
               <button
                 onClick={() => setIssuedLicenseModal(null)}

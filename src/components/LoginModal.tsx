@@ -63,12 +63,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   availableSessions,
   onRequestLicense,
 }) => {
-  const [activeTab, setActiveTab] = useState<"login" | "request">("login");
+  const [activeTab, setActiveTab] = useState<"login" | "collaborator" | "request">("login");
   const [licenseKeyInput, setLicenseKeyInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isValidatingKey, setIsValidatingKey] = useState(false);
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
+
+  // Collaborator direct login state
+  const [collabDniOrEmail, setCollabDniOrEmail] = useState("");
+  const [collabPin, setCollabPin] = useState("");
+  const [showCollabPin, setShowCollabPin] = useState(false);
+  const [collabSearchQuery, setCollabSearchQuery] = useState("");
+  const [selectedEntityForCollab, setSelectedEntityForCollab] = useState<LicenseSession | null>(null);
+  const [collabMode, setCollabMode] = useState<"direct" | "byEntity">("direct");
 
   // Team member selection state after key validation
   const [validatedLicense, setValidatedLicense] = useState<LicenseSession | null>(null);
@@ -286,6 +294,99 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       ...validatedLicense,
       activeMemberId: undefined, // Titular main workspace
     });
+  };
+
+  // Direct Collaborator Login via DNI / Email + PIN
+  const handleCollabDirectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const query = collabDniOrEmail.trim();
+    if (!query) {
+      setErrorMsg("Ingrese su DNI o Correo Electrónico institucional.");
+      return;
+    }
+
+    setIsValidatingKey(true);
+
+    try {
+      // 1. Gather all local sessions and cloud licenses
+      let allSessions = [...availableSessions];
+      try {
+        const cloudLicenses = await fetchFirebaseLicenses();
+        const map = new Map<string, LicenseSession>();
+        allSessions.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+        cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+        allSessions = Array.from(map.values());
+      } catch (e) {
+        // use local
+      }
+
+      // 2. Search for the team member across all entities
+      let targetSession: LicenseSession | null = null;
+      let targetMember: TeamMember | null = null;
+
+      const cleanQuery = query.toLowerCase();
+      const cleanDigits = query.replace(/\D/g, "");
+
+      for (const sess of allSessions) {
+        if (!sess.teamMembers || sess.teamMembers.length === 0) continue;
+        
+        for (const member of sess.teamMembers) {
+          const matchDni = member.dni && cleanDigits && member.dni.replace(/\D/g, "") === cleanDigits;
+          const matchEmail = member.email && member.email.trim().toLowerCase() === cleanQuery;
+          const matchCip = member.cip && member.cip.toLowerCase().replace(/\s+/g, "") === cleanQuery.replace(/\s+/g, "");
+
+          if (matchDni || matchEmail || matchCip) {
+            targetSession = sess;
+            targetMember = member;
+            break;
+          }
+        }
+        if (targetMember) break;
+      }
+
+      if (!targetSession || !targetMember) {
+        setErrorMsg(
+          `No se encontró ningún colaborador con el DNI/Correo "${query}". Verifique que su Titular lo haya registrado previamente en "Gestionar Mi Equipo" o seleccione su Entidad en la pestaña de abajo.`
+        );
+        return;
+      }
+
+      if (targetSession.status === "suspended") {
+        setErrorMsg("La licencia de su entidad está suspendida. Comuníquese con el Titular o Administrador.");
+        return;
+      }
+
+      if (targetSession.status === "expired") {
+        setErrorMsg("La licencia de su entidad ha expirado. El Titular debe renovarla.");
+        return;
+      }
+
+      // Check status of member
+      if (targetMember.status === "inactive") {
+        setErrorMsg("Su perfil de colaborador está marcado como inactivo. Solicite su activación al Titular.");
+        return;
+      }
+
+      // Check PIN
+      const expectedPin = (targetMember.accessPin || "").trim();
+      if (expectedPin && collabPin.trim() !== expectedPin) {
+        setErrorMsg(`El PIN de acceso ingresado es incorrecto para ${targetMember.name}. Verifique con el Titular.`);
+        return;
+      }
+
+      // Validated! Log into collaborator's clean workspace
+      onLogin({
+        ...targetSession,
+        activeMemberId: targetMember.id,
+      });
+    } catch (err: any) {
+      console.error("Collab login error:", err);
+      setErrorMsg("Error al autenticar colaborador. Por favor intente nuevamente.");
+    } finally {
+      setIsValidatingKey(false);
+    }
   };
 
   const handleSendRequest = async (e: React.FormEvent) => {
@@ -611,8 +712,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 }`}
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>Ingresar con Licencia</span>
+                <span>Titular / Licencia</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("collaborator");
+                  setErrorMsg(null);
+                }}
+                className={`flex-1 py-3 text-center transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  activeTab === "collaborator"
+                    ? "bg-white text-blue-600 border-b-2 border-blue-600 font-bold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Colaborador / PIN</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -626,7 +744,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
-                <span>Solicitar Licencia</span>
+                <span>Solicitar</span>
               </button>
             </div>
 
@@ -692,7 +810,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                         <input
                           type="text"
-                          placeholder="Ej: LIC-MUNI-CHICLAYO-2026 ó LIC-JHON-FRANKLIN-2026"
+                          placeholder="Ej: LIC-MUNI-RIOJA-2026 ó LIC-JHON-FRANKLIN-2026"
                           value={licenseKeyInput}
                           onChange={(e) => setLicenseKeyInput(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
@@ -723,6 +841,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </button>
                   </form>
 
+                  {/* Collaborator Shortcut Banner */}
+                  <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-blue-950">¿Eres Colaborador o Ingeniero?</div>
+                        <div className="text-[11px] text-blue-800 truncate">Ingresa directamente con tu DNI / Correo y PIN.</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("collaborator");
+                        setErrorMsg(null);
+                      }}
+                      className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    >
+                      <span>Ingreso Equipo</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
                   <div className="pt-2 text-center border-t border-slate-100">
                     <p className="text-[11px] text-slate-500">
                       ¿No tienes una clave de licencia activa?{" "}
@@ -734,6 +876,243 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         Solicítala aquí
                       </button>
                     </p>
+                  </div>
+                </div>
+              ) : activeTab === "collaborator" ? (
+                /* Dedicated Collaborator Login Tab */
+                <div className="space-y-4">
+                  {/* Mode switch: Direct by DNI/Email vs Pick by Entity */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollabMode("direct");
+                        setErrorMsg(null);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-center transition cursor-pointer ${
+                        collabMode === "direct"
+                          ? "bg-white text-blue-700 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Acceso Rápido con DNI / PIN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollabMode("byEntity");
+                        setErrorMsg(null);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-center transition cursor-pointer ${
+                        collabMode === "byEntity"
+                          ? "bg-white text-blue-700 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Seleccionar por Entidad
+                    </button>
+                  </div>
+
+                  {collabMode === "direct" ? (
+                    /* Direct DNI + PIN Form */
+                    <form onSubmit={handleCollabDirectSubmit} className="space-y-3 animate-in fade-in zoom-in-95">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          DNI, Correo Electrónico o CIP del Colaborador
+                        </label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                          <input
+                            type="text"
+                            placeholder="Ej: 44290188 ó wtafur@munirioja.gob.pe"
+                            value={collabDniOrEmail}
+                            onChange={(e) => setCollabDniOrEmail(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                            autoFocus
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Ingrese el DNI o correo con el que su Titular lo registró en el equipo.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          PIN de Acceso Personal (4 a 6 dígitos)
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                          <input
+                            type={showCollabPin ? "text" : "password"}
+                            placeholder="****"
+                            maxLength={6}
+                            value={collabPin}
+                            onChange={(e) => setCollabPin(e.target.value)}
+                            className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition tracking-widest"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCollabPin(!showCollabPin)}
+                            className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600"
+                          >
+                            {showCollabPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          PIN confidencial asignado para su mesa de trabajo técnica.
+                        </p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isValidatingKey}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
+                      >
+                        {isValidatingKey ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Autenticando Colaborador...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Entrar a mi Mesa de Trabajo</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  ) : (
+                    /* Pick Entity & Team Member View */
+                    <div className="space-y-3 animate-in fade-in zoom-in-95">
+                      {!selectedEntityForCollab ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                              Seleccione su Entidad / Empresa
+                            </label>
+                            <span className="text-[10px] text-slate-400">
+                              Haga clic en su institución
+                            </span>
+                          </div>
+
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Buscar entidad (ej: Rioja, Consorcio, Jhon...)"
+                              value={collabSearchQuery}
+                              onChange={(e) => setCollabSearchQuery(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            {availableSessions
+                              .filter((sess) => {
+                                if (sess.role === "admin") return false;
+                                if (!collabSearchQuery) return true;
+                                const q = collabSearchQuery.toLowerCase();
+                                return (
+                                  sess.companyName.toLowerCase().includes(q) ||
+                                  sess.userName.toLowerCase().includes(q) ||
+                                  sess.ruc.includes(q) ||
+                                  sess.licenseKey.toLowerCase().includes(q)
+                                );
+                              })
+                              .map((sess) => (
+                                <button
+                                  key={sess.id}
+                                  type="button"
+                                  onClick={() => setSelectedEntityForCollab(sess)}
+                                  className="w-full text-left p-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/40 transition flex items-center justify-between group cursor-pointer shadow-2xs"
+                                >
+                                  <div className="flex items-center space-x-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                      {getEntityIcon(sess.entityType)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 truncate">
+                                        {sess.companyName}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 truncate">
+                                        {sess.userName} • {sess.teamMembers?.length || 0} miembros
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition group-hover:translate-x-0.5 shrink-0" />
+                                </button>
+                              ))}
+                          </div>
+                        </>
+                      ) : (
+                        /* Entity chosen: show its members */
+                        <div className="space-y-3 animate-in fade-in">
+                          <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center space-x-2 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                {selectedEntityForCollab.companyName.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-blue-950 truncate">
+                                  {selectedEntityForCollab.companyName}
+                                </div>
+                                <div className="text-[10px] text-blue-700 font-mono">
+                                  RUC: {selectedEntityForCollab.ruc}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEntityForCollab(null)}
+                              className="text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 bg-white border border-blue-200 rounded-lg font-semibold shrink-0 cursor-pointer"
+                            >
+                              Cambiar
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                            {selectedEntityForCollab.teamMembers && selectedEntityForCollab.teamMembers.length > 0 ? (
+                              selectedEntityForCollab.teamMembers.map((member) => (
+                                <button
+                                  key={member.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setValidatedLicense(selectedEntityForCollab);
+                                    handleMemberSelect(member);
+                                  }}
+                                  className="w-full text-left p-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/50 transition flex items-center justify-between group cursor-pointer"
+                                >
+                                  <div className="flex items-center space-x-2 min-w-0">
+                                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                      {member.name.charAt(0)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 truncate">
+                                        {member.name}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 truncate">
+                                        {member.cargoText || member.role} {member.cip ? `• ${member.cip}` : ""}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center space-x-1 shrink-0">
+                                    {getRoleBadge(member.role)}
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600" />
+                                  </div>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="text-center py-4 text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                Esta entidad no tiene colaboradores registrados aún. El Titular debe agregarlos en "Gestionar Mi Equipo".
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 leading-relaxed">
+                    💡 <strong>Aislamiento de Trabajo:</strong> Cada colaborador ingresa a su propia mesa de trabajo con sus permisos técnicos específicos (Residente, Supervisor, Especialista en Costos o Asistente).
                   </div>
                 </div>
               ) : reqSuccess ? (

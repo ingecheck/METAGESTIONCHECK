@@ -1235,14 +1235,76 @@ Equipos: 1 Retroexcavadora CAT 420F, 1 Rodillo Dynapac CA250, 2 Volquetes Volvo 
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="sm:col-span-2">
-                <label className="block font-bold text-slate-700 mb-1">Cargo Postulado en la Obra / Servicio:</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Cargo Postulado en la Obra / Servicio:</label>
+                  <span className="text-[10px] text-blue-600 font-semibold">Seleccionar o digitar libremente</span>
+                </div>
                 <input
                   type="text"
-                  placeholder="Ej: Residente de Obra / Especialista en Mecánica de Suelos"
+                  list="personal-cargos-datalist"
+                  placeholder="Ej: Especialista en Estructuras / Mecánica de Suelos / Residente de Obra"
                   value={cargo}
                   onChange={(e) => setCargo(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 font-medium"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 font-semibold text-slate-900"
                 />
+                <datalist id="personal-cargos-datalist">
+                  <option value="Ingeniero Residente de Obra" />
+                  <option value="Jefe de Supervisión de Obra" />
+                  <option value="Especialista en Estructuras" />
+                  <option value="Especialista en Mecánica de Suelos, Pavimentos y Geotecnia" />
+                  <option value="Especialista en Seguridad en Obra y Salud en el Trabajo (SSOMA)" />
+                  <option value="Especialista en Costos, Presupuestos y Valorizaciones" />
+                  <option value="Especialista en Impacto Ambiental (PMA / PAC)" />
+                  <option value="Especialista en Instalaciones Sanitarias" />
+                  <option value="Especialista en Instalaciones Eléctricas y Electromecánicas" />
+                  <option value="Especialista en Hidrología, Hidráulica y Drenaje" />
+                  <option value="Especialista en Geología y Geotecnia" />
+                  <option value="Especialista en Topografía, Geodesia y Trazo" />
+                  <option value="Especialista en Control de Calidad de Materiales (QA/QC)" />
+                  <option value="Especialista BIM / Modelador" />
+                  <option value="Especialista en Puentes y Obras de Arte" />
+                  <option value="Especialista en Saneamiento y Redes de Agua/Desagüe" />
+                  <option value="Jefe de Oficina Técnica" />
+                  <option value="Asistente Técnico de Obra" />
+                </datalist>
+
+                {/* Quick select tags */}
+                <div className="pt-1.5 flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-slate-400 font-medium">Sugerencias:</span>
+                  {[
+                    "Residente de Obra",
+                    "Esp. Estructuras",
+                    "Esp. Suelos y Pavimentos",
+                    "Esp. SSOMA",
+                    "Esp. Costos y Valorizaciones",
+                    "Esp. Sanitarias",
+                    "Esp. Electromecánicas",
+                    "Esp. Ambiental",
+                    "Esp. BIM",
+                  ].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        const map: Record<string, string> = {
+                          "Residente de Obra": "Ingeniero Residente de Obra",
+                          "Esp. Estructuras": "Especialista en Estructuras",
+                          "Esp. Suelos y Pavimentos": "Especialista en Mecánica de Suelos, Pavimentos y Geotecnia",
+                          "Esp. SSOMA": "Especialista en Seguridad en Obra y Salud en el Trabajo (SSOMA)",
+                          "Esp. Costos y Valorizaciones": "Especialista en Costos, Presupuestos y Valorizaciones",
+                          "Esp. Sanitarias": "Especialista en Instalaciones Sanitarias",
+                          "Esp. Electromecánicas": "Especialista en Instalaciones Eléctricas y Electromecánicas",
+                          "Esp. Ambiental": "Especialista en Impacto Ambiental (PMA / PAC)",
+                          "Esp. BIM": "Especialista BIM",
+                        };
+                        setCargo(map[s] || s);
+                      }}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 rounded text-[10px] text-slate-600 transition cursor-pointer font-medium"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="sm:col-span-2">
@@ -1260,9 +1322,10 @@ Equipos: 1 Retroexcavadora CAT 420F, 1 Rodillo Dynapac CA250, 2 Volquetes Volvo 
                 <label className="block font-bold text-slate-700 mb-1">N° de DNI / CE:</label>
                 <input
                   type="text"
+                  maxLength={8}
                   placeholder="41829304"
                   value={dni}
-                  onChange={(e) => setDni(e.target.value)}
+                  onChange={(e) => setDni(e.target.value.replace(/\D/g, ""))}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 font-mono"
                 />
               </div>
@@ -1282,11 +1345,23 @@ Equipos: 1 Retroexcavadora CAT 420F, 1 Rodillo Dynapac CA250, 2 Volquetes Volvo 
                 <label className="block font-bold text-slate-700 mb-1">Profesión / Título Universitario:</label>
                 <input
                   type="text"
+                  list="personal-profesiones-datalist"
                   placeholder="Ingeniero Civil Colegiado"
                   value={profesion}
                   onChange={(e) => setProfesion(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
                 />
+                <datalist id="personal-profesiones-datalist">
+                  <option value="Ingeniero Civil Colegiado" />
+                  <option value="Ingeniero Sanitario Colegiado" />
+                  <option value="Ingeniero Mecánico Electricista Colegiado" />
+                  <option value="Ingeniero Ambiental Colegiado" />
+                  <option value="Ingeniero de Higiene y Seguridad Industrial" />
+                  <option value="Ingeniero Geólogo / Geotécnico" />
+                  <option value="Arquitecto Colegiado (CAP)" />
+                  <option value="Ingeniero Agrícola Colegiado" />
+                  <option value="Ingeniero de Minas Colegiado" />
+                </datalist>
               </div>
 
               <div>
@@ -1303,11 +1378,18 @@ Equipos: 1 Retroexcavadora CAT 420F, 1 Rodillo Dynapac CA250, 2 Volquetes Volvo 
                 <label className="block font-bold text-slate-700 mb-1">Documentos de Acreditación (Sustento):</label>
                 <input
                   type="text"
+                  list="personal-sustentos-datalist"
                   placeholder="Copia simple de Título, Habilitación CIP vigente y 3 Certificados de Trabajo"
                   value={sustento}
                   onChange={(e) => setSustento(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500"
                 />
+                <datalist id="personal-sustentos-datalist">
+                  <option value="Título profesional + Colegiatura CIP + Certificados de Trabajo" />
+                  <option value="Título profesional + Constancia de Habilitación vigente + Contratos y Conformidades" />
+                  <option value="Título profesional + Colegiatura + 3 Certificados de Trabajo acumulados" />
+                  <option value="Resoluciones de Designación + Contratos de Trabajo + Actas de Recepción de Obra" />
+                </datalist>
               </div>
             </div>
 
