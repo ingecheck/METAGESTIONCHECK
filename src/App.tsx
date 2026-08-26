@@ -79,6 +79,9 @@ import {
   subscribeToFirebaseLicenses,
   createFirebaseUserLicense,
   fetchFirebaseLicenses,
+  isLicenseDeleted,
+  markLicenseAsDeleted,
+  unmarkLicenseAsDeleted,
 } from "./services/firebaseSync";
 import {
   loadUserOffers,
@@ -101,20 +104,29 @@ export default function App() {
   // License Sessions & Authentication State - 100% Local & Free
   const [sessions, setSessions] = useState<LicenseSession[]>(() => {
     const saved = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    const map = new Map<string, LicenseSession>();
+    
+    INITIAL_DEFAULT_SESSIONS.forEach((s) => {
+      if (!isLicenseDeleted(s)) {
+        map.set(s.licenseKey.toUpperCase(), s);
+      }
+    });
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = new Map<string, LicenseSession>();
-          INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-          parsed.forEach((s: LicenseSession) => map.set(s.licenseKey.toUpperCase(), s));
-          return Array.from(map.values());
+          parsed.forEach((s: LicenseSession) => {
+            if (!isLicenseDeleted(s)) {
+              map.set(s.licenseKey.toUpperCase(), s);
+            }
+          });
         }
       } catch (e) {
         // fallback
       }
     }
-    return INITIAL_DEFAULT_SESSIONS;
+    return Array.from(map.values());
   });
 
   const [currentUser, setCurrentUser] = useState<LicenseSession | null>(() => {
@@ -553,9 +565,15 @@ export default function App() {
         if (cloudLicenses && cloudLicenses.length > 0) {
           setSessions((prev) => {
             const map = new Map<string, LicenseSession>();
-            INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-            prev.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-            cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+            INITIAL_DEFAULT_SESSIONS.forEach((s) => {
+              if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+            });
+            prev.forEach((s) => {
+              if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+            });
+            cloudLicenses.forEach((s) => {
+              if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+            });
             return Array.from(map.values());
           });
         }
@@ -564,12 +582,18 @@ export default function App() {
 
     // 2. Real-time subscription to cloud changes
     const unsubscribeLicenses = subscribeToFirebaseLicenses((cloudLicenses) => {
-      if (cloudLicenses && cloudLicenses.length > 0) {
+      if (cloudLicenses) {
         setSessions((prev) => {
           const map = new Map<string, LicenseSession>();
-          INITIAL_DEFAULT_SESSIONS.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-          prev.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-          cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+          INITIAL_DEFAULT_SESSIONS.forEach((s) => {
+            if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+          });
+          prev.forEach((s) => {
+            if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+          });
+          cloudLicenses.forEach((s) => {
+            if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+          });
           return Array.from(map.values());
         });
       }
@@ -669,8 +693,11 @@ export default function App() {
   };
 
   const handleAddSession = (newSession: LicenseSession) => {
+    if (newSession.id) unmarkLicenseAsDeleted(newSession.id);
+    if (newSession.licenseKey) unmarkLicenseAsDeleted(newSession.licenseKey);
+
     setSessions((prev) => {
-      const updated = [newSession, ...prev.filter((s) => s.licenseKey !== newSession.licenseKey)];
+      const updated = [newSession, ...prev.filter((s) => s.licenseKey !== newSession.licenseKey && s.id !== newSession.id)];
       try {
         localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
       } catch (e) {}
@@ -688,8 +715,23 @@ export default function App() {
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    if (currentUser?.id === sessionId) {
+    const sessionToDelete = sessions.find((s) => s.id === sessionId || s.licenseKey === sessionId);
+    if (sessionToDelete) {
+      if (sessionToDelete.id) markLicenseAsDeleted(sessionToDelete.id);
+      if (sessionToDelete.licenseKey) markLicenseAsDeleted(sessionToDelete.licenseKey);
+    } else {
+      markLicenseAsDeleted(sessionId);
+    }
+
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== sessionId && s.licenseKey !== sessionId);
+      try {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (currentUser?.id === sessionId || (sessionToDelete && currentUser?.licenseKey === sessionToDelete.licenseKey)) {
       setCurrentUser(null);
       setIsLoginModalOpen(true);
     }

@@ -18,6 +18,7 @@ const REQUESTS_COLLECTION = "license_requests";
 
 const LOCAL_REQUESTS_KEY = "mgc_license_requests";
 const LOCAL_LICENSES_KEY = "mgc_user_sessions";
+const DELETED_LICENSES_KEY = "mgc_deleted_licenses_list_v1";
 
 // Quota circuit breaker: if quota is exhausted, skip cloud calls to avoid backoff delays
 let isCloudQuotaExhausted = false;
@@ -28,6 +29,44 @@ export function markQuotaExhausted() {
 
 export function getIsQuotaExhausted(): boolean {
   return isCloudQuotaExhausted;
+}
+
+export function getDeletedLicensesBlacklist(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_LICENSES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function markLicenseAsDeleted(idOrKey: string) {
+  if (!idOrKey) return;
+  try {
+    const list = getDeletedLicensesBlacklist();
+    const clean = idOrKey.trim().toUpperCase();
+    if (!list.includes(clean)) {
+      list.push(clean);
+      localStorage.setItem(DELETED_LICENSES_KEY, JSON.stringify(list));
+    }
+  } catch (e) {}
+}
+
+export function unmarkLicenseAsDeleted(idOrKey: string) {
+  if (!idOrKey) return;
+  try {
+    const list = getDeletedLicensesBlacklist();
+    const clean = idOrKey.trim().toUpperCase();
+    const filtered = list.filter((k) => k !== clean && k !== idOrKey);
+    localStorage.setItem(DELETED_LICENSES_KEY, JSON.stringify(filtered));
+  } catch (e) {}
+}
+
+export function isLicenseDeleted(session: { id?: string; licenseKey?: string }): boolean {
+  const list = getDeletedLicensesBlacklist();
+  if (session.id && list.includes(session.id.toUpperCase())) return true;
+  if (session.licenseKey && list.includes(session.licenseKey.trim().toUpperCase())) return true;
+  return false;
 }
 
 function getLocalRequests(): LicenseRequest[] {
@@ -155,6 +194,9 @@ export async function verifyLicenseKeyFromCloud(rawKey: string): Promise<License
 export async function createFirebaseUserLicense(session: LicenseSession): Promise<void> {
   const docId = session.id || `lic-${Date.now()}`;
 
+  if (session.id) unmarkLicenseAsDeleted(session.id);
+  if (session.licenseKey) unmarkLicenseAsDeleted(session.licenseKey);
+
   if (isCloudQuotaExhausted) {
     return;
   }
@@ -249,20 +291,50 @@ export async function extendFirebaseLicense(
 }
 
 /**
- * Delete a user / license from Firebase Firestore
+ * Delete a user / license from Firebase Firestore and register in deleted blacklist
  */
-export async function deleteFirebaseUserLicense(id: string): Promise<void> {
+export async function deleteFirebaseUserLicense(idOrKey: string): Promise<void> {
+  if (!idOrKey) return;
+  
+  // Register in deleted blacklist so it won't be resurrected by subscriptions or default lists
+  markLicenseAsDeleted(idOrKey);
+
   if (isCloudQuotaExhausted) return;
 
   try {
-    const docRef = doc(db, LICENSES_COLLECTION, id);
-    await deleteDoc(docRef);
+    // 1. Direct delete attempt by document id
+    const docRef = doc(db, LICENSES_COLLECTION, idOrKey);
+    await deleteDoc(docRef).catch(() => {});
+
+    // 2. Query and delete any documents matching id or licenseKey
+    const colRef = collection(db, LICENSES_COLLECTION);
+    const snapshot = await getDocs(colRef);
+    const deletePromises: Promise<any>[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as LicenseSession;
+      if (
+        docSnap.id === idOrKey ||
+        data.id === idOrKey ||
+        (data.licenseKey && data.licenseKey.trim().toUpperCase() === idOrKey.trim().toUpperCase())
+      ) {
+        deletePromises.push(deleteDoc(doc(db, LICENSES_COLLECTION, docSnap.id)).catch(() => {}));
+        
+        // Also cleanup user record if found
+        if (data.userEmail) {
+          const userKey = data.userEmail.replace(/[^a-zA-Z0-9_]/g, "_");
+          deletePromises.push(deleteDoc(doc(db, USERS_COLLECTION, userKey)).catch(() => {}));
+        }
+      }
+    });
+
+    await Promise.all(deletePromises);
   } catch (error) {
     if (isFirestoreQuotaError(error)) {
       isCloudQuotaExhausted = true;
       return;
     }
-    handleFirestoreError(error, OperationType.DELETE, `${LICENSES_COLLECTION}/${id}`);
+    console.warn("Firestore delete license fallback:", error);
   }
 }
 

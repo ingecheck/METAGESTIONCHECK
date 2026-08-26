@@ -344,16 +344,40 @@ Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su 
     onExtendSession(id, days);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`¿Eliminar definitivamente el usuario y licencia de "${name}"?`)) {
+  const handleDelete = async (sessToDelete: LicenseSession) => {
+    const isMaster = sessToDelete.role === "admin" || sessToDelete.userEmail === ADMIN_MASTER_EMAIL || sessToDelete.licenseKey === "ADMIN-OSCE-MASTER-2026";
+    if (isMaster) {
+      alert("No es posible eliminar la Cuenta Maestra del Administrador Principal.");
       return;
     }
-    try {
-      await deleteFirebaseUserLicense(id);
-    } catch (e) {
-      // Local fallback
+
+    const confirmText = `¿Está seguro de ELIMINAR DEFINITIVAMENTE la siguiente licencia?\n\n• Titular / Entidad: ${sessToDelete.userName} (${sessToDelete.companyName})\n• Clave: ${sessToDelete.licenseKey}\n• RUC: ${sessToDelete.ruc}\n\nEsta acción borrará la licencia del sistema y de la nube.`;
+    if (!window.confirm(confirmText)) {
+      return;
     }
-    onDeleteSession(id);
+
+    try {
+      setIsSaving(true);
+      // Delete from cloud and register in deleted blacklist
+      if (sessToDelete.id) {
+        await deleteFirebaseUserLicense(sessToDelete.id);
+      }
+      if (sessToDelete.licenseKey && sessToDelete.licenseKey !== sessToDelete.id) {
+        await deleteFirebaseUserLicense(sessToDelete.licenseKey);
+      }
+      // Delete locally
+      onDeleteSession(sessToDelete.id);
+      
+      setSaveSuccessMsg(`✓ Licencia de "${sessToDelete.userName}" (${sessToDelete.companyName}) eliminada correctamente.`);
+      setTimeout(() => setSaveSuccessMsg(null), 4000);
+    } catch (e) {
+      console.warn("Delete license error:", e);
+      onDeleteSession(sessToDelete.id);
+      setSaveSuccessMsg(`✓ Licencia eliminada del registro local.`);
+      setTimeout(() => setSaveSuccessMsg(null), 4000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Export all sessions to a JSON file (Free local backup)
@@ -1048,9 +1072,9 @@ Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su 
                             </button>
 
                             <button
-                              onClick={() => handleDelete(sess.id, sess.userName)}
-                              className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                              title="Eliminar licencia"
+                              onClick={() => handleDelete(sess)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Eliminar licencia definitivamente"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
