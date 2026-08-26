@@ -1171,7 +1171,8 @@ Como Titular de la cuenta, usted puede acceder y registrar a los miembros de su 
       {/* 5. Team Management Inspector Modal for Admin */}
       {inspectTeamLicense && (
         <TeamManagementModal
-          session={inspectTeamLicense}
+          isOpen={true}
+          currentUser={inspectTeamLicense}
           onClose={() => setInspectTeamLicense(null)}
           onUpdateSession={(updatedSession) => {
             onAddSession(updatedSession);

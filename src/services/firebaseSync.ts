@@ -241,6 +241,8 @@ export async function createFirebaseUserLicense(session: LicenseSession): Promis
   }
 }
 
+export const updateFirebaseUserLicense = createFirebaseUserLicense;
+
 /**
  * Update user license status in Firebase Firestore
  */

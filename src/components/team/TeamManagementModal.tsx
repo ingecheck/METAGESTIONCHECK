@@ -131,7 +131,7 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({
   const [formModuleScope, setFormModuleScope] = useState<"all" | "obras" | "ofertador">("all");
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentUser) return null;
 
   const teamMembers = currentUser.teamMembers || [];
   const maxMembers = currentUser.maxTeamMembers || 10;

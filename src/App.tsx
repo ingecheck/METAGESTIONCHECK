@@ -78,6 +78,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   subscribeToFirebaseLicenses,
   createFirebaseUserLicense,
+  updateFirebaseUserLicense,
   fetchFirebaseLicenses,
   isLicenseDeleted,
   markLicenseAsDeleted,
@@ -1174,22 +1175,40 @@ export default function App() {
           <TeamManagementModal
             isOpen={isTeamModalOpen}
             onClose={() => setIsTeamModalOpen(false)}
-            license={currentUser}
-            onSaveLicense={(updated) => {
-              setSessions((prev) =>
-                prev.map((s) => (s.id === updated.id ? updated : s))
-              );
-              setCurrentUser((prev) =>
-                prev && prev.id === updated.id
-                  ? {
-                      ...prev,
-                      teamMembers: updated.teamMembers,
-                      maxTeamMembers: updated.maxTeamMembers,
-                    }
-                  : prev
-              );
+            currentUser={currentUser}
+            onUpdateSession={(updated) => {
+              setSessions((prev) => {
+                const updatedList = prev.map((s) =>
+                  s.id === updated.id || s.licenseKey === updated.licenseKey ? updated : s
+                );
+                try {
+                  localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updatedList));
+                } catch (e) {}
+                return updatedList;
+              });
+              setCurrentUser(updated);
+              try {
+                localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updated));
+              } catch (e) {}
+              updateFirebaseUserLicense(updated).catch(() => {});
             }}
-            isAdmin={currentUser.role === "admin"}
+            onSwitchActiveMember={(memberId) => {
+              const updatedUser: LicenseSession = {
+                ...currentUser,
+                activeMemberId: memberId || undefined,
+              };
+              setCurrentUser(updatedUser);
+              setSessions((prev) => {
+                const updatedList = prev.map((s) =>
+                  s.id === updatedUser.id || s.licenseKey === updatedUser.licenseKey ? updatedUser : s
+                );
+                try {
+                  localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updatedList));
+                  localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updatedUser));
+                } catch (e) {}
+                return updatedList;
+              });
+            }}
           />
         )}
       </div>
