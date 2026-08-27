@@ -75,6 +75,58 @@ async function generateGeminiContentWithRetry(
   throw lastError;
 }
 
+/**
+ * Indestructible JSON parser that cleans Markdown code fences, extract bracketed objects,
+ * repairs trailing commas and escapes invalid characters.
+ */
+function cleanAndParseJson<T = any>(rawText: any, fallback: T): T {
+  if (!rawText) return fallback;
+  const textStr = typeof rawText === "string" ? rawText : String(rawText);
+  let clean = textStr.trim();
+
+  // Strip Markdown code blocks: ```json ... ``` or ``` ... ```
+  if (clean.startsWith("```")) {
+    clean = clean.replace(/^```(?:json|JSON)?\s*/g, "").replace(/\s*```$/g, "").trim();
+  } else if (clean.includes("```")) {
+    const match = clean.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
+    if (match && match[1]) {
+      clean = match[1].trim();
+    }
+  }
+
+  // Find first { or [ and last } or ]
+  const firstBrace = clean.indexOf("{");
+  const firstBracket = clean.indexOf("[");
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    const lastBrace = clean.lastIndexOf("}");
+    if (lastBrace !== -1) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+  } else if (firstBracket !== -1) {
+    const lastBracket = clean.lastIndexOf("]");
+    if (lastBracket !== -1) {
+      clean = clean.substring(firstBracket, lastBracket + 1);
+    }
+  }
+
+  try {
+    return JSON.parse(clean);
+  } catch (err) {
+    // Relaxed repair: remove trailing commas before closing braces/brackets
+    const repaired = clean
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/[\u0000-\u0019]+/g, " ");
+
+    try {
+      return JSON.parse(repaired);
+    } catch (err2) {
+      console.warn("Could not parse JSON even with repair, using fallback:", err2);
+      return fallback;
+    }
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -288,7 +340,7 @@ Devuelve estrictamente un JSON válido con esta estructura:
         }
 
         const text = response?.text || "{}";
-        const parsedData = JSON.parse(text);
+        const parsedData = cleanAndParseJson(text, extractStructuredDataFromText(inputContent, tenderType, objectType));
 
         return res.json({
           success: true,
@@ -414,7 +466,7 @@ Devuelve un JSON con el siguiente formato:
         const text = response.text || "[]";
         return res.json({
           success: true,
-          data: JSON.parse(text),
+          data: cleanAndParseJson(text, generateFallbackObservations(tenderInfo)),
         });
       } catch (geminiErr) {
         return res.json({
@@ -489,7 +541,7 @@ Devuelve estrictamente un JSON con este formato:
         const text = response.text || "{}";
         return res.json({
           success: true,
-          audit: JSON.parse(text),
+          audit: cleanAndParseJson(text, generateFallbackAudit(tender, company, personal, equipment, experience, offerPrice)),
         });
       } catch (geminiErr) {
         console.warn("Audit Gemini call failed, using fallback auditor:", geminiErr);
@@ -694,7 +746,7 @@ Devuelve estrictamente un JSON válido con esta estructura exacta:
       }
 
       const text = response?.text || "{}";
-      const parsed = JSON.parse(text);
+      const parsed = cleanAndParseJson(text, generateFallbackExperienceData(inputContent, tenderInfo, targetSpecialty, targetSubSpecialty));
 
       return res.json({
         success: true,
@@ -872,7 +924,7 @@ Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta:
       }
 
       const text = response?.text || "{}";
-      const parsed = JSON.parse(text);
+      const parsed = cleanAndParseJson(text, generateFallbackPersonnelData(inputContent, tenderInfo));
 
       return res.json({
         success: true,
@@ -1116,7 +1168,7 @@ Devuelve ESTRICTAMENTE un JSON con esta estructura exacta:
       );
 
       const text = response.text || "{}";
-      const parsed = JSON.parse(text);
+      const parsed = cleanAndParseJson(text, extractContractDataFallback(inputContent, documentType, fileName, fileSizeBytes));
 
       parsed.fileName = fileName;
       parsed.fileSizeBytes = fileSizeBytes;

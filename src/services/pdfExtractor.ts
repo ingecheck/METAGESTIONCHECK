@@ -150,13 +150,14 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
   }
 
   let cleanText = fullText.trim();
-  const isScanned = cleanText.length < 150;
+  const isScanned = cleanText.length < 250;
 
   let pageImagesBase64: string[] = [];
   let pdfBase64: string | undefined = undefined;
 
-  // Always attach raw PDF base64 if under 12MB for native Gemini Multimodal PDF understanding
-  if (file.size < 12 * 1024 * 1024) {
+  // If text was successfully extracted and is rich, we don't need heavy base64 payloads
+  // Only attach raw PDF base64 if the document is scanned / text is very short, and file size is <= 8MB
+  if (isScanned && file.size <= 8 * 1024 * 1024) {
     try {
       const b64 = arrayBufferToBase64(arrayBuffer.slice(0));
       if (b64) {
@@ -167,23 +168,23 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
     }
   }
 
-  // Generate sample page images for visual layout / OCR fallback if canvas is available
-  if (pdfDoc && typeof document !== "undefined") {
+  // Generate sample page images for visual OCR only if document appears scanned
+  if (isScanned && pdfDoc && typeof document !== "undefined") {
     try {
-      const pagesToSample = [1, 2, 3, 4, 5].filter((p) => p <= numPages);
+      const pagesToSample = [1, 2, 3, 4].filter((p) => p <= numPages);
 
       for (const p of pagesToSample) {
         try {
           const page = await pdfDoc.getPage(p);
-          const viewport = page.getViewport({ scale: 1.0 });
+          const viewport = page.getViewport({ scale: 0.9 });
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
-          canvas.width = Math.min(viewport.width, 1000);
-          canvas.height = Math.min(viewport.height, 1400);
+          canvas.width = Math.min(viewport.width, 900);
+          canvas.height = Math.min(viewport.height, 1200);
 
           if (ctx) {
             await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
-            const base64Data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+            const base64Data = canvas.toDataURL("image/jpeg", 0.65).split(",")[1];
             if (base64Data) {
               pageImagesBase64.push(base64Data);
             }
@@ -198,7 +199,7 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
   }
 
   if (!cleanText) {
-    cleanText = `[Expediente / Bases de Concurso Público en PDF: "${file.name}" (${numPages} páginas, ${(file.size / 1024).toFixed(1)} KB). Digitalización e interpretación integral de requisitos de calificación, experiencia, personal clave, equipamiento y presupuesto referencial.]`;
+    cleanText = `[Expediente / Bases de Concurso Público en PDF: "${file.name}" (${numPages} páginas, ${(file.size / 1024).toFixed(1)} KB). Requisitos de calificación, experiencia, personal clave, equipamiento y presupuesto referencial.]`;
   }
 
   return {
@@ -207,7 +208,7 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
     fileName: file.name,
     fileSizeBytes: file.size,
     isScannedImage: isScanned,
-    pdfBase64: pdfBase64,
-    pageImagesBase64: pageImagesBase64.length > 0 ? pageImagesBase64 : undefined,
+    pdfBase64: isScanned ? pdfBase64 : undefined,
+    pageImagesBase64: isScanned && pageImagesBase64.length > 0 ? pageImagesBase64 : undefined,
   };
 }
