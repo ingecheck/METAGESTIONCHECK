@@ -33,13 +33,17 @@ async function generateGeminiContentWithRetry(
 ) {
   const modelsToTry = [
     primaryModel,
+    "gemini-3.7-flash",
+    "gemini-3.1-pro-preview",
     "gemini-flash-latest",
-    "gemini-3.1-flash-lite",
   ];
+
+  // Remove duplicates while preserving order
+  const uniqueModels = Array.from(new Set(modelsToTry));
 
   let lastError: any = null;
 
-  for (const model of modelsToTry) {
+  for (const model of uniqueModels) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
@@ -252,17 +256,38 @@ Devuelve estrictamente un JSON válido con esta estructura:
           ];
         }
 
-        const response = await generateGeminiContentWithRetry(
-          ai,
-          "gemini-3.7-flash",
-          contentsPayload,
-          {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          }
-        );
+        let response: any = null;
 
-        const text = response.text || "{}";
+        // Try primary multimodal / image payload first
+        try {
+          response = await generateGeminiContentWithRetry(
+            ai,
+            "gemini-3.7-flash",
+            contentsPayload,
+            {
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            }
+          );
+        } catch (multiErr) {
+          console.warn("Multimodal PDF payload attempt failed, retrying with text prompt:", multiErr);
+          const safeText =
+            inputContent.length > 80000
+              ? inputContent.substring(0, 80000) + "\n...[Texto truncado]..."
+              : inputContent;
+
+          response = await generateGeminiContentWithRetry(
+            ai,
+            "gemini-3.7-flash",
+            [`${promptInstruction}\n\n--- CONTENIDO EXTRAÍDO DEL DOCUMENTO / BASES DEL CONCURSO ---\n${safeText || "Procedimiento de selección de contratación pública"}`],
+            {
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            }
+          );
+        }
+
+        const text = response?.text || "{}";
         const parsedData = JSON.parse(text);
 
         return res.json({
@@ -270,11 +295,11 @@ Devuelve estrictamente un JSON válido con esta estructura:
           data: parsedData,
         });
       } catch (geminiErr: any) {
-        console.warn("Gemini multimodal OCR fallback:", geminiErr?.message || geminiErr);
+        console.warn("Gemini analysis fallback:", geminiErr?.message || geminiErr);
         return res.json({
           success: true,
           isMock: true,
-          notice: "Extracción procesada con motor de contingencia OSCE.",
+          notice: "Extracción procesada con motor de contingencia de contrataciones del Estado.",
           data: extractStructuredDataFromText(inputContent, tenderType, objectType),
         });
       }
@@ -638,17 +663,37 @@ Devuelve estrictamente un JSON válido con esta estructura exacta:
         ];
       }
 
-      const response = await generateGeminiContentWithRetry(
-        ai,
-        "gemini-3.7-flash",
-        contentsPayload,
-        {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-        }
-      );
+      let response: any = null;
 
-      const text = response.text || "{}";
+      try {
+        response = await generateGeminiContentWithRetry(
+          ai,
+          "gemini-3.7-flash",
+          contentsPayload,
+          {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          }
+        );
+      } catch (multiErr) {
+        console.warn("Multimodal experience payload failed, retrying with text prompt:", multiErr);
+        const safeText =
+          inputContent.length > 80000
+            ? inputContent.substring(0, 80000) + "\n...[Texto truncado]..."
+            : inputContent;
+
+        response = await generateGeminiContentWithRetry(
+          ai,
+          "gemini-3.7-flash",
+          [`${promptInstruction}\n\n--- DOCUMENTOS / CONTRATOS DE EXPERIENCIA DE OBRAS / SERVICIOS ---\n${safeText || "Experiencia del postor en contratación pública"}`],
+          {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          }
+        );
+      }
+
+      const text = response?.text || "{}";
       const parsed = JSON.parse(text);
 
       return res.json({
@@ -796,17 +841,37 @@ Devuelve ÚNICAMENTE un objeto JSON con esta estructura exacta:
         ];
       }
 
-      const response = await generateGeminiContentWithRetry(
-        ai,
-        "gemini-3.7-flash",
-        contentsPayload,
-        {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-        }
-      );
+      let response: any = null;
 
-      const text = response.text || "{}";
+      try {
+        response = await generateGeminiContentWithRetry(
+          ai,
+          "gemini-3.7-flash",
+          contentsPayload,
+          {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          }
+        );
+      } catch (multiErr) {
+        console.warn("Multimodal personnel payload failed, retrying with text prompt:", multiErr);
+        const safeText =
+          inputContent.length > 80000
+            ? inputContent.substring(0, 80000) + "\n...[Texto truncado]..."
+            : inputContent;
+
+        response = await generateGeminiContentWithRetry(
+          ai,
+          "gemini-3.7-flash",
+          [`${promptInstruction}\n\n--- DOCUMENTOS / CVs / CERTIFICADOS / EQUIPOS ---\n${safeText || "Personal clave y equipamiento estratégico"}`],
+          {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          }
+        );
+      }
+
+      const text = response?.text || "{}";
       const parsed = JSON.parse(text);
 
       return res.json({

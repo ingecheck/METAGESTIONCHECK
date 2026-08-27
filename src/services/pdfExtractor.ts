@@ -1,11 +1,12 @@
 import * as pdfjsLib from "pdfjs-dist";
 
-// Safe setup for PDF worker
+// Setup for PDF worker with multiple safe fallbacks
 if (typeof window !== "undefined") {
   try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    // Try setting standard CDN worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "4.10.38"}/build/pdf.worker.min.mjs`;
   } catch (e) {
-    console.warn("Could not set external workerSrc", e);
+    console.warn("Could not set external workerSrc, will use fallback extraction", e);
   }
 }
 
@@ -20,44 +21,95 @@ export interface ExtractedPdfResult {
 }
 
 /**
- * Converts an ArrayBuffer to a base64 string safely without callstack limit issues
+ * Converts an ArrayBuffer to a base64 string safely without callstack limit issues or memory spikes
  */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  const chunkSize = 8192;
-  for (let i = 0; i < len; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
-    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  try {
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    let binary = "";
+    const chunkSize = 4096;
+    for (let i = 0; i < len; i += chunkSize) {
+      const end = Math.min(i + chunkSize, len);
+      for (let j = i; j < end; j++) {
+        binary += String.fromCharCode(bytes[j]);
+      }
+    }
+    return btoa(binary);
+  } catch (err) {
+    console.warn("Error converting ArrayBuffer to Base64:", err);
+    return "";
   }
-  return btoa(binary);
 }
 
 /**
- * Fast and optimized extraction of textual content from an uploaded PDF File.
- * Extracts digital text layer instantly. If the document is scanned, renders only key sample pages.
+ * Fast direct binary string extractor from raw PDF stream when PDF.js worker fails or for complex PDFs
+ */
+function extractRawStringsFromPdfBuffer(buffer: ArrayBuffer): string {
+  try {
+    const bytes = new Uint8Array(buffer);
+    const decoder = new TextDecoder("latin1");
+    const rawString = decoder.decode(bytes);
+
+    const matches: string[] = [];
+    // Extract text in parentheses (PDF literal strings)
+    const literalMatches = rawString.match(/\(([^()]{3,200})\)/g);
+    if (literalMatches && literalMatches.length > 0) {
+      for (const m of literalMatches.slice(0, 1000)) {
+        const clean = m.slice(1, -1).replace(/\\[0-9]{3}/g, " ").replace(/\\/g, "").trim();
+        if (clean.length > 2 && /[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]/.test(clean)) {
+          matches.push(clean);
+        }
+      }
+    }
+
+    if (matches.length > 10) {
+      return matches.join(" ");
+    }
+  } catch (rawErr) {
+    console.warn("Raw stream extraction fallback failed:", rawErr);
+  }
+  return "";
+}
+
+/**
+ * Fast, reliable and optimized extraction of textual content from an uploaded PDF File.
+ * Extracts digital text layer instantly. If the document is scanned, renders key sample pages.
+ * Never throws an uncaught error.
  */
 export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfResult> {
-  const arrayBuffer = await file.arrayBuffer();
-  
+  let arrayBuffer: ArrayBuffer;
+  try {
+    arrayBuffer = await file.arrayBuffer();
+  } catch (readErr) {
+    console.warn("Could not read file arrayBuffer directly:", readErr);
+    return {
+      text: `[Archivo PDF: ${file.name} - ${(file.size / 1024).toFixed(1)} KB]`,
+      pageCount: 1,
+      fileName: file.name,
+      fileSizeBytes: file.size,
+      isScannedImage: false,
+    };
+  }
+
   let fullText = "";
   let numPages = 1;
   let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
 
+  // Attempt 1: Standard PDF.js text layer extraction
   try {
-    // Pass a cloned buffer slice to prevent detaching the original buffer
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(arrayBuffer.slice(0)),
       useSystemFonts: true,
       disableFontFace: false,
+      stopAtErrors: false,
     });
 
     pdfDoc = await loadingTask.promise;
-    numPages = pdfDoc.numPages;
+    numPages = pdfDoc.numPages || 1;
 
-    // Process up to 30 pages max to ensure fast speed on large files
-    const pagesToRead = Math.min(numPages, 30);
+    // Process up to 40 pages max to ensure fast speed on large files
+    const pagesToRead = Math.min(numPages, 40);
 
     for (let pageNum = 1; pageNum <= pagesToRead; pageNum++) {
       try {
@@ -71,7 +123,7 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
 
         for (const item of textContent.items as any[]) {
           if (!item.str) continue;
-          
+
           if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
             pageText += "\n";
           } else if (pageText.length > 0 && !pageText.endsWith(" ") && !pageText.endsWith("\n")) {
@@ -80,7 +132,7 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
           pageText += item.str;
           lastY = item.transform[5];
         }
-        
+
         if (pageText.trim()) {
           fullText += `\n--- PÁGINA ${pageNum} ---\n` + pageText.trim();
         }
@@ -89,10 +141,15 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
       }
     }
   } catch (loadErr) {
-    console.warn("Could not parse text layer with PDF.js:", loadErr);
+    console.warn("PDF.js text layer extraction warning (will use binary/OCR fallback):", loadErr);
+    // Fallback: extract raw text strings directly
+    const fallbackRawText = extractRawStringsFromPdfBuffer(arrayBuffer);
+    if (fallbackRawText) {
+      fullText = fallbackRawText;
+    }
   }
 
-  const cleanText = fullText.trim();
+  let cleanText = fullText.trim();
   const isScanned = cleanText.length < 150;
 
   let pageImagesBase64: string[] = [];
@@ -101,31 +158,38 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
   // Always attach raw PDF base64 if under 12MB for native Gemini Multimodal PDF understanding
   if (file.size < 12 * 1024 * 1024) {
     try {
-      pdfBase64 = arrayBufferToBase64(arrayBuffer.slice(0));
+      const b64 = arrayBufferToBase64(arrayBuffer.slice(0));
+      if (b64) {
+        pdfBase64 = b64;
+      }
     } catch (b64Err) {
       console.warn("Could not convert buffer to base64:", b64Err);
     }
   }
 
-  // Generate sample page images for visual layout / OCR fallback
+  // Generate sample page images for visual layout / OCR fallback if canvas is available
   if (pdfDoc && typeof document !== "undefined") {
     try {
       const pagesToSample = [1, 2, 3, 4, 5].filter((p) => p <= numPages);
 
       for (const p of pagesToSample) {
-        const page = await pdfDoc.getPage(p);
-        const viewport = page.getViewport({ scale: 1.2 });
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        try {
+          const page = await pdfDoc.getPage(p);
+          const viewport = page.getViewport({ scale: 1.0 });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = Math.min(viewport.width, 1000);
+          canvas.height = Math.min(viewport.height, 1400);
 
-        if (ctx) {
-          await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
-          const base64Data = canvas.toDataURL("image/jpeg", 0.75).split(",")[1];
-          if (base64Data) {
-            pageImagesBase64.push(base64Data);
+          if (ctx) {
+            await (page.render({ canvasContext: ctx, viewport: viewport } as any).promise);
+            const base64Data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+            if (base64Data) {
+              pageImagesBase64.push(base64Data);
+            }
           }
+        } catch (pageRenderErr) {
+          console.warn(`Could not render sample page ${p}:`, pageRenderErr);
         }
       }
     } catch (renderErr) {
@@ -133,8 +197,12 @@ export async function extractTextFromPdfFile(file: File): Promise<ExtractedPdfRe
     }
   }
 
+  if (!cleanText) {
+    cleanText = `[Expediente / Bases de Concurso Público en PDF: "${file.name}" (${numPages} páginas, ${(file.size / 1024).toFixed(1)} KB). Digitalización e interpretación integral de requisitos de calificación, experiencia, personal clave, equipamiento y presupuesto referencial.]`;
+  }
+
   return {
-    text: cleanText || `[Documento PDF: "${file.name}" (${numPages} páginas). Digitalización y extracción de metadatos de obra, montos, plazos y cláusulas contractuales].`,
+    text: cleanText,
     pageCount: numPages,
     fileName: file.name,
     fileSizeBytes: file.size,

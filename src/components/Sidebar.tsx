@@ -84,10 +84,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [activeTab, isObrasTab]);
 
-  // Sub-items for Module 1: Ofertador / Postor
+  // Sub-items for Module 1: Ofertador / Postor / Concursos Públicos
   const ofertadorNavItems = [
     { id: "dashboard", label: "Dashboard del Postor", icon: LayoutDashboard },
-    { id: "analyzer", label: "1. Análisis Bases SEACE", icon: FileText },
+    { id: "analyzer", label: "1. Bases & Concurso Público", icon: FileText },
     {
       id: "company",
       label: company.esConsorcio ? "2. Consorcio Postor" : "2. Perfil Empresa",
@@ -130,7 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>METAGESTIONCHECK</span>
               </div>
               <div className="text-[10px] text-blue-400 font-medium truncate">
-                Licitaciones & Control de Obras
+                Concursos Públicos & Obras
               </div>
             </div>
           </div>
@@ -239,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Briefcase className="w-3 h-3" />
                 </div>
                 <span className="truncate uppercase tracking-wide text-[11px]">
-                  1. Ofertador / SEACE
+                  1. Concursos Públicos / Licitaciones
                 </span>
               </div>
               <div className="flex items-center space-x-1.5 shrink-0">

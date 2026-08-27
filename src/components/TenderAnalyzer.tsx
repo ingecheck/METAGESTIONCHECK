@@ -330,19 +330,22 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
 
   return (
     <div className="space-y-3.5 pb-6">
-      {/* Top Banner - Compact & Focused */}
+      {/* Top Banner - Compact & Focused on Contractors & Business Owners */}
       <div className="bg-slate-900 rounded-xl p-4 text-white shadow-xs border border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center space-x-2 text-blue-400 text-[11px] font-semibold uppercase tracking-wider mb-0.5">
               <Compass className="w-3.5 h-3.5" />
-              <span>Paso 1 de 6 • Análisis de Bases SEACE</span>
+              <span>Paso 1 de 6 • Convocatoria & Requisitos del Concurso Público</span>
             </div>
-            <h1 className="text-base font-bold tracking-tight text-slate-100">
-              Analizador de Bases: Especialidad y Requisitos de Calificación
+            <h1 className="text-base font-bold tracking-tight text-slate-100 flex items-center gap-2">
+              <span>Analizador de Bases & Convocatorias para Empresarios y Postores</span>
+              <span className="bg-blue-500/20 text-blue-300 text-[10px] font-normal px-2 py-0.5 rounded-full border border-blue-500/30">
+                Para ganar Licitaciones del Estado
+              </span>
             </h1>
             <p className="text-slate-300 text-xs mt-0.5 max-w-2xl">
-              Cargue el PDF de Bases del SEACE o pegue el texto para extraer automáticamente especialidad, sub-especialidad y requisitos de calificación.
+              Cargue el PDF de Bases, Términos de Referencia (TDR) o Expediente Técnico para extraer de inmediato los requisitos de calificación, experiencia requerida en obras/servicios similares, personal clave y equipamiento estratégico.
             </p>
           </div>
 
@@ -350,7 +353,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
             onClick={() => onNavigateToTab ? onNavigateToTab("company") : onNavigateToBuilder && onNavigateToBuilder()}
             className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-xs cursor-pointer flex items-center space-x-1.5 shrink-0 self-start sm:self-auto"
           >
-            <span>Ir a Perfil Postor (Paso 2)</span>
+            <span>Ir a Perfil Postor / Consorcio (Paso 2)</span>
             <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -391,7 +394,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               }`}
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>Subir Archivo PDF de Bases</span>
+              <span>Subir Bases o TDR del Concurso (PDF)</span>
             </button>
 
             <button
@@ -403,12 +406,12 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Pegar Texto de Bases / TDR</span>
+              <span>Pegar Texto de Convocatoria</span>
             </button>
           </div>
 
           <span className="text-[10.5px] text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-            Motor de Análisis Normativo SEACE
+            Inteligencia para Empresarios y Postores
           </span>
         </div>
 
@@ -469,10 +472,10 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
                       <UploadCloud className="w-4 h-4" />
                     </div>
                     <div className="text-xs font-bold text-slate-800">
-                      Haga clic o arrastre el archivo PDF de las Bases del SEACE
+                      Haga clic o arrastre el archivo PDF de las Bases o TDR del Concurso Público
                     </div>
                     <div className="text-[10.5px] text-slate-500">
-                      Bases Administrativas, Términos de Referencia o Especificaciones Técnicas
+                      Bases Administrativas, Términos de Referencia (TDR), Especificaciones Técnicas o Expediente Técnico
                     </div>
                   </div>
                 )}
@@ -499,7 +502,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
                 rows={4}
-                placeholder="Pegue aquí el texto copiado de las bases del SEACE (Capítulo III Requerimiento, TDR, Requisitos de Calificación, etc.). El sistema extraerá automáticamente el alcance, plazos, valor referencial, especialidad, sub-especialidad, personal clave y equipamiento..."
+                placeholder="Pegue aquí el texto copiado de las bases del concurso público (Capítulo III Requerimiento, TDR, Requisitos de Calificación, etc.). El sistema extraerá y estructurará automáticamente el alcance, plazos, valor referencial, especialidad, obras o servicios similares, personal clave y equipamiento para armar la oferta..."
                 className="w-full text-xs font-mono text-slate-800 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-slate-50/50"
               />
             </div>
@@ -510,7 +513,7 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
             <div className="text-[10.5px] text-slate-500">
               {rawText ? (
                 <span className="text-emerald-700 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Bases listas para procesamiento
+                  <CheckCircle2 className="w-3 h-3" /> Convocatoria lista para estructurar propuesta
                 </span>
               ) : (
                 <span>Cargue el archivo o pegue el texto para iniciar.</span>
@@ -525,12 +528,12 @@ export const TenderAnalyzer: React.FC<TenderAnalyzerProps> = ({
               {isAnalyzing ? (
                 <>
                   <RefreshCw className="w-3 h-3 animate-spin" />
-                  <span>Procesando...</span>
+                  <span>Estructurando Oferta Ganadora...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3 h-3 text-amber-300" />
-                  <span>Analizar y Estructurar Oferta</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Analizar Concurso y Estructurar Oferta</span>
                 </>
               )}
             </button>

@@ -1,6 +1,6 @@
 {
   "name": "METAGESTIONCHECK",
-  "description": "Suite integral e independiente de Licitaciones SEACE y Control de Obras Públicas bajo la normativa del Estado, con Base de Datos Unificada de Entidad en tiempo real, experiencia BIM 3D/4D/5D, Curva S, Valorizaciones, Cuaderno Digital y Liquidación.",
+  "description": "Suite integral para empresarios, contratistas y consorcios para ganar Concursos Públicos y Licitaciones del Estado (Ley N° 32069 / TUO Ley 30225), con análisis de bases, armado de ofertas técnicas, experiencia Anexo 8, y gestión completa de obras públicas.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

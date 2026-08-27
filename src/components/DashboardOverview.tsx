@@ -150,11 +150,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                Mis Ofertas y Convocatorias SEACE
+              <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <span>Mis Ofertas y Concursos Públicos</span>
+                <span className="bg-blue-100 text-blue-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                  Postores & Contratistas
+                </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Seleccione la oferta en la que desea trabajar para cargar sus datos en los 7 módulos del expediente
+                Gestione las licitaciones y concursos del Estado en los que su empresa o consorcio participa para estructurar propuestas técnicas y económicas ganadoras
               </p>
             </div>
           </div>
@@ -164,7 +167,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             className="flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer shrink-0"
           >
             <FileText className="w-4 h-4" />
-            <span>Cargar / Analizar Bases (Paso 1)</span>
+            <span>Cargar Convocatoria / Bases (Paso 1)</span>
           </button>
         </div>
 
