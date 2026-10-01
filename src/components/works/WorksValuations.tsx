@@ -16,6 +16,7 @@ import {
   Table,
   ShieldAlert,
   ListTree,
+  FileCheck2,
 } from "lucide-react";
 import {
   ObraProyecto,
@@ -25,6 +26,7 @@ import {
 } from "../../types/obras";
 import { WorksItemsExecutedTable } from "./WorksItemsExecutedTable";
 import { WorksValuationAuditor } from "./WorksValuationAuditor";
+import { EntityValuationReportsManager } from "./EntityValuationReportsManager";
 import { SAMPLE_PARTIDAS_OBRA } from "../../data/samplePartidas";
 import { SAMPLE_AUDITORIA_DATA } from "../../data/sampleIncongruencias";
 
@@ -38,7 +40,8 @@ interface WorksValuationsProps {
   setAuditorias?: React.Dispatch<React.SetStateAction<AuditoriaValorizacion[]>>;
   auditoria?: AuditoriaValorizacion;
   setAuditoria?: React.Dispatch<React.SetStateAction<AuditoriaValorizacion | undefined>>;
-  initialSubTab?: "curva-s" | "partidas" | "auditoria";
+  initialSubTab?: "curva-s" | "partidas" | "auditoria" | "informe-entidad";
+  onNavigateToInformeEntidad?: () => void;
 }
 
 export const WorksValuations: React.FC<WorksValuationsProps> = ({
@@ -52,8 +55,9 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
   auditoria: externalAuditoria,
   setAuditoria: externalSetAuditoria,
   initialSubTab = "curva-s",
+  onNavigateToInformeEntidad,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<"curva-s" | "partidas" | "auditoria">(
+  const [activeSubTab, setActiveSubTab] = useState<"curva-s" | "partidas" | "auditoria" | "informe-entidad">(
     initialSubTab
   );
 
@@ -185,6 +189,33 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
               Alerta
             </span>
           </button>
+
+          <button
+            onClick={() => {
+              if (onNavigateToInformeEntidad) {
+                onNavigateToInformeEntidad();
+              } else {
+                setActiveSubTab("informe-entidad");
+              }
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeSubTab === "informe-entidad"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-emerald-800 hover:bg-emerald-50 hover:text-emerald-950 border border-emerald-300/60"
+            }`}
+          >
+            <FileCheck2 className="w-4 h-4 text-emerald-600" />
+            <span>4. Informes Automáticos Entidad (Word - Rioja)</span>
+            <span
+              className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                activeSubTab === "informe-entidad"
+                  ? "bg-emerald-700 text-white"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              Word
+            </span>
+          </button>
         </div>
       </div>
 
@@ -206,7 +237,23 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onNavigateToInformeEntidad) {
+                    onNavigateToInformeEntidad();
+                  } else {
+                    setActiveSubTab("informe-entidad");
+                  }
+                }}
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                title="Generar informe oficial de aprobación de valorización en Word (.docx) con el formato de la Municipalidad Provincial de Rioja"
+              >
+                <FileCheck2 className="w-4 h-4" />
+                <span>Generar Informe en Word (Rioja)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() =>
@@ -638,7 +685,16 @@ export const WorksValuations: React.FC<WorksValuationsProps> = ({
           onSaveAuditorias={(newAudits) => {
             currentSetAuditorias(newAudits);
           }}
-          onNavigateToSubTab={(sub) => setActiveSubTab(sub)}
+          onNavigateToSubTab={(sub) => setActiveSubTab(sub as any)}
+        />
+      )}
+
+      {/* VIEW 4: INFORMES AUTOMÁTICOS DE ENTIDAD (RIOJA - WORD) */}
+      {activeSubTab === "informe-entidad" && (
+        <EntityValuationReportsManager
+          currentObra={obra}
+          valorizaciones={valorizaciones}
+          onNavigateToTab={(tab) => setActiveSubTab(tab as any)}
         />
       )}
     </div>

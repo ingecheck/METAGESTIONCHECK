@@ -25,6 +25,7 @@ import { WorksValuations } from "./components/works/WorksValuations";
 import { WorksModificationsManager } from "./components/works/WorksModificationsManager";
 import { WorksSettlementManager } from "./components/works/WorksSettlementManager";
 import { WorksBimViewer } from "./components/works/WorksBimViewer";
+import { WorksPortfolioTracker } from "./components/works/WorksPortfolioTracker";
 
 import {
   TenderInfo,
@@ -62,6 +63,7 @@ import { INITIAL_AUDITORIAS_OBRA } from "./data/sampleIncongruencias";
 import { WorksItemsExecutedTable } from "./components/works/WorksItemsExecutedTable";
 import { WorksValuationAuditor } from "./components/works/WorksValuationAuditor";
 import { ContractDocumentUploader } from "./components/works/ContractDocumentUploader";
+import { EntityValuationReportsManager } from "./components/works/EntityValuationReportsManager";
 import {
   generateAnexo1Docx,
   generateAnexo2Docx,
@@ -1125,6 +1127,33 @@ export default function App() {
               obra={obra}
               liquidacion={liquidacion}
               setLiquidacion={setLiquidacion}
+            />
+          )}
+
+          {/* ======================================================== */}
+          {/* APARTADO 3: GESTIÓN DOCUMENTARIA & INFORMES OFICIALES (OEI / GERENCIA / RIOJA) */}
+          {/* ======================================================== */}
+          {(activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad") && (
+            <EntityValuationReportsManager
+              currentObra={obra}
+              valorizaciones={valorizaciones}
+              initialTab={activeTab}
+              onNavigateToTab={setActiveTab}
+            />
+          )}
+
+          {/* ======================================================== */}
+          {/* APARTADO 4: SEGUIMIENTO DE CARTERA OEI (1-CLICK PIPELINE) */}
+          {/* ======================================================== */}
+          {activeTab === "seguimiento-cartera" && (
+            <WorksPortfolioTracker
+              onSelectObra={(partialObra) =>
+                setObra((prev) => ({
+                  ...prev,
+                  ...partialObra,
+                }))
+              }
+              onNavigateToTab={setActiveTab}
             />
           )}
         </main>

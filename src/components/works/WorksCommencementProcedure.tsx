@@ -633,6 +633,17 @@ _______________________________          _______________________________
               <Save className="w-4 h-4" />
               <span>Guardar y Sincronizar Fechas</span>
             </button>
+
+            {onNavigateSubtab && (
+              <button
+                type="button"
+                onClick={() => onNavigateSubtab("seguimiento-cartera")}
+                className="flex items-center space-x-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                <span>Ver Cartera Completa (23 Obras)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 

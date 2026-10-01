@@ -26,6 +26,7 @@ import {
   ListTree,
   FileCheck2,
   Box,
+  FolderKanban,
 } from "lucide-react";
 import { TenderInfo, CompanyProfile } from "../types/osce";
 import { LicenseSession } from "../types/auth";
@@ -70,19 +71,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? currentUser.teamMembers.find((m) => m.id === currentUser.activeMemberId)
     : null;
 
-  // Accordion open/close state for both main modules
-  const isObrasTab = activeTab.startsWith("obras-");
-  const [isOfertadorOpen, setIsOfertadorOpen] = useState<boolean>(!isObrasTab);
+  // Accordion open/close state for all main modules
+  const isObrasTab = activeTab.startsWith("obras-") && activeTab !== "obras-informe-entidad";
+  const isInformesTab = activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad";
+  const [isOfertadorOpen, setIsOfertadorOpen] = useState<boolean>(!isObrasTab && !isInformesTab);
   const [isObrasOpen, setIsObrasOpen] = useState<boolean>(isObrasTab);
+  const [isInformesOpen, setIsInformesOpen] = useState<boolean>(isInformesTab);
 
   // Auto expand the module containing the active tab
   useEffect(() => {
-    if (isObrasTab) {
+    if (isInformesTab) {
+      setIsInformesOpen(true);
+    } else if (isObrasTab) {
       setIsObrasOpen(true);
     } else if (activeTab !== "admin-panel") {
       setIsOfertadorOpen(true);
     }
-  }, [activeTab, isObrasTab]);
+  }, [activeTab, isObrasTab, isInformesTab]);
 
   // Sub-items for Module 1: Ofertador / Postor / Concursos Públicos
   const ofertadorNavItems = [
@@ -110,6 +115,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "obras-adicionales", label: "6. Adicionales y Plazos", icon: Scale },
     { id: "obras-liquidacion", label: "7. Recepción y Liquidación", icon: Award },
     { id: "obras-bim", label: "8. Experiencia BIM 3D y 4D", icon: Box },
+  ];
+
+  // Sub-items for Module 3: Gestión Documentaria & Informes de Inversiones (OEI / Gerencia / Rioja)
+  const informesNavItems = [
+    {
+      id: "informes-locadores",
+      label: "1. Locadores de Servicios (O.S.)",
+      icon: Users,
+    },
+    {
+      id: "informes-jefe-oei",
+      label: "2. Informes Jefe de OEI",
+      icon: FileText,
+    },
+    {
+      id: "informes-gerente",
+      label: "3. Informes Gerente Inversiones",
+      icon: Building2,
+    },
+    {
+      id: "informes-memos",
+      label: "4. Notas & Memorándums OEI",
+      icon: MessageSquare,
+    },
+    {
+      id: "informes-entidad",
+      label: "5. Valorizaciones de Obra (Rioja)",
+      icon: FileCheck2,
+    },
   ];
 
   return (
@@ -378,6 +412,126 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </div>
           )}
+        </div>
+
+        {/* ======================================================== */}
+        {/* APARTADO 3: INFORMES AUTOMÁTICOS DE ENTIDAD (RIOJA / OSCE) */}
+        {/* ======================================================== */}
+        <div className="space-y-1 pt-1 border-t border-slate-800/60">
+          {!isCollapsed ? (
+            <button
+              onClick={() => {
+                setIsInformesOpen(!isInformesOpen);
+                if (!isInformesOpen && !isInformesTab) {
+                  setActiveTab("informes-entidad");
+                }
+              }}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                isInformesTab
+                  ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/50"
+                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+              }`}
+            >
+              <div className="flex items-center space-x-2 truncate">
+                <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-2xs shrink-0">
+                  <Building2 className="w-3 h-3" />
+                </div>
+                <span className="truncate uppercase tracking-wide text-[11px]">
+                  3. Informes OEI & Inversiones
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+                  {informesNavItems.length}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    isInformesOpen ? "rotate-0" : "-rotate-90"
+                  }`}
+                />
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveTab("informes-locadores");
+                setIsCollapsed(false);
+              }}
+              className="w-full flex justify-center py-2 text-emerald-400 hover:bg-slate-800 rounded-lg"
+              title="3. Gestión Documentaria & Informes OEI (Rioja)"
+            >
+              <Building2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Desplegable de Informes de Entidad */}
+          {(!isCollapsed ? isInformesOpen : true) && (
+            <div className="space-y-0.5 pl-1">
+              {informesNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    id={`sidebar-item-${item.id}`}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer group text-left ${
+                      isActive
+                        ? "bg-emerald-600 text-white font-semibold shadow-xs"
+                        : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                    }`}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <Icon
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        isActive ? "text-white" : "text-emerald-400 group-hover:text-emerald-200"
+                      }`}
+                    />
+                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ======================================================== */}
+        {/* APARTADO 4: SEGUIMIENTO DE CARTERA OEI (1-CLICK PIPELINE) */}
+        {/* ======================================================== */}
+        <div className="pt-1 border-t border-slate-800/60">
+          <button
+            id="sidebar-item-seguimiento-cartera"
+            onClick={() => setActiveTab("seguimiento-cartera")}
+            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === "seguimiento-cartera"
+                ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20"
+                : "text-amber-400 hover:bg-slate-800/80 hover:text-amber-300"
+            }`}
+            title={isCollapsed ? "4. Seguimiento de Cartera OEI" : undefined}
+          >
+            <div className="flex items-center space-x-2 truncate">
+              <div
+                className={`w-5 h-5 rounded-md flex items-center justify-center shadow-2xs shrink-0 ${
+                  activeTab === "seguimiento-cartera"
+                    ? "bg-slate-950 text-amber-400"
+                    : "bg-amber-500 text-slate-950"
+                }`}
+              >
+                <FolderKanban className="w-3 h-3" />
+              </div>
+              {!isCollapsed && (
+                <span className="truncate uppercase tracking-wide text-[11px]">
+                  4. Seguimiento Cartera OEI
+                </span>
+              )}
+            </div>
+            {!isCollapsed && (
+              <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold border border-amber-500/30">
+                23 Obras
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Master Admin Tab */}

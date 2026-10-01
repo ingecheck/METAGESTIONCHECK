@@ -27,6 +27,8 @@ import { WorksModificationsManager } from "./WorksModificationsManager";
 import { WorksSettlementManager } from "./WorksSettlementManager";
 import { ContractDocumentUploader } from "./ContractDocumentUploader";
 import { WorksBimViewer } from "./WorksBimViewer";
+import { EntityValuationReportsManager } from "./EntityValuationReportsManager";
+import { FileCheck2 } from "lucide-react";
 
 interface WorksControlSuiteProps {
   obra: ObraProyecto;
@@ -76,9 +78,10 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
     { id: "dashboard-obras", label: "Panel Principal", icon: Building2 },
     { id: "lector-contratos", label: "1. Análisis de Contratos / O.S.", icon: FileText },
     { id: "valorizaciones", label: "2. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "adicionales", label: "3. Adicionales y Plazos", icon: Scale },
-    { id: "liquidacion", label: "4. Recepción y Liquidación", icon: Award },
-    { id: "bim", label: "5. Experiencia BIM 3D y 4D", icon: Box },
+    { id: "informe-entidad", label: "3. Informes Entidad (Word - Rioja)", icon: FileCheck2 },
+    { id: "adicionales", label: "4. Adicionales y Plazos", icon: Scale },
+    { id: "liquidacion", label: "5. Recepción y Liquidación", icon: Award },
+    { id: "bim", label: "6. Experiencia BIM 3D y 4D", icon: Box },
   ];
 
   return (
@@ -140,6 +143,15 @@ export const WorksControlSuite: React.FC<WorksControlSuiteProps> = ({
           obra={obra}
           valorizaciones={valorizaciones}
           setValorizaciones={setValorizaciones}
+          onNavigateToInformeEntidad={() => handleSubTabChange("informe-entidad")}
+        />
+      )}
+
+      {currentSubTab === "informe-entidad" && (
+        <EntityValuationReportsManager
+          currentObra={obra}
+          valorizaciones={valorizaciones}
+          onNavigateToTab={handleSubTabChange}
         />
       )}
 
