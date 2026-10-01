@@ -121,6 +121,20 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           parsed.forEach((s: LicenseSession) => {
             if (!isLicenseDeleted(s)) {
+              // Ensure default members (e.g. for Rioja) are merged into cached sessions
+              const defaultMatch = INITIAL_DEFAULT_SESSIONS.find(
+                (d) => d.licenseKey.toUpperCase() === s.licenseKey.toUpperCase()
+              );
+              if (defaultMatch && defaultMatch.teamMembers) {
+                const existingMemberIds = new Set((s.teamMembers || []).map((m) => m.id));
+                const mergedTeamMembers = [...(s.teamMembers || [])];
+                defaultMatch.teamMembers.forEach((dm) => {
+                  if (!existingMemberIds.has(dm.id)) {
+                    mergedTeamMembers.push(dm);
+                  }
+                });
+                s.teamMembers = mergedTeamMembers;
+              }
               map.set(s.licenseKey.toUpperCase(), s);
             }
           });
@@ -138,6 +152,20 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.licenseKey && parsed.status === "active") {
+          // Ensure team members from latest default sessions are merged
+          const defaultMatch = INITIAL_DEFAULT_SESSIONS.find(
+            (d) => d.licenseKey.toUpperCase() === parsed.licenseKey.toUpperCase()
+          );
+          if (defaultMatch && defaultMatch.teamMembers) {
+            const existingMemberIds = new Set((parsed.teamMembers || []).map((m: any) => m.id));
+            const merged = [...(parsed.teamMembers || [])];
+            defaultMatch.teamMembers.forEach((dm) => {
+              if (!existingMemberIds.has(dm.id)) {
+                merged.push(dm);
+              }
+            });
+            parsed.teamMembers = merged;
+          }
           return parsed;
         }
       } catch (e) {
@@ -362,6 +390,22 @@ export default function App() {
     // Admin security check
     if (currentUser.role !== "admin" && currentUser.userEmail !== ADMIN_MASTER_EMAIL) {
       setActiveTab((prev) => (prev === "admin-panel" ? "dashboard" : prev));
+    }
+
+    // Direct Municipalities / Entidades like Rioja to Seguimiento Cartera OEI
+    if (
+      currentUser.role === "entidad" ||
+      currentUser.entityType === "municipalidad" ||
+      currentUser.companyName?.toUpperCase().includes("RIOJA") ||
+      currentUser.licenseKey?.toUpperCase().includes("RIOJA")
+    ) {
+      setActiveTab((prev) => {
+        // If current tab is private postor tender dashboard, switch to OEI Seguimiento de Cartera
+        if (prev === "dashboard" || prev === "analyzer" || prev === "builder") {
+          return "seguimiento-cartera";
+        }
+        return prev;
+      });
     }
   }, [currentUser?.id, currentUser?.activeMemberId]);
 

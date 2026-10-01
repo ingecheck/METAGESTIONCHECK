@@ -13,6 +13,7 @@ import {
   Briefcase,
   HardHat,
   ChevronDown,
+  FolderKanban,
 } from "lucide-react";
 import { TenderInfo, CompanyProfile } from "../types/osce";
 import { LicenseSession } from "../types/auth";
@@ -52,13 +53,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onToggleSidebar,
 }) => {
   const isAdmin = currentUser?.role === "admin";
-  const isObras = activeTab.startsWith("obras-");
+  const isInformes = activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad";
+  const isCartera = activeTab === "seguimiento-cartera";
+  const isObras = activeTab.startsWith("obras-") && !isInformes;
+  const isOfertador = !isObras && !isInformes && !isCartera && activeTab !== "admin-panel";
 
   return (
     <header className="bg-white border-b border-slate-200/80 sticky top-0 z-20 shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between gap-4">
         {/* Left: Hamburger & Active Module Switcher */}
-        <div className="flex items-center space-x-3 overflow-hidden">
+        <div className="flex items-center space-x-2.5 overflow-hidden">
           <button
             onClick={onToggleSidebar}
             className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
@@ -67,43 +71,90 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Module Switcher Pills */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs">
+          {/* Module Switcher Pills - All 4 Apartados */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-[580px] lg:max-w-none">
+            {/* 1. Concursos SEACE */}
             <button
               onClick={() => onSelectTab("dashboard")}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                !isObras && activeTab !== "admin-panel"
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                isOfertador
                   ? "bg-blue-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
               }`}
+              title="1. Concursos Públicos y Licitaciones SEACE"
             >
               <Briefcase className="w-3.5 h-3.5" />
-              <span>Ofertador SEACE</span>
+              <span className="hidden md:inline">1. Concursos OSCE</span>
+              <span className="md:hidden">OSCE</span>
             </button>
 
+            {/* 2. Control de Obras */}
             <button
               onClick={() => onSelectTab("obras-dashboard")}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
                 isObras
                   ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
               }`}
+              title="2. Control y Supervisión de Obras"
             >
               <HardHat className="w-3.5 h-3.5" />
-              <span>Control de Obras</span>
+              <span className="hidden md:inline">2. Control Obras</span>
+              <span className="md:hidden">Obras</span>
+            </button>
+
+            {/* 3. Informes OEI & Inversiones (Rioja) */}
+            <button
+              onClick={() => onSelectTab("informes-locadores")}
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                isInformes
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100/70"
+              }`}
+              title="3. Informes OEI & Inversiones (Formato Oficial Rioja)"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">3. Informes OEI</span>
+              <span className="md:hidden">Informes</span>
+            </button>
+
+            {/* 4. Seguimiento Cartera OEI (Rioja 23 Obras) */}
+            <button
+              onClick={() => onSelectTab("seguimiento-cartera")}
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg font-black transition cursor-pointer whitespace-nowrap ${
+                isCartera
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "text-amber-800 hover:text-amber-950 hover:bg-amber-100"
+              }`}
+              title="4. Seguimiento Cartera OEI (23 Obras de Rioja - 1 Click Pipeline)"
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">4. Cartera OEI</span>
+              <span className="sm:hidden">Cartera</span>
+              <span className="text-[9px] bg-amber-900/10 text-amber-950 px-1 rounded font-mono font-bold">
+                23
+              </span>
             </button>
           </div>
 
           {/* Active project / tender badge */}
-          <div className="hidden lg:flex items-center space-x-2 text-xs truncate">
+          <div className="hidden xl:flex items-center space-x-2 text-xs truncate">
             <span className="text-slate-300">•</span>
-            {!isObras ? (
-              <span className="bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-md border border-blue-200/60 truncate max-w-xs">
-                {tender.nomenclatura || "Ninguna oferta seleccionada"}
+            {isCartera ? (
+              <span className="bg-amber-50 text-amber-900 font-semibold px-2 py-0.5 rounded-md border border-amber-200/80 truncate max-w-xs">
+                Matriz de 23 Obras • M.P. Rioja
               </span>
-            ) : (
+            ) : isInformes ? (
+              <span className="bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-200/80 truncate max-w-xs">
+                Centro Documentario OEI • Rioja
+              </span>
+            ) : isObras ? (
               <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md border border-indigo-200/60 truncate max-w-xs">
                 {obra?.cui ? `CUI ${obra.cui} • ${obra.nombre}` : (obra?.nombre || "Ninguna obra seleccionada")}
+              </span>
+            ) : (
+              <span className="bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-md border border-blue-200/60 truncate max-w-xs">
+                {tender.nomenclatura || "Ninguna oferta seleccionada"}
               </span>
             )}
           </div>

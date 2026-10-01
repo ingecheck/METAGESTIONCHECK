@@ -328,6 +328,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       const cleanQuery = query.toLowerCase();
       const cleanDigits = query.replace(/\D/g, "");
+      const normalizeStr = (s?: string) =>
+        (s || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim();
+      const normalizedQuery = normalizeStr(query);
+      const queryWords = normalizedQuery.split(/\s+/).filter(Boolean);
 
       for (const sess of allSessions) {
         if (!sess.teamMembers || sess.teamMembers.length === 0) continue;
@@ -336,8 +344,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           const matchDni = member.dni && cleanDigits && member.dni.replace(/\D/g, "") === cleanDigits;
           const matchEmail = member.email && member.email.trim().toLowerCase() === cleanQuery;
           const matchCip = member.cip && member.cip.toLowerCase().replace(/\s+/g, "") === cleanQuery.replace(/\s+/g, "");
+          const normName = normalizeStr(member.name);
+          const matchNameDirect = normName.includes(normalizedQuery);
+          const matchNameWords = queryWords.length > 0 && queryWords.every((word) => normName.includes(word));
+          const matchCargo = member.cargoText && normalizeStr(member.cargoText).includes(normalizedQuery);
 
-          if (matchDni || matchEmail || matchCip) {
+          if (matchDni || matchEmail || matchCip || matchNameDirect || matchNameWords || matchCargo) {
             targetSession = sess;
             targetMember = member;
             break;

@@ -74,9 +74,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Accordion open/close state for all main modules
   const isObrasTab = activeTab.startsWith("obras-") && activeTab !== "obras-informe-entidad";
   const isInformesTab = activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad";
-  const [isOfertadorOpen, setIsOfertadorOpen] = useState<boolean>(!isObrasTab && !isInformesTab);
+  const isCarteraTab = activeTab === "seguimiento-cartera";
+  const isRiojaEntity =
+    currentUser?.role === "entidad" ||
+    currentUser?.entityType === "municipalidad" ||
+    currentUser?.companyName?.toUpperCase().includes("RIOJA") ||
+    currentUser?.licenseKey?.toUpperCase().includes("RIOJA");
+
+  const [isOfertadorOpen, setIsOfertadorOpen] = useState<boolean>(
+    !isObrasTab && !isInformesTab && !isCarteraTab && !isRiojaEntity
+  );
   const [isObrasOpen, setIsObrasOpen] = useState<boolean>(isObrasTab);
-  const [isInformesOpen, setIsInformesOpen] = useState<boolean>(isInformesTab);
+  const [isInformesOpen, setIsInformesOpen] = useState<boolean>(isInformesTab || isRiojaEntity);
 
   // Auto expand the module containing the active tab
   useEffect(() => {
@@ -84,10 +93,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsInformesOpen(true);
     } else if (isObrasTab) {
       setIsObrasOpen(true);
-    } else if (activeTab !== "admin-panel") {
+    } else if (activeTab === "seguimiento-cartera") {
+      // Keep focused
+    } else if (activeTab !== "admin-panel" && !isRiojaEntity) {
       setIsOfertadorOpen(true);
     }
-  }, [activeTab, isObrasTab, isInformesTab]);
+  }, [activeTab, isObrasTab, isInformesTab, isRiojaEntity]);
 
   // Sub-items for Module 1: Ofertador / Postor / Concursos Públicos
   const ofertadorNavItems = [
@@ -250,6 +261,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation List with Modules Accordion */}
       <nav className="flex-1 px-2.5 py-2 space-y-3 overflow-y-auto" aria-label="Sidebar Navigation">
+        {/* Quick Access Shortcut for OEI / Rioja */}
+        {!isCollapsed && (
+          <div className="p-2 rounded-xl bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-indigo-500/10 border border-amber-500/30 space-y-1.5 shadow-2xs">
+            <div className="flex items-center justify-between text-[10px] font-bold text-amber-300">
+              <span className="uppercase tracking-wider flex items-center gap-1">
+                <span>⭐ ACCESOS OEI RIOJA</span>
+              </span>
+              <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded font-black text-[9px]">
+                23 Obras
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab("seguimiento-cartera")}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${
+                  activeTab === "seguimiento-cartera"
+                    ? "bg-amber-500 text-slate-950 shadow-xs"
+                    : "bg-slate-800 text-amber-300 hover:bg-slate-700 hover:text-white"
+                }`}
+                title="4. Seguimiento Cartera OEI (23 Proyectos)"
+              >
+                <FolderKanban className="w-3 h-3 shrink-0 text-amber-400" />
+                <span className="truncate">4. Cartera</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsInformesOpen(true);
+                  setActiveTab("informes-locadores");
+                }}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${
+                  isInformesTab
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-slate-800 text-emerald-300 hover:bg-slate-700 hover:text-white"
+                }`}
+                title="3. Informes OEI & Inversiones (Oficial Rioja)"
+              >
+                <Building2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                <span className="truncate">3. Informes</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ======================================================== */}
         {/* APARTADO 1: OFERTADOR / POSTOR (LICITACIONES SEACE)     */}
         {/* ======================================================== */}

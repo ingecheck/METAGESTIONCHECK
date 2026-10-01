@@ -366,7 +366,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 10,
-    encargado: "-",
+    encargado: "JOSUE",
     proyecto: "COBERTURA-SAN AGUSTIN",
     cui: "2722218",
     contratoEjecucionNumero: "PUBLICADO 31/07",
@@ -384,7 +384,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 11,
-    encargado: "-",
+    encargado: "JOSUE",
     proyecto: "COBERTURA-2724099",
     cui: "2724099",
     contratoEjecucionNumero: "PUBLICADO 31/07",
@@ -402,7 +402,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 12,
-    encargado: "-",
+    encargado: "LUIS",
     proyecto: "COBERTURA-BARRIOS ALTOS",
     cui: "2723034",
     contratoEjecucionNumero: "PUBLICADO 31/07",
@@ -420,7 +420,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 13,
-    encargado: "-",
+    encargado: "LUIS",
     proyecto: "FONDES-IE DEL",
     cui: "2689751",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -438,7 +438,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 14,
-    encargado: "-",
+    encargado: "PICO",
     proyecto: "FONDES-IE JUAN",
     cui: "2689748",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -456,7 +456,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 15,
-    encargado: "-",
+    encargado: "PICO",
     proyecto: "FONDES-IE",
     cui: "2689756",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -474,7 +474,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 16,
-    encargado: "-",
+    encargado: "JOSUE",
     proyecto: "FONDES-IE SANTA",
     cui: "2689539",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -492,7 +492,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 17,
-    encargado: "-",
+    encargado: "LUIS",
     proyecto: "PUENTE-PABLO MORI",
     cui: "2677501",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -510,7 +510,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 18,
-    encargado: "-",
+    encargado: "PICO",
     proyecto: "PUENTE-2677502",
     cui: "2677502",
     contratoEjecucionNumero: "BASES INTEGRADAS 24/07",
@@ -528,7 +528,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 19,
-    encargado: "-",
+    encargado: "LUIS",
     proyecto: "PUENTE-EL",
     cui: "2677531",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -546,7 +546,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 20,
-    encargado: "-",
+    encargado: "JOSUE",
     proyecto: "PUENTE-2677528",
     cui: "2677528",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -564,7 +564,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 21,
-    encargado: "-",
+    encargado: "PICO",
     proyecto: "PUENTE-TUMBARO",
     cui: "2677530",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -582,7 +582,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 9,
-    encargado: "-",
+    encargado: "LUIS",
     proyecto: "PISTAS PACHACUTEC",
     cui: "2521144",
     contratoEjecucionNumero: "INTEGRADO BASES 08/07",

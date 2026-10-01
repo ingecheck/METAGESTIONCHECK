@@ -61,7 +61,14 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Merge with seeds to ensure any updated assignments (e.g. JOSUE, LUIS, PICO) are reflected
+          return parsed.map((p: ProyectoCartera) => {
+            const seedMatch = PROYECTOS_RIOJA_SEED.find((s) => s.id === p.id);
+            if (seedMatch && (p.encargado === "-" || !p.encargado) && seedMatch.encargado !== "-") {
+              return { ...p, encargado: seedMatch.encargado };
+            }
+            return p;
+          });
         }
       }
     } catch (e) {
@@ -468,7 +475,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <Filter className="w-3 h-3" />
               Encargado:
             </span>
-            {["TODOS", "JHON", "JHENIFER", "JEZER", "SIN_ASIGNAR"].map((enc) => (
+            {["TODOS", "JOSUE", "LUIS", "PICO", "JHON", "JHENIFER", "JEZER", "SIN_ASIGNAR"].map((enc) => (
               <button
                 key={enc}
                 onClick={() => setFilterEncargado(enc)}
@@ -589,7 +596,13 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                       <td className="p-2.5 border-r border-slate-200">
                         <span
                           className={`font-black px-2 py-0.5 rounded text-[10px] tracking-wide inline-block ${
-                            p.encargado === "JHON"
+                            p.encargado === "JOSUE"
+                              ? "bg-cyan-100 text-cyan-800 border border-cyan-300"
+                              : p.encargado === "LUIS"
+                              ? "bg-indigo-100 text-indigo-800 border border-indigo-300"
+                              : p.encargado === "PICO"
+                              ? "bg-amber-100 text-amber-900 border border-amber-300"
+                              : p.encargado === "JHON"
                               ? "bg-purple-100 text-purple-800 border border-purple-200"
                               : p.encargado === "JHENIFER"
                               ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
@@ -1031,8 +1044,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             </div>
 
             {/* Distribution by Encargado */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {["JHON", "JHENIFER", "JEZER"].map((enc) => {
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {["JOSUE", "LUIS", "PICO", "JHON", "JHENIFER", "JEZER"].map((enc) => {
                 const encProjs = proyectos.filter((p) => p.encargado === enc);
                 const encMonto = encProjs.reduce((sum, p) => sum + (p.contratoEjecucionMonto || 0), 0);
                 const encAvg =
