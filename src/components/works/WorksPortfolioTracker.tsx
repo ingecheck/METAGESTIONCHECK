@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   FolderKanban,
   CheckCircle2,
@@ -30,6 +30,7 @@ import {
   FileText,
   Save,
   Check,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   ProyectoCartera,
@@ -48,26 +49,71 @@ interface WorksPortfolioTrackerProps {
   onNavigateToTab?: (tab: string) => void;
 }
 
-const LOCAL_STORAGE_KEY = "mgc_cartera_rioja_proyectos_v1";
+const LOCAL_STORAGE_KEY = "mgc_cartera_rioja_proyectos_v3";
 
 export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   onSelectObra,
   onNavigateToTab,
 }) => {
+  // Synchronized horizontal scroll refs
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
+
   // Load projects from localStorage or seed
   const [proyectos, setProyectos] = useState<ProyectoCartera[]>(() => {
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const saved =
+        localStorage.getItem(LOCAL_STORAGE_KEY) ||
+        localStorage.getItem("mgc_cartera_rioja_proyectos_v1");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with seeds to ensure any updated assignments (e.g. JOSUE, LUIS, PICO) are reflected
-          return parsed.map((p: ProyectoCartera) => {
-            const seedMatch = PROYECTOS_RIOJA_SEED.find((s) => s.id === p.id);
-            if (seedMatch && (p.encargado === "-" || !p.encargado) && seedMatch.encargado !== "-") {
-              return { ...p, encargado: seedMatch.encargado };
-            }
-            return p;
+          // Merge with latest seed so updated contractual & supervisory data are always reflected
+          return PROYECTOS_RIOJA_SEED.map((seedP) => {
+            const savedMatch = parsed.find((p: ProyectoCartera) => p.id === seedP.id);
+            if (!savedMatch) return seedP;
+            return {
+              ...savedMatch,
+              contratoEjecucionNumero: seedP.contratoEjecucionNumero || savedMatch.contratoEjecucionNumero,
+              contratoEjecucionFechaFirma: seedP.contratoEjecucionFechaFirma || savedMatch.contratoEjecucionFechaFirma,
+              contratoEjecucionMonto: seedP.contratoEjecucionMonto || savedMatch.contratoEjecucionMonto,
+              contratoEjecucionEmpresa: seedP.contratoEjecucionEmpresa || savedMatch.contratoEjecucionEmpresa,
+              residenteNombre: seedP.residenteNombre || savedMatch.residenteNombre,
+              residenteCip: seedP.residenteCip || savedMatch.residenteCip,
+              contratoSupervisionNumero: seedP.contratoSupervisionNumero || savedMatch.contratoSupervisionNumero,
+              contratoSupervisionFechaFirma: seedP.contratoSupervisionFechaFirma || savedMatch.contratoSupervisionFechaFirma,
+              contratoSupervisionMonto: seedP.contratoSupervisionMonto || savedMatch.contratoSupervisionMonto,
+              contratoSupervisionEmpresa: seedP.contratoSupervisionEmpresa || savedMatch.contratoSupervisionEmpresa,
+              supervisorNombre: seedP.supervisorNombre || savedMatch.supervisorNombre,
+              supervisorCip: seedP.supervisorCip || savedMatch.supervisorCip,
+              entregaTerrenoFecha: seedP.entregaTerrenoFecha ?? savedMatch.entregaTerrenoFecha,
+              inicioObraFecha: seedP.inicioObraFecha ?? savedMatch.inicioObraFecha,
+              plazoDias: seedP.plazoDias ?? savedMatch.plazoDias,
+              fechaTerminoActualizado: seedP.fechaTerminoActualizado ?? savedMatch.fechaTerminoActualizado,
+              observaciones: seedP.observaciones || savedMatch.observaciones,
+              estado: seedP.estado || savedMatch.estado,
+              hitos: seedP.hitos.map((sh) => {
+                const savedHito = savedMatch.hitos?.find((h: HitoNormativo) => h.id === sh.id);
+                if (!savedHito) return sh;
+                return {
+                  ...sh,
+                  cumplido: savedHito.cumplido || sh.cumplido,
+                  fecha: savedHito.fecha || sh.fecha,
+                };
+              }),
+            };
           });
         }
       }
@@ -108,10 +154,13 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
         const updatedHitos = proj.hitos.map((h) => {
           if (h.id === hitoId) {
+            const nextCumplido = !h.cumplido;
             return {
               ...h,
-              cumplido: !h.cumplido,
-              fecha: !h.cumplido ? new Date().toLocaleDateString("es-PE") : undefined,
+              cumplido: nextCumplido,
+              fecha: nextCumplido
+                ? h.fecha || new Date().toLocaleDateString("es-PE")
+                : undefined,
             };
           }
           return h;
@@ -138,6 +187,37 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         const updatedProj = {
           ...proj,
           estado: updatedEstado,
+          hitos: updatedHitos,
+        };
+
+        if (selectedProject && selectedProject.id === proyectoId) {
+          setSelectedProject(updatedProj);
+        }
+
+        return updatedProj;
+      })
+    );
+  };
+
+  // Update date for a specific milestone
+  const handleUpdateHitoFecha = (proyectoId: number, hitoId: string, newFecha: string) => {
+    setProyectos((prev) =>
+      prev.map((proj) => {
+        if (proj.id !== proyectoId) return proj;
+
+        const updatedHitos = proj.hitos.map((h) => {
+          if (h.id === hitoId) {
+            return {
+              ...h,
+              fecha: newFecha,
+              cumplido: newFecha.trim() !== "" ? true : h.cumplido,
+            };
+          }
+          return h;
+        });
+
+        const updatedProj = {
+          ...proj,
           hitos: updatedHitos,
         };
 
@@ -536,8 +616,25 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[750px]">
-            <table className="w-full text-left border-collapse text-xs">
+          {/* Barra de desplazamiento horizontal sincronizada (Superior) */}
+          <div className="bg-slate-100/90 px-3 py-2 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px] shrink-0">
+              <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+              <span>Barra de Desplazamiento Horizontal (Mueve la matriz a izquierda / derecha):</span>
+            </div>
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopScroll}
+              className="overflow-x-auto overflow-y-hidden flex-1 h-5 cursor-ew-resize bg-slate-200 rounded-md border border-slate-300"
+              title="Desplaza horizontalmente la matriz sin tener que bajar al fondo"
+            >
+              <div style={{ width: 1780 }} className="h-5" />
+            </div>
+          </div>
+
+          {/* Contenedor principal de la tabla (sin cuadro vertical encerrado: baja con la barra del navegador) */}
+          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto w-full">
+            <table className="min-w-[1780px] w-full text-left border-collapse text-xs">
               <thead className="bg-slate-900 text-white sticky top-0 z-20 font-bold text-[11px]">
                 <tr>
                   <th className="p-2.5 border-r border-slate-800 text-center w-12">ID</th>
@@ -784,7 +881,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Notificación al Supervisor (Art. 176.1.a)"
+                              title={`Notificación al Supervisor (Art. 176.1.a)${hitoNotifSup?.fecha ? ` • Fecha: ${hitoNotifSup.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoNotifSup?.cumplido ? "text-emerald-700" : "text-slate-300"}`} />
                               <span>Notif Sup</span>
@@ -799,7 +896,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Entrega de Terreno (Art. 176.1.b)"
+                              title={`Entrega de Terreno (Art. 176.1.b)${hitoTerreno?.fecha ? ` • Fecha: ${hitoTerreno.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoTerreno?.cumplido ? "text-emerald-700" : "text-slate-300"}`} />
                               <span>Terreno</span>
@@ -814,7 +911,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Entrega del Expediente Técnico Completo (Art. 176.1.c)"
+                              title={`Entrega del Expediente Técnico Completo (Art. 176.1.c)${hitoExpediente?.fecha ? ` • Fecha: ${hitoExpediente.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoExpediente?.cumplido ? "text-emerald-700" : "text-slate-300"}`} />
                               <span>Exp E.T.</span>
@@ -829,7 +926,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Cuaderno de Obra Digital"
+                              title={`Cuaderno de Obra Digital${hitoCod?.fecha ? ` • Fecha: ${hitoCod.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoCod?.cumplido ? "text-emerald-700" : "text-slate-300"}`} />
                               <span>COD</span>
@@ -844,7 +941,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Valorización N° 01 Aprobada"
+                              title={`Valorización N° 01 Aprobada${hitoValo1?.fecha ? ` • Fecha: ${hitoValo1.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoValo1?.cumplido ? "text-emerald-700" : "text-slate-300"}`} />
                               <span>Val 01</span>
@@ -859,12 +956,23 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-teal-100 text-teal-800 border-teal-300"
                                   : "bg-white text-slate-500 border-slate-300 hover:border-blue-400"
                               }`}
-                              title="Acta de Recepción de Obra"
+                              title={`Acta de Recepción de Obra${hitoRecepcion?.fecha ? ` • Fecha: ${hitoRecepcion.fecha}` : ""}`}
                             >
                               <Check className={`w-2.5 h-2.5 ${hitoRecepcion?.cumplido ? "text-teal-700" : "text-slate-300"}`} />
                               <span>Recep.</span>
                             </button>
                           </div>
+
+                          {/* Quick trigger for all file dates in this project */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProject(p)}
+                            className="w-full mt-1 py-0.5 px-1.5 rounded text-[9px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center justify-center gap-1 transition cursor-pointer"
+                            title="Abrir checklist normativo para ver y registrar las fechas de cada archivo"
+                          >
+                            <Calendar className="w-2.5 h-2.5 text-blue-600" />
+                            <span>Ver / Registrar Fechas ({p.hitos.filter((h) => h.fecha).length}/{p.hitos.length})</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1170,35 +1278,74 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                   </span>
                 </div>
 
-                <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   {selectedProject.hitos.map((hito) => (
                     <div
                       key={hito.id}
-                      onClick={() => handleToggleHito(selectedProject.id, hito.id)}
-                      className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition select-none ${
+                      className={`p-2.5 rounded-lg border transition ${
                         hito.cumplido
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-950 font-semibold"
-                          : "bg-white border-slate-200 text-slate-700 hover:bg-blue-50/50"
+                          ? "bg-emerald-50/70 border-emerald-300 text-emerald-950 font-semibold"
+                          : "bg-white border-slate-200 text-slate-700"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div
-                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                            hito.cumplido
-                              ? "bg-emerald-600 border-emerald-600 text-white"
-                              : "border-slate-400 bg-white"
-                          }`}
+                          onClick={() => handleToggleHito(selectedProject.id, hito.id)}
+                          className="flex items-start gap-2.5 cursor-pointer flex-1 select-none"
                         >
-                          {hito.cumplido && <Check className="w-3 h-3" />}
+                          <div
+                            className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border mt-0.5 transition ${
+                              hito.cumplido
+                                ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
+                                : "border-slate-400 bg-white hover:border-blue-500"
+                            }`}
+                          >
+                            {hito.cumplido && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                          <div>
+                            <div className="text-xs leading-tight font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                              <span>{hito.nombre}</span>
+                              <span className="font-mono text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                                {hito.codigo}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-normal mt-0.5">
+                              {hito.baseLegal}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs leading-tight">{hito.nombre}</div>
-                          <div className="text-[10px] text-slate-400 font-normal">{hito.baseLegal}</div>
+
+                        {/* Fecha en que se elabora / tramita el archivo */}
+                        <div
+                          className="flex items-center gap-1.5 shrink-0 pl-7 sm:pl-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span className="text-[10px] font-bold text-slate-600 shrink-0">Fecha:</span>
+                          <input
+                            type="text"
+                            placeholder="DD/MM/AAAA"
+                            value={hito.fecha || ""}
+                            onChange={(e) =>
+                              handleUpdateHitoFecha(selectedProject.id, hito.id, e.target.value)
+                            }
+                            className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white border border-slate-300 rounded-md focus:border-blue-500 focus:outline-none text-slate-800"
+                          />
+                          {!hito.fecha && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const today = new Date().toLocaleDateString("es-PE");
+                                handleUpdateHitoFecha(selectedProject.id, hito.id, today);
+                              }}
+                              className="text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-1.5 py-1 rounded border border-blue-200 cursor-pointer"
+                              title="Asignar fecha de hoy"
+                            >
+                              Hoy
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <span className="font-mono text-[10px] font-bold text-slate-500 shrink-0">
-                        {hito.codigo}
-                      </span>
                     </div>
                   ))}
                 </div>
