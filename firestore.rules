@@ -54,6 +54,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
+    // Multi-tenant Cartera de Obras per Municipality / Tenant
+    match /cartera_obras/{entityId} {
+      allow read, write: if true;
+    }
+
     // Connection testing
     match /test/{docId} {
       allow read, write: if true;

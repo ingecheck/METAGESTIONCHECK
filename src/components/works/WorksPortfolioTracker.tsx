@@ -58,6 +58,12 @@ import { LicenseSession } from "../../types/auth";
 import { formatPEN } from "../../services/docxGenerator";
 import { WorksValorizacionesIntegratedModal } from "./WorksValorizacionesIntegratedModal";
 import { WorksValorizacionesView } from "./WorksValorizacionesView";
+import {
+  saveCarteraToFirestore,
+  subscribeToCartera,
+  loadCarteraFromFirestore,
+  CarteraSyncPayload,
+} from "../../services/carteraFirestoreSync";
 
 interface WorksPortfolioTrackerProps {
   onSelectObra?: (obra: Partial<ObraProyecto>) => void;
@@ -115,6 +121,20 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     return `Entidad ${selectedEntityKey}`;
   }, [selectedEntityKey, currentUser]);
 
+  // Active member / user details for multi-user audit and attribution
+  const activeMember =
+    currentUser?.activeMemberId && currentUser?.teamMembers
+      ? currentUser.teamMembers.find((m) => m.id === currentUser.activeMemberId)
+      : null;
+  const currentMemberName = activeMember?.name || currentUser?.userName || "Usuario Municipal";
+  const currentMemberEmail = activeMember?.email || currentUser?.userEmail || "";
+
+  const [lastSyncInfo, setLastSyncInfo] = useState<{
+    lastUpdated: string;
+    updatedBy: string;
+    source?: string;
+  } | null>(null);
+
   // Excel input ref & feedback notice
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [importNotice, setImportNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -137,6 +157,59 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     return selectedEntityKey === "RIOJA" ? PROYECTOS_RIOJA_SEED : [];
   });
 
+  // Real-time Firestore Multi-tenant Synchronization
+  // Ensures that when Pilco, Luis, Jhon, Carlos, etc. upload an Excel, all members receive it live
+  useEffect(() => {
+    let isCancelled = false;
+
+    // Initial check from Cloud Firestore
+    loadCarteraFromFirestore(selectedEntityKey).then((cloudData) => {
+      if (!isCancelled && cloudData && Array.isArray(cloudData.proyectos) && cloudData.proyectos.length > 0) {
+        setProyectos(cloudData.proyectos);
+        setLastSyncInfo({
+          lastUpdated: cloudData.lastUpdated,
+          updatedBy: cloudData.updatedBy,
+          source: cloudData.source,
+        });
+      }
+    });
+
+    // Real-time subscription: when ANY member of this municipality updates or uploads an Excel,
+    // all other members of this municipality receive the update instantly.
+    // Other municipalities have their own isolated entityId and never see this data.
+    const unsubscribe = subscribeToCartera(
+      selectedEntityKey,
+      (remotePayload) => {
+        if (isCancelled) return;
+        if (remotePayload && Array.isArray(remotePayload.proyectos)) {
+          setProyectos(remotePayload.proyectos);
+          setLastSyncInfo({
+            lastUpdated: remotePayload.lastUpdated,
+            updatedBy: remotePayload.updatedBy,
+            source: remotePayload.source,
+          });
+
+          // If the update was made by another colleague in this municipality, notify on screen
+          if (remotePayload.updatedBy && remotePayload.updatedBy !== currentMemberName) {
+            setImportNotice({
+              message: `🔄 Sincronización en Tiempo Real: ${remotePayload.updatedBy} acaba de actualizar la cartera de obras (${new Date(remotePayload.lastUpdated).toLocaleTimeString("es-PE")}).`,
+              type: "success",
+            });
+            setTimeout(() => setImportNotice(null), 8000);
+          }
+        }
+      },
+      (err) => {
+        console.warn("Firestore subscription note:", err);
+      }
+    );
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [selectedEntityKey, entityDisplayName, currentMemberName]);
+
   // Reload projects when switching entities (multi-tenant isolation)
   useEffect(() => {
     try {
@@ -154,7 +227,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     }
   }, [selectedEntityKey, activeStorageKey]);
 
-  // Save to active storage key on change
+  // Save to active storage key on change (local caching)
   useEffect(() => {
     try {
       localStorage.setItem(activeStorageKey, JSON.stringify(proyectos));
@@ -193,12 +266,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
   // Callback to update project from valorizaciones modal
   const handleSaveUpdatedProject = (updated: ProyectoCartera) => {
-    setProyectos((prev) =>
-      prev.map((p) => (p.id === updated.id ? updated : p))
-    );
+    const nextList = proyectos.map((p) => (p.id === updated.id ? updated : p));
+    setProyectos(nextList);
     if (selectedProject?.id === updated.id) {
       setSelectedProject(updated);
     }
+    // Sync live to Firestore so all team members in this municipality see the change
+    saveCarteraToFirestore(
+      selectedEntityKey,
+      nextList,
+      currentMemberName,
+      currentMemberEmail,
+      "checklist_sync"
+    );
   };
 
   // Download official Excel template
@@ -233,8 +313,9 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   const handleToggleHito = (proyectoId: number, hitoId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
-    setProyectos((prev) =>
-      prev.map((proj) => {
+    let nextListToSync: ProyectoCartera[] = [];
+    setProyectos((prev) => {
+      const nextList = prev.map((proj) => {
         if (proj.id !== proyectoId) return proj;
 
         const updatedHitos = proj.hitos.map((h) => {
@@ -280,14 +361,27 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         }
 
         return updatedProj;
-      })
-    );
+      });
+      nextListToSync = nextList;
+      return nextList;
+    });
+
+    if (nextListToSync.length > 0) {
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextListToSync,
+        currentMemberName,
+        currentMemberEmail,
+        "manual_edit"
+      );
+    }
   };
 
   // Update date for a specific milestone
   const handleUpdateHitoFecha = (proyectoId: number, hitoId: string, newFecha: string) => {
-    setProyectos((prev) =>
-      prev.map((proj) => {
+    let nextListToSync: ProyectoCartera[] = [];
+    setProyectos((prev) => {
+      const nextList = prev.map((proj) => {
         if (proj.id !== proyectoId) return proj;
 
         const updatedHitos = proj.hitos.map((h) => {
@@ -311,8 +405,20 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         }
 
         return updatedProj;
-      })
-    );
+      });
+      nextListToSync = nextList;
+      return nextList;
+    });
+
+    if (nextListToSync.length > 0) {
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextListToSync,
+        currentMemberName,
+        currentMemberEmail,
+        "manual_edit"
+      );
+    }
   };
 
   // Excel File Importer (.xlsx, .xls, .csv)
@@ -464,11 +570,24 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
         if (importedList.length > 0) {
           setProyectos(importedList);
+          // Save to Firestore in real time: triggers onSnapshot for ALL team members of this municipality
+          saveCarteraToFirestore(
+            selectedEntityKey,
+            importedList,
+            currentMemberName,
+            currentMemberEmail,
+            "excel_upload"
+          );
+          setLastSyncInfo({
+            lastUpdated: new Date().toISOString(),
+            updatedBy: currentMemberName,
+            source: "excel_upload",
+          });
           setImportNotice({
-            message: `¡Éxito! Se han importado y sincronizado ${importedList.length} obras correctamente desde el Excel.`,
+            message: `¡Éxito! Se han importado ${importedList.length} obras y se han sincronizado en tiempo real para todos los integrantes de ${entityDisplayName}.`,
             type: "success",
           });
-          setTimeout(() => setImportNotice(null), 7000);
+          setTimeout(() => setImportNotice(null), 8000);
         } else {
           setImportNotice({ message: "No se encontraron filas con datos de obras en el archivo.", type: "error" });
         }
@@ -862,6 +981,30 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
               <span>Restaurar</span>
             </button>
+          </div>
+        </div>
+
+        {/* Real-Time Cloud Synchronization & Isolation Status Bar */}
+        <div className="mt-3.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-[10px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Sincronización en Tiempo Real Activa</span>
+            </div>
+            <span className="text-slate-300 text-[11px]">
+              {lastSyncInfo ? (
+                <span>
+                  Última actualización: <strong className="text-white">{lastSyncInfo.updatedBy}</strong> ({new Date(lastSyncInfo.lastUpdated).toLocaleTimeString("es-PE")})
+                </span>
+              ) : (
+                <span>Base de datos en la nube conectada</span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] text-amber-300 font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Mesa de Trabajo Privada: {entityDisplayName}</span>
           </div>
         </div>
 

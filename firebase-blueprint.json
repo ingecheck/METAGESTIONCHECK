@@ -38,6 +38,19 @@
         "updatedAt": { "type": "string", "description": "Last update" }
       },
       "required": ["id", "ownerId", "nomenclatura"]
+    },
+    "CarteraObrasEntity": {
+      "title": "CarteraObrasEntity",
+      "description": "Multi-tenant municipal works portfolio isolated per entity",
+      "type": "object",
+      "properties": {
+        "entityId": { "type": "string", "description": "Municipality or tenant key" },
+        "proyectos": { "type": "array", "description": "List of public work projects" },
+        "lastUpdated": { "type": "string", "description": "Timestamp of last modification or Excel upload" },
+        "updatedBy": { "type": "string", "description": "Name of user who updated" },
+        "updatedByEmail": { "type": "string", "description": "Email of user" }
+      },
+      "required": ["entityId", "proyectos"]
     }
   },
   "firestore": {
@@ -48,6 +61,10 @@
     "/proposals/{proposalId}": {
       "schema": "TenderProposal",
       "description": "Tender proposals saved by users"
+    },
+    "/cartera_obras/{entityId}": {
+      "schema": "CarteraObrasEntity",
+      "description": "Multi-tenant municipal works portfolio isolated per entity"
     }
   }
 }
