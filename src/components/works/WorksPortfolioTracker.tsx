@@ -44,11 +44,13 @@ import {
   RotateCcw,
   FileUp,
   FileCheck,
+  User,
 } from "lucide-react";
 import {
   ProyectoCartera,
   PROYECTOS_RIOJA_SEED,
   getProgresoPorcentaje,
+  getAvanceFisicoObra,
   getEstadoLabel,
   getAlertasNormativas,
   EstadoCartera,
@@ -264,6 +266,83 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
   // New Obra Modal State
   const [isNewCarteraModalOpen, setIsNewCarteraModalOpen] = useState(false);
+  const [editingCarteraObra, setEditingCarteraObra] = useState<ProyectoCartera | null>(null);
+
+  // Dynamic Encargado editing state
+  const [editingEncargadoId, setEditingEncargadoId] = useState<number | null>(null);
+  const [customEncargadoText, setCustomEncargadoText] = useState<string>("");
+
+  // List of all known encargados across projects + common defaults
+  const allKnownEncargados = useMemo(() => {
+    const defaultSet = new Set(["JHON", "JHENIFER", "JEZER", "JOSUE", "LUIS", "PICO", "CARLOS", "MARIELA", "EDSON"]);
+    proyectos.forEach((p) => {
+      if (p.encargado && p.encargado.trim() && p.encargado !== "-") {
+        defaultSet.add(p.encargado.trim().toUpperCase());
+      }
+    });
+    return Array.from(defaultSet);
+  }, [proyectos]);
+
+  // Quick change of encargado directly from the table matrix
+  const handleUpdateEncargado = (proyectoId: number, newEncargado: string) => {
+    const formatted = newEncargado.trim().toUpperCase() || "-";
+    let nextListToSync: ProyectoCartera[] = [];
+    setProyectos((prev) => {
+      const nextList = prev.map((p) => {
+        if (p.id !== proyectoId) return p;
+        const updated = { ...p, encargado: formatted };
+        if (selectedProject && selectedProject.id === proyectoId) {
+          setSelectedProject(updated);
+        }
+        return updated;
+      });
+      nextListToSync = nextList;
+      return nextList;
+    });
+
+    if (nextListToSync.length > 0) {
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextListToSync,
+        currentMemberName,
+        currentMemberEmail,
+        "encargado_change"
+      );
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextListToSync));
+      } catch (e) {}
+    }
+  };
+
+  // Quick change of estado situacional directly from the table matrix
+  const handleUpdateEstado = (proyectoId: number, newEstado: EstadoCartera) => {
+    let nextListToSync: ProyectoCartera[] = [];
+    setProyectos((prev) => {
+      const nextList = prev.map((p) => {
+        if (p.id !== proyectoId) return p;
+        const updated = { ...p, estado: newEstado };
+        if (selectedProject && selectedProject.id === proyectoId) {
+          setSelectedProject(updated);
+        }
+        return updated;
+      });
+      nextListToSync = nextList;
+      return nextList;
+    });
+
+    if (nextListToSync.length > 0) {
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextListToSync,
+        currentMemberName,
+        currentMemberEmail,
+        "estado_change"
+      );
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextListToSync));
+      } catch (e) {}
+    }
+  };
 
   // Open Integrated Valorizaciones Tool
   const handleOpenValoModal = (
@@ -274,7 +353,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     setValModalTab(tab);
   };
 
-  // Handler to register a new Obra in the Cartera Matriz
+  // Handler to register or modify an Obra in the Cartera Matriz
   const handleCreateNewObra = (form: {
     proyecto: string;
     cui: string;
@@ -297,6 +376,88 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     observaciones: string;
   }) => {
     if (!form.proyecto.trim()) return;
+
+    // Check if modifying an existing obra
+    if (editingCarteraObra) {
+      let updatedHitos = [...editingCarteraObra.hitos];
+      if (form.docEntregaTerreno || form.entregaTerrenoFecha) {
+        updatedHitos = updatedHitos.map((h) => {
+          if (h.id === "hito-terreno") {
+            return {
+              ...h,
+              cumplido: form.docEntregaTerreno || form.entregaTerrenoFecha ? true : h.cumplido,
+              documentoSustento: form.docEntregaTerreno || h.documentoSustento,
+              fecha: form.entregaTerrenoFecha || h.fecha,
+            };
+          }
+          return h;
+        });
+      }
+      if (form.docInicioObra || form.inicioObraFecha) {
+        updatedHitos = updatedHitos.map((h) => {
+          if (h.id === "hito-acta-inicio") {
+            return {
+              ...h,
+              cumplido: form.docInicioObra || form.inicioObraFecha ? true : h.cumplido,
+              documentoSustento: form.docInicioObra || h.documentoSustento,
+              fecha: form.inicioObraFecha || h.fecha,
+            };
+          }
+          return h;
+        });
+      }
+
+      const updatedProj: ProyectoCartera = {
+        ...editingCarteraObra,
+        proyecto: form.proyecto.toUpperCase().trim(),
+        cui: form.cui.trim(),
+        encargado: form.encargado,
+        estado: form.estado,
+        contratoEjecucionNumero: form.contratoEjecucionNumero.trim(),
+        contratoEjecucionMonto: form.contratoEjecucionMonto || 0,
+        contratoEjecucionEmpresa: form.contratoEjecucionEmpresa.trim(),
+        residenteNombre: form.residenteNombre.trim(),
+        contratoSupervisionNumero: form.contratoSupervisionNumero.trim(),
+        contratoSupervisionMonto: form.contratoSupervisionMonto || 0,
+        contratoSupervisionEmpresa: form.contratoSupervisionEmpresa.trim(),
+        supervisorNombre: form.supervisorNombre.trim(),
+        entregaTerrenoFecha: form.entregaTerrenoFecha.trim() || undefined,
+        inicioObraFecha: form.inicioObraFecha.trim() || undefined,
+        plazoDias: form.plazoDias || undefined,
+        fechaTerminoActualizado: form.fechaTerminoActualizado.trim() || undefined,
+        observaciones: form.observaciones.trim() || editingCarteraObra.observaciones,
+        hitos: updatedHitos,
+      };
+
+      const nextList = proyectos.map((p) => (p.id === updatedProj.id ? updatedProj : p));
+      setProyectos(nextList);
+      if (selectedProject && selectedProject.id === updatedProj.id) {
+        setSelectedProject(updatedProj);
+      }
+
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextList,
+        currentMemberName,
+        currentMemberEmail,
+        "manual_edit"
+      );
+
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextList));
+      } catch (e) {
+        console.warn("Storage warning:", e);
+      }
+
+      setIsNewCarteraModalOpen(false);
+      setEditingCarteraObra(null);
+      setImportNotice({
+        message: `¡Éxito! Los datos de la obra "${updatedProj.proyecto}" (CUI: ${updatedProj.cui}) han sido modificados y sincronizados.`,
+        type: "success",
+      });
+      setTimeout(() => setImportNotice(null), 6000);
+      return;
+    }
 
     const nextId = proyectos.length > 0 ? Math.max(...proyectos.map((p) => p.id)) + 1 : 1;
     const newCui = form.cui.trim() || `2${Math.floor(Math.random() * 900000 + 100000)}`;
@@ -1070,6 +1231,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     const total = proyectos.length;
     const montoTotal = proyectos.reduce((sum, p) => sum + (p.contratoEjecucionMonto || 0), 0);
     const montoSupervision = proyectos.reduce((sum, p) => sum + (p.contratoSupervisionMonto || 0), 0);
+    const totalEjecutadoFisico = proyectos.reduce((sum, p) => sum + getAvanceFisicoObra(p).montoEjecutadoTotal, 0);
+    const avanceFisicoPromedio = montoTotal > 0 ? Math.round((totalEjecutadoFisico / montoTotal) * 10000) / 100 : 0;
     const actosPrep = proyectos.filter(
       (p) => p.estado === "ACTOS_PREPARATORIOS" || p.estado === "EN_SELECCION_SEACE"
     ).length;
@@ -1084,6 +1247,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       total,
       montoTotal,
       montoSupervision,
+      totalEjecutadoFisico,
+      avanceFisicoPromedio,
       actosPrep,
       pendienteInicio,
       enEjecucion,
@@ -1571,8 +1736,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             <table className="min-w-[1780px] w-full text-left border-collapse text-xs">
               <thead className="bg-slate-900 text-white sticky top-0 z-20 font-bold text-[11px]">
                 <tr>
-                  <th className="p-2.5 border-r border-slate-800 text-center w-12">ID</th>
-                  <th className="p-2.5 border-r border-slate-800 w-24">ENCARGADO</th>
+                  <th className="p-2.5 border-r border-slate-800 text-center w-14">ID / EDIT</th>
+                  <th className="p-2.5 border-r border-slate-800 w-32">ENCARGADO (OEI)</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[200px]">PROYECTO & CUI</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[220px]">
                     CONTRATO EJECUCIÓN (OBRA)
@@ -1593,8 +1758,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                   <th className="p-2.5 border-r border-slate-800 min-w-[180px]">
                     OBSERVACIONES & ALERTAS
                   </th>
-                  <th className="p-2.5 text-center min-w-[280px]">
-                    CHECKLIST & VALORIZACIONES (CLIC PARA INGRESAR)
+                  <th className="p-2.5 text-center min-w-[320px]">
+                    AVANCE FÍSICO REAL (OBRA) vs FICHA NORMATIVA (ADMINISTRATIVO)
                   </th>
                 </tr>
               </thead>
@@ -1603,6 +1768,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                   const estadoInfo = getEstadoLabel(p.estado);
                   const alertas = getAlertasNormativas(p);
                   const pct = getProgresoPorcentaje(p.hitos);
+                  const avanceFisico = getAvanceFisicoObra(p);
 
                   // Hitos clave para 1-click rápido
                   const hitoNotifSup = p.hitos.find((h) => h.id === "hito-notif-sup");
@@ -1618,35 +1784,125 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                       onClick={() => setSelectedProject(p)}
                       className="hover:bg-blue-50/60 transition cursor-pointer group"
                     >
-                      {/* ID */}
-                      <td className="p-2.5 font-bold text-center font-mono text-slate-700 bg-slate-50 group-hover:bg-blue-100/50 border-r border-slate-200">
-                        {p.id}
+                      {/* ID y Botón Editar Obra */}
+                      <td
+                        className="p-2 font-bold text-center font-mono text-slate-700 bg-slate-50 group-hover:bg-blue-100/50 border-r border-slate-200"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <span className="text-xs">{p.id}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCarteraObra(p);
+                              setIsNewCarteraModalOpen(true);
+                            }}
+                            className="px-1.5 py-0.5 rounded-md text-[9px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
+                            title="Modificar todos los datos de esta obra (contratos, montos, plazos, personal)"
+                          >
+                            <Edit2 className="w-3 h-3 text-blue-600" />
+                            <span>Editar</span>
+                          </button>
+                        </div>
                       </td>
 
-                      {/* ENCARGADO */}
-                      <td className="p-2.5 border-r border-slate-200">
-                        <span
-                          className={`font-black px-2 py-0.5 rounded text-[10px] tracking-wide inline-block ${
-                            p.encargado === "JOSUE"
-                              ? "bg-cyan-100 text-cyan-800 border border-cyan-300"
-                              : p.encargado === "LUIS"
-                              ? "bg-indigo-100 text-indigo-800 border border-indigo-300"
-                              : p.encargado === "PICO"
-                              ? "bg-amber-100 text-amber-900 border border-amber-300"
-                              : p.encargado === "JHON"
-                              ? "bg-purple-100 text-purple-800 border border-purple-200"
-                              : p.encargado === "JHENIFER"
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                              : p.encargado === "JEZER"
-                              ? "bg-blue-100 text-blue-800 border border-blue-200"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {p.encargado}
-                        </span>
+                      {/* ENCARGADO - Editable directamente en la matriz (Selección o Escritura Libre) */}
+                      <td className="p-2 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
+                        {editingEncargadoId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={customEncargadoText}
+                              onChange={(e) => setCustomEncargadoText(e.target.value.toUpperCase())}
+                              placeholder="Nombre..."
+                              className="font-black text-[10px] bg-white border border-amber-400 rounded px-1.5 py-1 w-full focus:outline-none shadow-xs"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  if (customEncargadoText.trim()) {
+                                    handleUpdateEncargado(p.id, customEncargadoText);
+                                  }
+                                  setEditingEncargadoId(null);
+                                } else if (e.key === "Escape") {
+                                  setEditingEncargadoId(null);
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (customEncargadoText.trim()) {
+                                  handleUpdateEncargado(p.id, customEncargadoText);
+                                }
+                                setEditingEncargadoId(null);
+                              }}
+                              className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 cursor-pointer shrink-0"
+                              title="Guardar nuevo encargado"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingEncargadoId(null)}
+                              className="p-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 cursor-pointer shrink-0"
+                              title="Cancelar"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={p.encargado}
+                              onChange={(e) => {
+                                if (e.target.value === "__NEW__") {
+                                  setEditingEncargadoId(p.id);
+                                  setCustomEncargadoText(p.encargado === "-" ? "" : p.encargado);
+                                } else {
+                                  handleUpdateEncargado(p.id, e.target.value);
+                                }
+                              }}
+                              className={`font-black text-[10px] tracking-wide rounded px-1.5 py-1 border cursor-pointer focus:outline-none transition w-full ${
+                                p.encargado === "JOSUE"
+                                  ? "bg-cyan-100 text-cyan-800 border-cyan-300"
+                                  : p.encargado === "LUIS"
+                                  ? "bg-indigo-100 text-indigo-800 border-indigo-300"
+                                  : p.encargado === "PICO"
+                                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                                  : p.encargado === "JHON"
+                                  ? "bg-purple-100 text-purple-800 border-purple-200"
+                                  : p.encargado === "JHENIFER"
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                  : p.encargado === "JEZER"
+                                  ? "bg-blue-100 text-blue-800 border-blue-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-300"
+                              }`}
+                              title="Cambiar encargado directamente en la tabla (sincroniza en tiempo real)"
+                            >
+                              {allKnownEncargados.map((enc) => (
+                                <option key={enc} value={enc}>
+                                  {enc}
+                                </option>
+                              ))}
+                              <option value="-">SIN ASIGNAR (-)</option>
+                              <option value="__NEW__">✏️ + Escribir otro...</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingEncargadoId(p.id);
+                                setCustomEncargadoText(p.encargado === "-" ? "" : p.encargado);
+                              }}
+                              className="p-1 text-slate-400 hover:text-amber-700 hover:bg-amber-100 rounded cursor-pointer transition shrink-0"
+                              title="Escribir nombre de nuevo encargado"
+                            >
+                              <Edit2 className="w-3 h-3 text-slate-500 hover:text-amber-700" />
+                            </button>
+                          </div>
+                        )}
                       </td>
 
-                      {/* PROYECTO & CUI */}
+                      {/* PROYECTO & CUI & ESTADO (Editable directamente) */}
                       <td className="p-2.5 border-r border-slate-200">
                         <div className="font-extrabold text-slate-900 leading-tight">
                           {p.proyecto}
@@ -1655,11 +1911,20 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                           <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
                             CUI: {p.cui}
                           </span>
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${estadoInfo.bg} ${estadoInfo.color} ${estadoInfo.border}`}
+                          <select
+                            value={p.estado}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => handleUpdateEstado(p.id, e.target.value as EstadoCartera)}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${estadoInfo.bg} ${estadoInfo.color} ${estadoInfo.border}`}
+                            title="Cambiar estado situacional de la obra"
                           >
-                            {estadoInfo.label}
-                          </span>
+                            <option value="ACTOS_PREPARATORIOS">Actos Preparatorios</option>
+                            <option value="EN_SELECCION_SEACE">En Selección (SEACE)</option>
+                            <option value="PENDIENTE_INICIO_CONDICIONES">Pendiente Inicio (Art. 176)</option>
+                            <option value="EN_EJECUCION">En Ejecución de Obra</option>
+                            <option value="RECEPCIONADA">Recepcionada</option>
+                            <option value="FINALIZADA_LIQUIDADA">Liquidada / Finalizada</option>
+                          </select>
                         </div>
                       </td>
 
@@ -1790,140 +2055,213 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                         }}
                         title="Haz clic para abrir la herramienta de valorizaciones, partidas y avance"
                       >
-                        <div className="space-y-1.5 min-w-[260px]">
-                          {/* Top Header with Progress and Direct Valo Trigger */}
-                          <div className="flex items-center justify-between text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-700">Avance Normativo:</span>
-                              <span className="font-mono font-black text-blue-700">{pct}%</span>
+                        <div className="space-y-2 min-w-[285px]">
+                          {/* 1. SECCIÓN A: Avance Físico Real de Ejecución de Obra (Campo - Art. 194) */}
+                          <div className="bg-emerald-50/80 p-2 rounded-xl border border-emerald-300 shadow-2xs space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-emerald-950 text-[10px] flex items-center gap-1">
+                                <span>🏗️ Avance Físico (Obra):</span>
+                                <span
+                                  className={`text-[8px] font-bold px-1.5 py-0.2 rounded ${
+                                    avanceFisico.estadoFisico === "ATRASADA"
+                                      ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                      : avanceFisico.estadoFisico === "CULMINADA"
+                                      ? "bg-teal-100 text-teal-800 border border-teal-300"
+                                      : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  }`}
+                                >
+                                  {avanceFisico.etiqueta}
+                                </span>
+                              </span>
+                              <span className="font-mono font-black text-emerald-800 text-sm">
+                                {avanceFisico.porcentajeFisico.toFixed(2)}%
+                              </span>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenValoModal(p, "valorizacion");
-                              }}
-                              className="py-0.5 px-2 rounded text-[9px] font-extrabold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 flex items-center gap-1 cursor-pointer shadow-2xs"
-                              title="Ingresar o actualizar valorización y planilla de partidas"
-                            >
-                              <Calculator className="w-2.5 h-2.5 text-emerald-700" />
-                              <span>+ Valorización</span>
-                            </button>
+                            {/* Dual Progress Bars: Real vs Programado */}
+                            <div className="space-y-0.5">
+                              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300">
+                                <div
+                                  className={`h-full transition-all ${
+                                    avanceFisico.porcentajeFisico >= 100
+                                      ? "bg-teal-500"
+                                      : avanceFisico.estadoFisico === "ATRASADA"
+                                      ? "bg-rose-500"
+                                      : "bg-emerald-600"
+                                  }`}
+                                  style={{ width: `${Math.min(100, avanceFisico.porcentajeFisico)}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[8px] font-mono">
+                                <span className="text-slate-600 font-bold">
+                                  Certif: {formatPEN(avanceFisico.montoEjecutadoTotal)}
+                                </span>
+                                <span className="text-blue-700 font-bold">
+                                  Prog: {(avanceFisico.porcentajeProgramado || 0).toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-0.5 border-t border-emerald-200/60">
+                              <span className="text-[8px] font-mono text-slate-500">
+                                Saldo: {formatPEN(Math.max(0, p.contratoEjecucionMonto - avanceFisico.montoEjecutadoTotal))}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenValoModal(p, "valorizacion");
+                                }}
+                                className="py-0.5 px-2 rounded text-[9px] font-black text-emerald-900 bg-emerald-200 hover:bg-emerald-300 border border-emerald-400 flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                                title="Ingresar o actualizar cálculo de valorizaciones y partidas"
+                              >
+                                <Calculator className="w-2.5 h-2.5 text-emerald-800" />
+                                <span>+ Valorización</span>
+                              </button>
+                            </div>
                           </div>
 
-                          {/* Progress Bar */}
-                          <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={`h-full ${
-                                pct === 100
-                                  ? "bg-emerald-500"
-                                  : pct > 60
-                                  ? "bg-blue-600"
-                                  : pct > 30
-                                  ? "bg-amber-500"
-                                  : "bg-rose-500"
-                              }`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-
-                          {/* Checklist Items with Visibly Formatted Document Emission Dates */}
-                          <div className="grid grid-cols-2 gap-1 pt-0.5">
-                            {/* 1. Notif Supervisor */}
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenValoModal(p, "valorizacion");
-                              }}
-                              className={`p-1.5 rounded text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition ${
-                                hitoNotifSup?.cumplido
-                                  ? "bg-amber-50/70 text-slate-900 border-amber-300/80 hover:bg-amber-100/70"
-                                  : "bg-white text-slate-500 border-slate-200 hover:border-amber-400"
-                              }`}
-                              title={`Notificación al Supervisor (Art. 176.1.a) • Fecha: ${hitoNotifSup?.fecha || "Sin fecha"} • Clic para ver valorizaciones`}
-                            >
-                              <div className="flex items-center gap-1 truncate">
-                                <span className="text-[7px] uppercase font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded">
-                                  Doc
+                          {/* 2. SECCIÓN B: Ficha Normativa (Cumplimiento de Hitos Administrativos) */}
+                          <div className="bg-purple-50/60 p-2 rounded-xl border border-purple-200 shadow-2xs space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-extrabold text-purple-950 flex items-center gap-1">
+                                <span>📋 Ficha Normativa:</span>
+                                <span className="font-normal text-[8px] text-purple-700">
+                                  ({p.hitos.filter((h) => h.cumplido).length}/{p.hitos.length} hitos)
                                 </span>
-                                <span className="truncate">Notif. Sup</span>
-                              </div>
-                              <span className="font-mono text-[8px] text-amber-900 font-bold shrink-0">
-                                {hitoNotifSup?.fecha ? `Emisión: ${hitoNotifSup.fecha}` : "Pendiente"}
                               </span>
+                              <span className="font-mono font-black text-purple-800">{pct}%</span>
                             </div>
 
-                            {/* 2. Entrega Terreno */}
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenValoModal(p, "valorizacion");
-                              }}
-                              className={`p-1.5 rounded text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition ${
-                                hitoTerreno?.cumplido
-                                  ? "bg-amber-50/70 text-slate-900 border-amber-300/80 hover:bg-amber-100/70"
-                                  : "bg-white text-slate-500 border-slate-200 hover:border-amber-400"
-                              }`}
-                              title={`Entrega de Terreno (Art. 176.1.b) • Fecha: ${hitoTerreno?.fecha || "Sin fecha"} • Clic para ver valorizaciones`}
-                            >
-                              <div className="flex items-center gap-1 truncate">
-                                <span className="text-[7px] uppercase font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded">
-                                  Doc
-                                </span>
-                                <span className="truncate">Terreno</span>
-                              </div>
-                              <span className="font-mono text-[8px] text-amber-900 font-bold shrink-0">
-                                {hitoTerreno?.fecha ? `Emisión: ${hitoTerreno.fecha}` : "Pendiente"}
-                              </span>
+                            {/* Progress Bar for Normative Checklist */}
+                            <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden border border-purple-200">
+                              <div
+                                className="h-full bg-purple-600 rounded-full transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
                             </div>
 
-                            {/* 3. Entrega Expediente */}
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenValoModal(p, "valorizacion");
-                              }}
-                              className={`p-1.5 rounded text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition ${
-                                hitoExpediente?.cumplido
-                                  ? "bg-amber-50/70 text-slate-900 border-amber-300/80 hover:bg-amber-100/70"
-                                  : "bg-white text-slate-500 border-slate-200 hover:border-amber-400"
-                              }`}
-                              title={`Entrega Expediente Técnico (Art. 176.1.c) • Fecha: ${hitoExpediente?.fecha || "Sin fecha"} • Clic para ver valorizaciones`}
-                            >
-                              <div className="flex items-center gap-1 truncate">
-                                <span className="text-[7px] uppercase font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded">
-                                  Doc
-                                </span>
-                                <span className="truncate">Expediente E.T.</span>
+                            {/* Checklist Items with Visibly Formatted Document & Emission Dates */}
+                            <div className="grid grid-cols-2 gap-1 pt-0.5">
+                              {/* 1. Notif Supervisor */}
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenValoModal(p, "valorizacion");
+                                }}
+                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                  hitoNotifSup?.cumplido
+                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
+                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                }`}
+                                title={`Notificación al Supervisor (Art. 176.1.a) • Doc: ${hitoNotifSup?.documentoSustento || "No especificado"} • Fecha: ${hitoNotifSup?.fecha || "Sin fecha"}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="truncate text-amber-900 font-extrabold">1. Notif. Sup</span>
+                                  <span className="font-mono text-[8px] text-slate-500">
+                                    {hitoNotifSup?.fecha || "-"}
+                                  </span>
+                                </div>
+                                {hitoNotifSup?.documentoSustento ? (
+                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                    📄 {hitoNotifSup.documentoSustento}
+                                  </span>
+                                ) : (
+                                  <span className="text-[7px] text-slate-400 font-normal">
+                                    {hitoNotifSup?.cumplido ? "Aprobado" : "Pendiente"}
+                                  </span>
+                                )}
                               </div>
-                              <span className="font-mono text-[8px] text-amber-900 font-bold shrink-0">
-                                {hitoExpediente?.fecha ? `Emisión: ${hitoExpediente.fecha}` : "Pendiente"}
-                              </span>
-                            </div>
 
-                            {/* 4. COD */}
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenValoModal(p, "valorizacion");
-                              }}
-                              className={`p-1.5 rounded text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition ${
-                                hitoCod?.cumplido
-                                  ? "bg-amber-50/70 text-slate-900 border-amber-300/80 hover:bg-amber-100/70"
-                                  : "bg-white text-slate-500 border-slate-200 hover:border-amber-400"
-                              }`}
-                              title={`Cuaderno de Obra Digital (Art. 176.1.d) • Fecha: ${hitoCod?.fecha || "Sin fecha"} • Clic para ver valorizaciones`}
-                            >
-                              <div className="flex items-center gap-1 truncate">
-                                <span className="text-[7px] uppercase font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded">
-                                  Doc
-                                </span>
-                                <span className="truncate">C.O.D.</span>
+                              {/* 2. Entrega Terreno */}
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenValoModal(p, "valorizacion");
+                                }}
+                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                  hitoTerreno?.cumplido
+                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
+                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                }`}
+                                title={`Entrega de Terreno (Art. 176.1.b) • Doc: ${hitoTerreno?.documentoSustento || "No especificado"} • Fecha: ${hitoTerreno?.fecha || "Sin fecha"}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="truncate text-amber-900 font-extrabold">2. Terreno</span>
+                                  <span className="font-mono text-[8px] text-slate-500">
+                                    {hitoTerreno?.fecha || "-"}
+                                  </span>
+                                </div>
+                                {hitoTerreno?.documentoSustento ? (
+                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                    📄 {hitoTerreno.documentoSustento}
+                                  </span>
+                                ) : (
+                                  <span className="text-[7px] text-slate-400 font-normal">
+                                    {hitoTerreno?.cumplido ? "Aprobado" : "Pendiente"}
+                                  </span>
+                                )}
                               </div>
-                              <span className="font-mono text-[8px] text-amber-900 font-bold shrink-0">
-                                {hitoCod?.fecha ? `Emisión: ${hitoCod.fecha}` : "Pendiente"}
-                              </span>
+
+                              {/* 3. Entrega Expediente */}
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenValoModal(p, "valorizacion");
+                                }}
+                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                  hitoExpediente?.cumplido
+                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
+                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                }`}
+                                title={`Entrega Expediente Técnico (Art. 176.1.c) • Doc: ${hitoExpediente?.documentoSustento || "No especificado"} • Fecha: ${hitoExpediente?.fecha || "Sin fecha"}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="truncate text-amber-900 font-extrabold">3. Expediente</span>
+                                  <span className="font-mono text-[8px] text-slate-500">
+                                    {hitoExpediente?.fecha || "-"}
+                                  </span>
+                                </div>
+                                {hitoExpediente?.documentoSustento ? (
+                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                    📄 {hitoExpediente.documentoSustento}
+                                  </span>
+                                ) : (
+                                  <span className="text-[7px] text-slate-400 font-normal">
+                                    {hitoExpediente?.cumplido ? "Aprobado" : "Pendiente"}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* 4. COD */}
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenValoModal(p, "valorizacion");
+                                }}
+                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                  hitoCod?.cumplido
+                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
+                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                }`}
+                                title={`Cuaderno de Obra Digital (Art. 176.1.d) • Doc: ${hitoCod?.documentoSustento || "No especificado"} • Fecha: ${hitoCod?.fecha || "Sin fecha"}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="truncate text-amber-900 font-extrabold">4. C.O.D.</span>
+                                  <span className="font-mono text-[8px] text-slate-500">
+                                    {hitoCod?.fecha || "-"}
+                                  </span>
+                                </div>
+                                {hitoCod?.documentoSustento ? (
+                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                    📄 {hitoCod.documentoSustento}
+                                  </span>
+                                ) : (
+                                  <span className="text-[7px] text-slate-400 font-normal">
+                                    {hitoCod?.cumplido ? "Aprobado" : "Pendiente"}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -2413,12 +2751,32 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             {/* Modal Header */}
             <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-start justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <span className="font-mono font-bold text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
                     ID #{selectedProject.id} • CUI {selectedProject.cui}
                   </span>
-                  <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded">
-                    Encargado: {selectedProject.encargado}
+                  
+                  {/* Encargado Selector Rápido */}
+                  <div className="flex items-center gap-1.5 bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700">
+                    <User className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="text-[10px] text-slate-300 font-bold">Encargado:</span>
+                    <select
+                      value={selectedProject.encargado}
+                      onChange={(e) => handleUpdateEncargado(selectedProject.id, e.target.value)}
+                      className="bg-slate-900 text-amber-300 font-black text-[10px] rounded px-1.5 py-0.5 border border-slate-700 focus:outline-none focus:border-amber-400 cursor-pointer"
+                      title="Cambiar ingeniero encargado de esta obra (sincroniza en tiempo real)"
+                    >
+                      {allKnownEncargados.map((enc) => (
+                        <option key={enc} value={enc}>
+                          {enc}
+                        </option>
+                      ))}
+                      <option value="-">SIN ASIGNAR (-)</option>
+                    </select>
+                  </div>
+
+                  <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded uppercase">
+                    {selectedProject.estado.replace(/_/g, " ")}
                   </span>
                 </div>
                 <h3 className="font-black text-base text-white">{selectedProject.proyecto}</h3>
@@ -2433,6 +2791,165 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
             {/* Modal Body */}
             <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto text-xs">
+              {/* PANEL COMPARATIVO CLAVE DE AVANCES (DISTINCIÓN TÉCNICA OEI) */}
+              {(() => {
+                const avanceFis = getAvanceFisicoObra(selectedProject);
+                const pctNormativo = getProgresoPorcentaje(selectedProject.hitos);
+                const hitosCumplidosCount = selectedProject.hitos.filter((h) => h.cumplido).length;
+                const hitosTotalCount = selectedProject.hitos.length;
+
+                return (
+                  <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-4 rounded-2xl text-white shadow-md border border-slate-700/80 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-amber-400" />
+                          <span>Control Integral de Avance del Proyecto</span>
+                        </span>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.2 rounded-full border border-slate-600 font-mono">
+                          RLCE Art. 194 / Art. 198
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-amber-300 font-semibold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/40">
+                        💡 % de Ficha (Hitos) ≠ % Avance Real de Obra en Terreno
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* CARD 1: Avance Físico Real de Obra */}
+                      <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-3 space-y-1.5 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                              <span>🏗️ Avance Físico (Obra)</span>
+                            </span>
+                            <span
+                              className={`text-[8px] font-black px-1.5 py-0.2 rounded ${
+                                avanceFis.estadoFisico === "ATRASADA"
+                                  ? "bg-rose-500/30 text-rose-300 border border-rose-400/50"
+                                  : avanceFis.estadoFisico === "CULMINADA"
+                                  ? "bg-teal-500/30 text-teal-300 border border-teal-400/50"
+                                  : "bg-emerald-500/30 text-emerald-300 border border-emerald-400/50"
+                              }`}
+                            >
+                              {avanceFis.etiqueta}
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className="text-2xl font-black font-mono text-emerald-300">
+                              {avanceFis.porcentajeFisico.toFixed(2)}%
+                            </span>
+                            <span className="text-[10px] text-emerald-200/70 font-semibold">ejecutado real</span>
+                          </div>
+
+                          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-emerald-900 mt-1">
+                            <div
+                              className={`h-full transition-all ${
+                                avanceFis.estadoFisico === "ATRASADA" ? "bg-rose-500" : "bg-emerald-400"
+                              }`}
+                              style={{ width: `${Math.min(100, avanceFis.porcentajeFisico)}%` }}
+                            />
+                          </div>
+
+                          <div className="text-[9px] font-mono text-emerald-200/80 flex justify-between pt-1">
+                            <span>Certif: {formatPEN(avanceFis.montoEjecutadoTotal)}</span>
+                            <span>Monto: {formatPEN(selectedProject.contratoEjecucionMonto)}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenValoModal(selectedProject, "valorizacion")}
+                          className="w-full mt-1.5 py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition cursor-pointer shadow-xs"
+                        >
+                          <Calculator className="w-3 h-3" />
+                          <span>Abrir Módulo de Valorizaciones</span>
+                        </button>
+                      </div>
+
+                      {/* CARD 2: Avance Programado */}
+                      <div className="bg-blue-950/60 border border-blue-500/40 rounded-xl p-3 space-y-1.5 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 flex items-center gap-1">
+                              <span>📅 Avance Programado</span>
+                            </span>
+                            <span className="text-[8px] font-bold text-slate-300 bg-slate-800 px-1.5 py-0.2 rounded">
+                              Cronograma
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className="text-2xl font-black font-mono text-blue-300">
+                              {(avanceFis.porcentajeProgramado || 0).toFixed(2)}%
+                            </span>
+                            <span className="text-[10px] text-blue-200/70 font-semibold">programado</span>
+                          </div>
+
+                          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-blue-900 mt-1">
+                            <div
+                              className="h-full bg-blue-400 transition-all"
+                              style={{ width: `${Math.min(100, avanceFis.porcentajeProgramado || 0)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] font-medium text-slate-300 pt-1 border-t border-slate-700/50">
+                          {avanceFis.porcentajeProgramado && avanceFis.porcentajeProgramado > 0 ? (
+                            avanceFis.porcentajeFisico < avanceFis.porcentajeProgramado * 0.8 ? (
+                              <span className="text-rose-400 font-bold flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                                <span>Alerta Art. 198: &lt; 80% programado</span>
+                              </span>
+                            ) : (
+                              <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>Ritmo de ejecución en plazo</span>
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-400">Cronograma contractual vigente</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* CARD 3: Ficha Normativa (Hitos de Gestión) */}
+                      <div className="bg-purple-950/60 border border-purple-500/40 rounded-xl p-3 space-y-1.5 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-purple-400 flex items-center gap-1">
+                              <span>📋 Ficha Normativa</span>
+                            </span>
+                            <span className="text-[8px] font-mono font-bold text-purple-300 bg-purple-900/60 px-1.5 py-0.2 rounded border border-purple-700/50">
+                              {hitosCumplidosCount} / {hitosTotalCount} Hitos
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className="text-2xl font-black font-mono text-purple-300">
+                              {pctNormativo}%
+                            </span>
+                            <span className="text-[10px] text-purple-200/70 font-semibold">trámites aprobados</span>
+                          </div>
+
+                          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-purple-900 mt-1">
+                            <div
+                              className="h-full bg-purple-400 transition-all"
+                              style={{ width: `${pctNormativo}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-[9px] text-slate-300 pt-1 border-t border-slate-700/50">
+                          Hitos documentales y sustentos oficiales
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Quick Checklist Section with Integrated Valorizaciones & Expedientes Toolbar */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
@@ -3230,12 +3747,16 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         </div>
       )}
 
-      {/* Modal para Registrar Nueva Obra en la Matriz de la Municipalidad */}
+      {/* Modal para Registrar o Modificar Obra en la Matriz */}
       <NewCarteraObraModal
         isOpen={isNewCarteraModalOpen}
-        onClose={() => setIsNewCarteraModalOpen(false)}
+        onClose={() => {
+          setIsNewCarteraModalOpen(false);
+          setEditingCarteraObra(null);
+        }}
         onSaveObra={handleCreateNewObra}
         entityDisplayName={entityDisplayName}
+        initialObra={editingCarteraObra}
       />
     </div>
   );

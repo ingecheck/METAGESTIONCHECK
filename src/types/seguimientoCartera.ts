@@ -1049,6 +1049,71 @@ export function getProgresoPorcentaje(hitos: HitoNormativo[]): number {
   return Math.round((completed / hitos.length) * 100);
 }
 
+// Helper calculation for Real Physical Progress of Work (Avance Físico de Obra vs Checklist Normativo)
+export function getAvanceFisicoObra(p: ProyectoCartera): {
+  porcentajeFisico: number;
+  montoEjecutadoTotal: number;
+  porcentajeProgramado?: number;
+  ultimaValorizacion?: ValorizacionObra;
+  estadoFisico: "SIN_VALORIZACIONES" | "NORMAL" | "ATRASADA" | "CULMINADA";
+  etiqueta: string;
+} {
+  if (p.estado === "FINALIZADA_LIQUIDADA" || p.estado === "RECEPCIONADA") {
+    return {
+      porcentajeFisico: 100,
+      montoEjecutadoTotal: p.contratoEjecucionMonto,
+      porcentajeProgramado: 100,
+      estadoFisico: "CULMINADA",
+      etiqueta: "100% Culminada",
+    };
+  }
+
+  if (p.valorizaciones && p.valorizaciones.length > 0) {
+    const sorted = [...p.valorizaciones].sort((a, b) => a.numero - b.numero);
+    const latest = sorted[sorted.length - 1];
+    const pct =
+      latest.porcentajeEjecutadoAcumulado ||
+      (p.contratoEjecucionMonto > 0
+        ? Math.min(100, Math.round((latest.montoEjecutadoAcumulado / p.contratoEjecucionMonto) * 10000) / 100)
+        : 0);
+    const isAtrasada =
+      latest.esAtrasada ||
+      (latest.porcentajeProgramadoAcumulado > 0 && pct < latest.porcentajeProgramadoAcumulado * 0.8);
+
+    return {
+      porcentajeFisico: pct,
+      montoEjecutadoTotal: latest.montoEjecutadoAcumulado || 0,
+      porcentajeProgramado: latest.porcentajeProgramadoAcumulado,
+      ultimaValorizacion: latest,
+      estadoFisico: pct >= 100 ? "CULMINADA" : isAtrasada ? "ATRASADA" : "NORMAL",
+      etiqueta: isAtrasada ? "Atrasada (Art. 198 RLCE)" : pct >= 100 ? "100% Ejecutada" : "Avance Normal",
+    };
+  }
+
+  // Check if there are any valo hitos with amount
+  const valoHitos = p.hitos.filter((h) => h.tipo === "valorizacion" || h.codigo.startsWith("VALO-"));
+  if (valoHitos.length > 0) {
+    const totalMonto = valoHitos.reduce((acc, h) => acc + (h.monto || 0), 0);
+    const pct =
+      p.contratoEjecucionMonto > 0
+        ? Math.min(100, Math.round((totalMonto / p.contratoEjecucionMonto) * 10000) / 100)
+        : 0;
+    return {
+      porcentajeFisico: pct,
+      montoEjecutadoTotal: totalMonto,
+      estadoFisico: pct >= 100 ? "CULMINADA" : pct > 0 ? "NORMAL" : "SIN_VALORIZACIONES",
+      etiqueta: pct > 0 ? "En Avance Físico" : "Sin Val. Aprobadas",
+    };
+  }
+
+  return {
+    porcentajeFisico: 0,
+    montoEjecutadoTotal: 0,
+    estadoFisico: "SIN_VALORIZACIONES",
+    etiqueta: "Sin Val. Aprobadas",
+  };
+}
+
 export function getEstadoLabel(estado: EstadoCartera): { label: string; color: string; bg: string; border: string } {
   switch (estado) {
     case "ACTOS_PREPARATORIOS":

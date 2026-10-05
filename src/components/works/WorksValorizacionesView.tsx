@@ -23,6 +23,8 @@ import {
   ProyectoCartera,
   ValorizacionObra,
   PartidaValorizacion,
+  getAvanceFisicoObra,
+  getProgresoPorcentaje,
 } from "../../types/seguimientoCartera";
 import { formatPEN } from "../../services/docxGenerator";
 
@@ -331,6 +333,150 @@ export const WorksValorizacionesView: React.FC<WorksValorizacionesViewProps> = (
             </div>
           </div>
 
+          {/* PANEL COMPARATIVO DE AVANCE (DISTINCIÓN FÍSICO VS FICHA) */}
+          {(() => {
+            const avanceFis = getAvanceFisicoObra(selectedProj);
+            const pctNormativo = getProgresoPorcentaje(selectedProj.hitos);
+            const hitosCumplidosCount = selectedProj.hitos.filter((h) => h.cumplido).length;
+            const hitosTotalCount = selectedProj.hitos.length;
+
+            return (
+              <div className="bg-slate-900 border-b border-slate-800 p-4 sm:p-5 text-white">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-amber-400" />
+                      <span>Panel Oficial de Avances de la Inversión</span>
+                    </span>
+                    <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700 font-mono">
+                      Art. 194 / Art. 198 RLCE
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-amber-300 font-semibold bg-amber-950/70 border border-amber-500/40 px-2.5 py-1 rounded-lg">
+                    💡 Criterio Técnico: El % de Avance de Obra (terreno) es independiente del % de la Ficha (hitos administrativos)
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* CARD 1: Avance Físico Real de Obra */}
+                  <div className="bg-emerald-950/60 border border-emerald-500/40 rounded-xl p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                        🏗️ Avance Físico Real (Campo)
+                      </span>
+                      <span
+                        className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
+                          avanceFis.estadoFisico === "ATRASADA"
+                            ? "bg-rose-500/30 text-rose-300 border border-rose-400/50"
+                            : avanceFis.estadoFisico === "CULMINADA"
+                            ? "bg-teal-500/30 text-teal-300 border border-teal-400/50"
+                            : "bg-emerald-500/30 text-emerald-300 border border-emerald-400/50"
+                        }`}
+                      >
+                        {avanceFis.etiqueta}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-2xl font-black font-mono text-emerald-300">
+                        {avanceFis.porcentajeFisico.toFixed(2)}%
+                      </span>
+                      <span className="text-[10px] text-emerald-200/70">ejecutado real</span>
+                    </div>
+
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-emerald-900 mt-1">
+                      <div
+                        className={`h-full transition-all ${
+                          avanceFis.estadoFisico === "ATRASADA" ? "bg-rose-500" : "bg-emerald-400"
+                        }`}
+                        style={{ width: `${Math.min(100, avanceFis.porcentajeFisico)}%` }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] font-mono text-emerald-200/80 flex justify-between pt-1">
+                      <span>Certif: {formatPEN(avanceFis.montoEjecutadoTotal)}</span>
+                      <span>Saldo: {formatPEN(Math.max(0, selectedProj.contratoEjecucionMonto - avanceFis.montoEjecutadoTotal))}</span>
+                    </div>
+                  </div>
+
+                  {/* CARD 2: Avance Programado */}
+                  <div className="bg-blue-950/60 border border-blue-500/40 rounded-xl p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">
+                        📅 Avance Programado
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-300 bg-slate-800 px-1.5 py-0.2 rounded">
+                        Cronograma Vigente
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-2xl font-black font-mono text-blue-300">
+                        {(avanceFis.porcentajeProgramado || 0).toFixed(2)}%
+                      </span>
+                      <span className="text-[10px] text-blue-200/70">programado</span>
+                    </div>
+
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-blue-900 mt-1">
+                      <div
+                        className="h-full bg-blue-400 transition-all"
+                        style={{ width: `${Math.min(100, avanceFis.porcentajeProgramado || 0)}%` }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] font-medium text-slate-300 pt-1">
+                      {avanceFis.porcentajeProgramado && avanceFis.porcentajeProgramado > 0 ? (
+                        avanceFis.porcentajeFisico < avanceFis.porcentajeProgramado * 0.8 ? (
+                          <span className="text-rose-400 font-bold flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            <span>Alerta Art. 198: Atrasada (&lt; 80% prog.)</span>
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>Ejecución normal en plazo</span>
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-slate-400">Sin desfase crítico reportado</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CARD 3: Ficha Normativa */}
+                  <div className="bg-purple-950/60 border border-purple-500/40 rounded-xl p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-400">
+                        📋 Ficha Normativa
+                      </span>
+                      <span className="text-[9px] font-mono font-bold text-purple-300 bg-purple-900/60 px-1.5 py-0.2 rounded border border-purple-700/50">
+                        {hitosCumplidosCount} / {hitosTotalCount} Hitos
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-2xl font-black font-mono text-purple-300">
+                        {pctNormativo}%
+                      </span>
+                      <span className="text-[10px] text-purple-200/70">hitos de gestión</span>
+                    </div>
+
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-purple-900 mt-1">
+                      <div
+                        className="h-full bg-purple-400 transition-all"
+                        style={{ width: `${pctNormativo}%` }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] text-slate-300 pt-1">
+                      Cumplimiento de trámites y sustentos oficiales
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Section: Valorizaciones List */}
           {(filterType === "ALL" || filterType === "VALORIZACION") && (
             <div className="p-4 sm:p-5 border-b border-slate-200 space-y-3">
@@ -364,6 +510,7 @@ export const WorksValorizacionesView: React.FC<WorksValorizacionesViewProps> = (
                         <th className="p-2.5 border-r border-slate-200 w-16 text-center">N° Valo</th>
                         <th className="p-2.5 border-r border-slate-200">Periodo / Mes</th>
                         <th className="p-2.5 border-r border-slate-200">Fecha Aprobación</th>
+                        <th className="p-2.5 border-r border-slate-200 min-w-[140px]">Doc. Aprobación Entidad</th>
                         <th className="p-2.5 border-r border-slate-200 text-right">Monto Mes (S/)</th>
                         <th className="p-2.5 border-r border-slate-200 text-right">Monto Acum. (S/)</th>
                         <th className="p-2.5 border-r border-slate-200 text-center">% Avance Mes</th>
@@ -383,6 +530,15 @@ export const WorksValorizacionesView: React.FC<WorksValorizacionesViewProps> = (
                           </td>
                           <td className="p-2.5 font-mono text-slate-600 border-r border-slate-200">
                             {v.fechaValorizacion || v.fechaAprobacionSupervisor || "-"}
+                          </td>
+                          <td className="p-2.5 font-mono text-[11px] border-r border-slate-200">
+                            {v.documentoAprobacion ? (
+                              <span className="font-semibold text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded block truncate max-w-[170px]" title={v.documentoAprobacion}>
+                                📄 {v.documentoAprobacion}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">Sin doc registrado</span>
+                            )}
                           </td>
                           <td className="p-2.5 text-right font-mono font-bold text-emerald-700 border-r border-slate-200 bg-emerald-50/20">
                             {formatPEN(v.montoEjecutadoMes)}

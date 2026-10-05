@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Plus,
+  Edit2,
   FolderKanban,
   Building2,
   HardHat,
@@ -12,7 +13,7 @@ import {
   ShieldCheck,
   CheckCircle2,
 } from "lucide-react";
-import { EstadoCartera } from "../../types/seguimientoCartera";
+import { EstadoCartera, ProyectoCartera } from "../../types/seguimientoCartera";
 
 interface NewCarteraObraModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ interface NewCarteraObraModalProps {
     observaciones: string;
   }) => void;
   entityDisplayName: string;
+  initialObra?: ProyectoCartera | null;
 }
 
 export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
@@ -46,10 +48,11 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
   onClose,
   onSaveObra,
   entityDisplayName,
+  initialObra,
 }) => {
   const [proyecto, setProyecto] = useState("");
   const [cui, setCui] = useState("");
-  const [encargado, setEncargado] = useState("JOSUE");
+  const [encargado, setEncargado] = useState("JHON");
   const [estado, setEstado] = useState<EstadoCartera>("PENDIENTE_INICIO_CONDICIONES");
 
   // Contrato Ejecución
@@ -74,6 +77,54 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
   const [observaciones, setObservaciones] = useState("");
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialObra) {
+      setProyecto(initialObra.proyecto || "");
+      setCui(initialObra.cui || "");
+      setEncargado(initialObra.encargado || "JHON");
+      setEstado(initialObra.estado || "PENDIENTE_INICIO_CONDICIONES");
+      setContratoEjecucionNumero(initialObra.contratoEjecucionNumero || "");
+      setContratoEjecucionMonto(initialObra.contratoEjecucionMonto || 0);
+      setContratoEjecucionEmpresa(initialObra.contratoEjecucionEmpresa || "");
+      setResidenteNombre(initialObra.residenteNombre || "");
+      setContratoSupervisionNumero(initialObra.contratoSupervisionNumero || "");
+      setContratoSupervisionMonto(initialObra.contratoSupervisionMonto || 0);
+      setContratoSupervisionEmpresa(initialObra.contratoSupervisionEmpresa || "");
+      setSupervisorNombre(initialObra.supervisorNombre || "");
+      setEntregaTerrenoFecha(initialObra.entregaTerrenoFecha || "");
+      setDocEntregaTerreno(
+        initialObra.hitos?.find((h) => h.id === "hito-terreno")?.documentoSustento || ""
+      );
+      setInicioObraFecha(initialObra.inicioObraFecha || "");
+      setDocInicioObra(
+        initialObra.hitos?.find((h) => h.id === "hito-acta-inicio")?.documentoSustento || ""
+      );
+      setPlazoDias(initialObra.plazoDias || 120);
+      setFechaTerminoActualizado(initialObra.fechaTerminoActualizado || "");
+      setObservaciones(initialObra.observaciones || "");
+    } else {
+      setProyecto("");
+      setCui("");
+      setEncargado("JHON");
+      setEstado("PENDIENTE_INICIO_CONDICIONES");
+      setContratoEjecucionNumero("");
+      setContratoEjecucionMonto(0);
+      setContratoEjecucionEmpresa("");
+      setResidenteNombre("");
+      setContratoSupervisionNumero("");
+      setContratoSupervisionMonto(0);
+      setContratoSupervisionEmpresa("");
+      setSupervisorNombre("");
+      setEntregaTerrenoFecha("");
+      setDocEntregaTerreno("");
+      setInicioObraFecha("");
+      setDocInicioObra("");
+      setPlazoDias(120);
+      setFechaTerminoActualizado("");
+      setObservaciones("");
+    }
+  }, [initialObra, isOpen]);
 
   if (!isOpen) return null;
 
@@ -116,17 +167,19 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
         <div className="bg-slate-950 text-white p-4 sm:p-5 flex items-start justify-between gap-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black shadow-md">
-              <Plus className="w-5 h-5 text-slate-950" />
+              {initialObra ? <Edit2 className="w-5 h-5 text-slate-950" /> : <Plus className="w-5 h-5 text-slate-950" />}
             </div>
             <div>
               <h3 className="font-black text-base text-white flex items-center gap-2">
-                <span>Registrar Nueva Obra en la Matriz</span>
+                <span>{initialObra ? "Editar Datos de la Obra en la Matriz" : "Registrar Nueva Obra en la Matriz"}</span>
                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded font-mono font-bold">
                   {entityDisplayName}
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Se inicializará automáticamente el checklist normativo y la suite de control
+                {initialObra
+                  ? `Modificando registro: ${initialObra.proyecto} (CUI: ${initialObra.cui})`
+                  : "Se inicializará automáticamente el checklist normativo y la suite de control"}
               </p>
             </div>
           </div>
@@ -185,18 +238,28 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                   Ingeniero Encargado (OEI):
                 </label>
-                <select
-                  value={encargado}
-                  onChange={(e) => setEncargado(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
-                >
-                  <option value="JOSUE">JOSUE (Pilco)</option>
-                  <option value="LUIS">LUIS</option>
-                  <option value="JHON">JHON</option>
-                  <option value="JHENIFER">JHENIFER</option>
-                  <option value="JEZER">JEZER</option>
-                  <option value="-">SIN ASIGNAR (-)</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="encargados-datalist"
+                    placeholder="ej. JHON, CARLOS, MARIELA..."
+                    value={encargado}
+                    onChange={(e) => setEncargado(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                  />
+                  <datalist id="encargados-datalist">
+                    <option value="JHON" />
+                    <option value="JHENIFER" />
+                    <option value="JEZER" />
+                    <option value="JOSUE" />
+                    <option value="LUIS" />
+                    <option value="PICO" />
+                    <option value="CARLOS" />
+                    <option value="MARIELA" />
+                    <option value="EDSON" />
+                    <option value="SIN ASIGNAR" />
+                  </datalist>
+                </div>
               </div>
 
               <div>
@@ -463,8 +526,17 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
               type="submit"
               className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2 rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-slate-950" />
-              <span>Guardar Nueva Obra</span>
+              {initialObra ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                  <span>Guardar Modificaciones de la Obra</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 text-slate-950" />
+                  <span>Guardar Nueva Obra</span>
+                </>
+              )}
             </button>
           </div>
         </form>
