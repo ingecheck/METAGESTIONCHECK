@@ -39,6 +39,11 @@ import {
   Activity,
   Tag,
   SlidersHorizontal,
+  Paperclip,
+  UploadCloud,
+  RotateCcw,
+  FileUp,
+  FileCheck,
 } from "lucide-react";
 import {
   ProyectoCartera,
@@ -52,12 +57,14 @@ import {
   ValorizacionObra,
   ExpedienteAdicional,
   AmpliacionPlazo,
+  createDefaultHitos,
 } from "../../types/seguimientoCartera";
 import { ObraProyecto } from "../../types/obras";
 import { LicenseSession } from "../../types/auth";
 import { formatPEN } from "../../services/docxGenerator";
 import { WorksValorizacionesIntegratedModal } from "./WorksValorizacionesIntegratedModal";
 import { WorksValorizacionesView } from "./WorksValorizacionesView";
+import { NewCarteraObraModal } from "./NewCarteraObraModal";
 import {
   saveCarteraToFirestore,
   subscribeToCartera,
@@ -255,6 +262,9 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   // Excel Upload Drag & Drop Modal
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
 
+  // New Obra Modal State
+  const [isNewCarteraModalOpen, setIsNewCarteraModalOpen] = useState(false);
+
   // Open Integrated Valorizaciones Tool
   const handleOpenValoModal = (
     project: ProyectoCartera,
@@ -262,6 +272,101 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   ) => {
     setValModalProject(project);
     setValModalTab(tab);
+  };
+
+  // Handler to register a new Obra in the Cartera Matriz
+  const handleCreateNewObra = (form: {
+    proyecto: string;
+    cui: string;
+    encargado: string;
+    estado: EstadoCartera;
+    contratoEjecucionNumero: string;
+    contratoEjecucionMonto: number;
+    contratoEjecucionEmpresa: string;
+    residenteNombre: string;
+    contratoSupervisionNumero: string;
+    contratoSupervisionMonto: number;
+    contratoSupervisionEmpresa: string;
+    supervisorNombre: string;
+    entregaTerrenoFecha: string;
+    docEntregaTerreno: string;
+    inicioObraFecha: string;
+    docInicioObra: string;
+    plazoDias: number;
+    fechaTerminoActualizado: string;
+    observaciones: string;
+  }) => {
+    if (!form.proyecto.trim()) return;
+
+    const nextId = proyectos.length > 0 ? Math.max(...proyectos.map((p) => p.id)) + 1 : 1;
+    const newCui = form.cui.trim() || `2${Math.floor(Math.random() * 900000 + 100000)}`;
+
+    // Generate initial hitos with configured sequence
+    const defaultHitos = createDefaultHitos({
+      "hito-notif-sup": form.docEntregaTerreno ? { cumplido: true, fecha: form.entregaTerrenoFecha } : false,
+      "hito-terreno": form.entregaTerrenoFecha ? { cumplido: true, fecha: form.entregaTerrenoFecha } : false,
+      "hito-acta-inicio": form.inicioObraFecha ? { cumplido: true, fecha: form.inicioObraFecha } : false,
+    });
+
+    const updatedHitos = defaultHitos.map((h) => {
+      if (h.id === "hito-terreno" && form.docEntregaTerreno) {
+        return { ...h, documentoSustento: form.docEntregaTerreno };
+      }
+      if (h.id === "hito-acta-inicio" && form.docInicioObra) {
+        return { ...h, documentoSustento: form.docInicioObra };
+      }
+      return h;
+    });
+
+    const newProject: ProyectoCartera = {
+      id: nextId,
+      encargado: form.encargado,
+      proyecto: form.proyecto.toUpperCase().trim(),
+      cui: newCui,
+      contratoEjecucionNumero: form.contratoEjecucionNumero.trim(),
+      contratoEjecucionMonto: form.contratoEjecucionMonto || 0,
+      contratoEjecucionEmpresa: form.contratoEjecucionEmpresa.trim(),
+      residenteNombre: form.residenteNombre.trim(),
+      contratoSupervisionNumero: form.contratoSupervisionNumero.trim(),
+      contratoSupervisionMonto: form.contratoSupervisionMonto || 0,
+      contratoSupervisionEmpresa: form.contratoSupervisionEmpresa.trim(),
+      supervisorNombre: form.supervisorNombre.trim(),
+      entregaTerrenoFecha: form.entregaTerrenoFecha.trim() || undefined,
+      inicioObraFecha: form.inicioObraFecha.trim() || undefined,
+      plazoDias: form.plazoDias || undefined,
+      fechaTerminoActualizado: form.fechaTerminoActualizado.trim() || undefined,
+      observaciones: form.observaciones.trim() || "Obra nueva registrada en la cartera municipal.",
+      estado: form.estado,
+      hitos: updatedHitos,
+      valorizaciones: [],
+      expedientes: [],
+      ampliacionesPlazo: [],
+    };
+
+    const updatedList = [newProject, ...proyectos];
+    setProyectos(updatedList);
+
+    // Save to Firestore in real time for all municipal team members
+    saveCarteraToFirestore(
+      selectedEntityKey,
+      updatedList,
+      currentMemberName,
+      currentMemberEmail,
+      "manual_edit"
+    );
+
+    try {
+      localStorage.setItem(activeStorageKey, JSON.stringify(updatedList));
+    } catch (e) {
+      console.warn("Storage warning:", e);
+    }
+
+    setIsNewCarteraModalOpen(false);
+    setImportNotice({
+      message: `¡Éxito! La obra "${newProject.proyecto}" (CUI: ${newProject.cui}) ha sido registrada y sincronizada en tiempo real.`,
+      type: "success",
+    });
+    setTimeout(() => setImportNotice(null), 6000);
   };
 
   // Callback to update project from valorizaciones modal
@@ -419,6 +524,216 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         "manual_edit"
       );
     }
+  };
+
+  // Update approving document (documento de la entidad que aprobó el hito)
+  const handleUpdateHitoDoc = (proyectoId: number, hitoId: string, newDoc: string) => {
+    let nextListToSync: ProyectoCartera[] = [];
+    setProyectos((prev) => {
+      const nextList = prev.map((proj) => {
+        if (proj.id !== proyectoId) return proj;
+
+        const updatedHitos = proj.hitos.map((h) => {
+          if (h.id === hitoId) {
+            const hasContent = newDoc.trim() !== "";
+            return {
+              ...h,
+              documentoSustento: newDoc,
+              cumplido: hasContent ? true : h.cumplido,
+            };
+          }
+          return h;
+        });
+
+        const updatedProj = {
+          ...proj,
+          hitos: updatedHitos,
+        };
+
+        if (selectedProject && selectedProject.id === proyectoId) {
+          setSelectedProject(updatedProj);
+        }
+
+        return updatedProj;
+      });
+      nextListToSync = nextList;
+      return nextList;
+    });
+
+    if (nextListToSync.length > 0) {
+      saveCarteraToFirestore(
+        selectedEntityKey,
+        nextListToSync,
+        currentMemberName,
+        currentMemberEmail,
+        "manual_edit"
+      );
+    }
+  };
+
+  // Async saving state for Ficha
+  const [isSavingFichaAsync, setIsSavingFichaAsync] = useState(false);
+  const [fichaSaveNotice, setFichaSaveNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Guardar datos actualizados de la Ficha (Asíncrono con Firestore y LocalStorage)
+  const handleSaveFichaDatesAsync = async () => {
+    if (!selectedProject) return;
+    setIsSavingFichaAsync(true);
+    setFichaSaveNotice(null);
+
+    try {
+      const updatedList = proyectos.map((p) => (p.id === selectedProject.id ? selectedProject : p));
+      setProyectos(updatedList);
+
+      // Asynchronous save to Firestore so all municipal members see the updated dates in real time
+      await saveCarteraToFirestore(
+        selectedEntityKey,
+        updatedList,
+        currentMemberName,
+        currentMemberEmail,
+        "checklist_sync"
+      );
+
+      // Local storage fallback
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(updatedList));
+      } catch (e) {
+        console.warn("Storage write warning:", e);
+      }
+
+      setFichaSaveNotice({
+        message: "¡Datos, fechas y documentos probatorios guardados exitosamente y sincronizados en tiempo real!",
+        type: "success",
+      });
+      setTimeout(() => setFichaSaveNotice(null), 5000);
+    } catch (err: any) {
+      console.error("Error guardando datos de la ficha:", err);
+      setFichaSaveNotice({
+        message: `Error al guardar datos actualizados: ${err?.message || "Error desconocido"}`,
+        type: "error",
+      });
+    } finally {
+      setIsSavingFichaAsync(false);
+    }
+  };
+
+  // Upload and attach official event document
+  const handleAttachEventFile = (
+    eventKey: "notifSup" | "cod" | "entregaTerreno" | "inicioObra" | "suspension" | "reinicio" | "termino",
+    file: File,
+    customDate?: string
+  ) => {
+    if (!selectedProject) return;
+
+    const fileName = file.name;
+    const fileSize = `${(file.size / 1024).toFixed(1)} KB`;
+    const dateVal = customDate || new Date().toLocaleDateString("es-PE");
+
+    const updatedAdjuntos = {
+      ...(selectedProject.adjuntosEventos || {}),
+      [eventKey]: {
+        nombre: fileName,
+        fecha: dateVal,
+        tipoDocumento: fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "Documento Oficial",
+        tamano: fileSize,
+      },
+    };
+
+    // Sincronización automática con Checklist Normativo
+    let targetHitoId = "";
+    if (eventKey === "notifSup") targetHitoId = "hito-notif-sup";
+    else if (eventKey === "cod") targetHitoId = "hito-cod";
+    else if (eventKey === "entregaTerreno") targetHitoId = "hito-terreno";
+    else if (eventKey === "inicioObra") targetHitoId = "hito-acta-inicio";
+
+    const updatedHitos = selectedProject.hitos.map((h) => {
+      if (h.id === targetHitoId || (eventKey === "inicioObra" && (h.id === "hito-acta-inicio" || h.id === "hito-inicio-obra"))) {
+        return {
+          ...h,
+          cumplido: true,
+          fecha: dateVal,
+          documentoSustento: fileName,
+          adjuntoNombre: fileName,
+          adjuntoTamano: fileSize,
+        };
+      }
+      return h;
+    });
+
+    const updatedProj: ProyectoCartera = {
+      ...selectedProject,
+      adjuntosEventos: updatedAdjuntos,
+      hitos: updatedHitos,
+      ...(eventKey === "entregaTerreno" ? { entregaTerrenoFecha: dateVal } : {}),
+      ...(eventKey === "inicioObra" ? { inicioObraFecha: dateVal } : {}),
+      ...(eventKey === "suspension" ? { suspensionFecha: dateVal } : {}),
+      ...(eventKey === "reinicio" ? { reinicioFecha: dateVal } : {}),
+    };
+
+    setSelectedProject(updatedProj);
+    setProyectos((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
+  };
+
+  // Upload and attach document directly to a milestone
+  const handleAttachHitoFile = (hitoId: string, file: File) => {
+    if (!selectedProject) return;
+
+    const fileName = file.name;
+    const fileSize = `${(file.size / 1024).toFixed(1)} KB`;
+    const today = new Date().toLocaleDateString("es-PE");
+
+    const updatedHitos = selectedProject.hitos.map((h) => {
+      if (h.id === hitoId) {
+        return {
+          ...h,
+          cumplido: true,
+          fecha: h.fecha || today,
+          documentoSustento: fileName,
+          adjuntoNombre: fileName,
+          adjuntoTamano: fileSize,
+        };
+      }
+      return h;
+    });
+
+    const updatedProj: ProyectoCartera = {
+      ...selectedProject,
+      hitos: updatedHitos,
+    };
+
+    setSelectedProject(updatedProj);
+    setProyectos((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
+  };
+
+  // Update date field and sync with checklist
+  const handleUpdateProjectDateField = (field: keyof ProyectoCartera, value: string) => {
+    if (!selectedProject) return;
+
+    let targetHitoId = "";
+    if (field === "entregaTerrenoFecha") targetHitoId = "hito-terreno";
+    else if (field === "inicioObraFecha") targetHitoId = "hito-acta-inicio";
+
+    const updatedHitos = targetHitoId
+      ? selectedProject.hitos.map((h) => {
+          if (h.id === targetHitoId) {
+            return {
+              ...h,
+              fecha: value,
+              cumplido: value.trim() !== "" ? true : h.cumplido,
+            };
+          }
+          return h;
+        })
+      : selectedProject.hitos;
+
+    const updatedProj: ProyectoCartera = {
+      ...selectedProject,
+      [field]: value,
+      hitos: updatedHitos,
+    };
+
+    setSelectedProject(updatedProj);
+    setProyectos((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
   };
 
   // Excel File Importer (.xlsx, .xls, .csv)
@@ -943,13 +1258,23 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
-            {/* Excel Upload Button - Corporate Amber Accent */}
+            {/* New Obra Button - Corporate Amber Accent */}
+            <button
+              onClick={() => setIsNewCarteraModalOpen(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20"
+              title="Registrar una nueva obra en la matriz de seguimiento municipal"
+            >
+              <Plus className="w-4 h-4 text-slate-950" />
+              <span>+ Nueva Obra</span>
+            </button>
+
+            {/* Excel Upload Button */}
             <button
               onClick={() => setIsExcelModalOpen(true)}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20"
+              className="bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
               title="Cargar archivo Excel (.xlsx/.csv) para actualizar la matriz de obras automáticamente"
             >
-              <Upload className="w-3.5 h-3.5 text-slate-950" />
+              <Upload className="w-3.5 h-3.5 text-amber-400" />
               <span>Subir Excel (.xlsx)</span>
             </button>
 
@@ -1209,8 +1534,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <FileSpreadsheet className="w-4 h-4 text-blue-600" />
               <span>Matriz Oficial de Obras e Inversiones ({filteredProjects.length} Registros)</span>
             </div>
-            <div className="text-[11px] text-slate-500 font-medium">
-              💡 Haz clic en cualquier casilla de verificación para marcar hitos normativos al instante.
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsNewCarteraModalOpen(true)}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Registrar una nueva obra en la matriz de seguimiento"
+              >
+                <Plus className="w-3.5 h-3.5 text-slate-950" />
+                <span>+ Agregar Obra a Matriz</span>
+              </button>
+              <div className="text-[11px] text-slate-500 font-medium hidden sm:block">
+                💡 Haz clic en cualquier casilla o fila para abrir y actualizar datos al instante.
+              </div>
             </div>
           </div>
 
@@ -2238,32 +2574,80 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                               </button>
                             )}
 
-                            {/* Fecha asignada / emisión del documento */}
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span className="text-[10px] font-bold text-slate-600 shrink-0">Fecha:</span>
-                              <input
-                                type="text"
-                                placeholder="DD/MM/AAAA"
-                                value={hito.fecha || ""}
-                                onChange={(e) =>
-                                  handleUpdateHitoFecha(selectedProject.id, hito.id, e.target.value)
-                                }
-                                className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white border border-slate-300 rounded-md focus:border-blue-500 focus:outline-none text-slate-800"
-                              />
-                              {!hito.fecha && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const today = new Date().toLocaleDateString("es-PE");
-                                    handleUpdateHitoFecha(selectedProject.id, hito.id, today);
-                                  }}
-                                  className="text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-1.5 py-1 rounded border border-blue-200 cursor-pointer"
-                                  title="Asignar fecha de hoy"
+                            {/* Document attachment & Date row */}
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {/* Attached file badge if exists */}
+                              {hito.adjuntoNombre && (
+                                <span
+                                  className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-1"
+                                  title={`Documento adjunto: ${hito.adjuntoNombre} (${hito.adjuntoTamano || "Adjuntado"})`}
                                 >
-                                  Hoy
-                                </button>
+                                  <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span className="truncate max-w-[85px]">{hito.adjuntoNombre}</span>
+                                </span>
                               )}
+
+                              {/* Upload attachment clip for this milestone */}
+                              <label
+                                className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                                title="Subir documento oficial probatorio (Resolución, Informe, Acta)"
+                              >
+                                <Paperclip className="w-3.5 h-3.5" />
+                                <input
+                                  type="file"
+                                  accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleAttachHitoFile(hito.id, file);
+                                    if (e.target) e.target.value = "";
+                                  }}
+                                />
+                              </label>
+
+                              {/* Fecha asignada / emisión del documento */}
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="text-[10px] font-bold text-slate-600 shrink-0">Fecha:</span>
+                                <input
+                                  type="text"
+                                  placeholder="DD/MM/AAAA"
+                                  value={hito.fecha || ""}
+                                  onChange={(e) =>
+                                    handleUpdateHitoFecha(selectedProject.id, hito.id, e.target.value)
+                                  }
+                                  className="w-24 px-1.5 py-1 text-xs font-mono font-bold bg-white border border-slate-300 rounded-md focus:border-amber-500 focus:outline-none text-slate-800"
+                                />
+                                {!hito.fecha && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const today = new Date().toLocaleDateString("es-PE");
+                                      handleUpdateHitoFecha(selectedProject.id, hito.id, today);
+                                    }}
+                                    className="text-[10px] bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold px-1.5 py-1 rounded border border-amber-300 cursor-pointer"
+                                    title="Asignar fecha de hoy"
+                                  >
+                                    Hoy
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Documento de la Entidad que Aprobó el Hito */}
+                              <div className="flex items-center gap-1">
+                                <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span className="text-[10px] font-bold text-slate-600 shrink-0">Doc. Aprobación:</span>
+                                <input
+                                  type="text"
+                                  placeholder="Ej: Res. N° 045 / Carta N° 12..."
+                                  value={hito.documentoSustento || ""}
+                                  onChange={(e) =>
+                                    handleUpdateHitoDoc(selectedProject.id, hito.id, e.target.value)
+                                  }
+                                  className="w-36 sm:w-52 px-2 py-1 text-xs font-semibold bg-white border border-slate-300 rounded-md focus:border-amber-500 focus:outline-none text-slate-900 placeholder-slate-400"
+                                  title="Escribir con qué documento de la entidad se aprobó este hito"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2327,27 +2711,344 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                 </div>
               </div>
 
-              {/* Fechas & Plazos */}
+              {/* Fechas Clave con Adjuntos Probatorios y Sincronización Automática con el Checklist */}
               <div className="space-y-2">
-                <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] border-b border-slate-100 pb-1">
-                  3. Fechas Clave y Plazo de Ejecución
-                </h4>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-bold block">Entrega Terreno</span>
-                    <span className="font-mono font-bold text-slate-800">{selectedProject.entregaTerrenoFecha || "-"}</span>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                    <span>3. Fechas Clave y Documentos Probatorios por Evento</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Vinculación y sincronización automática al Checklist
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {/* Evento 1: Notificación Supervisor (Previa a apertura) */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Notif. Supervisor (Previa)
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Carta / Oficio de Designación"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("notifSup", f);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA"
+                      value={selectedProject.hitos.find((h) => h.id === "hito-notif-sup")?.fecha || ""}
+                      onChange={(e) => handleUpdateHitoFecha(selectedProject.id, "hito-notif-sup", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Carta / Oficio..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-notif-sup")?.documentoSustento || selectedProject.adjuntosEventos?.notifSup?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-notif-sup", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir con qué documento de la entidad se aprobó / comunicó"
+                    />
+
+                    {selectedProject.adjuntosEventos?.notifSup?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.notifSup.nombre}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-bold block">Inicio Obra</span>
-                    <span className="font-mono font-bold text-emerald-700">{selectedProject.inicioObraFecha || "-"}</span>
+
+                  {/* Evento 2: Apertura de Obra / COD */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Apertura Obra / C.O.D.
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Acta de Apertura COD / Asiento 01"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("cod", f);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA"
+                      value={selectedProject.hitos.find((h) => h.id === "hito-cod")?.fecha || ""}
+                      onChange={(e) => handleUpdateHitoFecha(selectedProject.id, "hito-cod", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Acta Apertura / COD..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-cod")?.documentoSustento || selectedProject.adjuntosEventos?.cod?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-cod", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir documento de apertura de obra"
+                    />
+
+                    {selectedProject.adjuntosEventos?.cod?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.cod.nombre}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-bold block">Plazo (Días)</span>
-                    <span className="font-mono font-bold text-slate-800">{selectedProject.plazoDias ? `${selectedProject.plazoDias} d` : "-"}</span>
+
+                  {/* Evento 3: Entrega Total de Terreno (Posterior a apertura) */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Entrega Total Terreno
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Acta de Entrega de Terreno"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("entregaTerreno", f, selectedProject.entregaTerrenoFecha);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA"
+                      value={selectedProject.entregaTerrenoFecha || ""}
+                      onChange={(e) => handleUpdateProjectDateField("entregaTerrenoFecha", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Acta Entrega Terreno..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-terreno")?.documentoSustento || selectedProject.adjuntosEventos?.entregaTerreno?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-terreno", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir acta o resolución de entrega de terreno"
+                    />
+
+                    {selectedProject.adjuntosEventos?.entregaTerreno?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.entregaTerreno.nombre}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-bold block">Término Vigente</span>
-                    <span className="font-mono font-bold text-slate-800">{selectedProject.fechaTerminoActualizado || "-"}</span>
+
+                  {/* Evento 4: Inicio de Obra & Acta de Inicio */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Acta de Inicio de Obra
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Acta Oficial de Inicio de Obra"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("inicioObra", f, selectedProject.inicioObraFecha);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA"
+                      value={selectedProject.inicioObraFecha || ""}
+                      onChange={(e) => handleUpdateProjectDateField("inicioObraFecha", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-emerald-800 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Acta Oficial de Inicio..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-acta-inicio")?.documentoSustento || selectedProject.adjuntosEventos?.inicioObra?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-acta-inicio", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir con qué documento / acta se inició la obra"
+                    />
+
+                    {selectedProject.adjuntosEventos?.inicioObra?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.inicioObra.nombre}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Plazo Contractual */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                      Plazo Ejecución (Días)
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={selectedProject.plazoDias || ""}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || undefined;
+                        const updated = { ...selectedProject, plazoDias: val };
+                        setSelectedProject(updated);
+                        setProyectos((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Término Vigente */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                      Fecha Término Vigente
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA"
+                      value={selectedProject.fechaTerminoActualizado || ""}
+                      onChange={(e) => handleUpdateProjectDateField("fechaTerminoActualizado", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Suspensión de Plazo (Eventual) */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Suspensión de Plazo
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Acta de Suspensión de Plazo"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("suspension", f, selectedProject.suspensionFecha);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA (Opcional)"
+                      value={selectedProject.suspensionFecha || ""}
+                      onChange={(e) => handleUpdateProjectDateField("suspensionFecha", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Acta / Res. Suspensión..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-suspension")?.documentoSustento || selectedProject.adjuntosEventos?.suspension?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-suspension", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir con qué documento o resolución se aprobó la suspensión"
+                    />
+
+                    {selectedProject.adjuntosEventos?.suspension?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.suspension.nombre}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Reinicio de Obra */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-700 font-black block leading-tight">
+                        Reinicio de Obra
+                      </span>
+                      <label
+                        className="cursor-pointer text-slate-500 hover:text-amber-600 p-1 rounded hover:bg-slate-200 transition"
+                        title="Subir Acta de Reinicio de Obra"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleAttachEventFile("reinicio", f, selectedProject.reinicioFecha);
+                            if (e.target) e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="DD/MM/AAAA (Opcional)"
+                      value={selectedProject.reinicioFecha || ""}
+                      onChange={(e) => handleUpdateProjectDateField("reinicioFecha", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
+                    />
+
+                    <input
+                      type="text"
+                      placeholder="Doc: Acta / Res. Reinicio..."
+                      value={selectedProject.hitos.find((h) => h.id === "hito-reinicio")?.documentoSustento || selectedProject.adjuntosEventos?.reinicio?.nombre || ""}
+                      onChange={(e) => handleUpdateHitoDoc(selectedProject.id, "hito-reinicio", e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[11px] font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none"
+                      title="Escribir con qué documento o acta se reinició la obra"
+                    />
+
+                    {selectedProject.adjuntosEventos?.reinicio?.nombre && (
+                      <div className="text-[9px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">{selectedProject.adjuntosEventos.reinicio.nombre}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2370,27 +3071,65 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white"
                 />
               </div>
+
+              {/* Notice Feedback Banner */}
+              {fichaSaveNotice && (
+                <div
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                    fichaSaveNotice.type === "success"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-bold"
+                      : "bg-rose-50 border-rose-300 text-rose-950 font-bold"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {fichaSaveNotice.type === "success" ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{fichaSaveNotice.message}</span>
+                  </div>
+                  <button onClick={() => setFichaSaveNotice(null)} className="p-0.5 text-slate-400 hover:text-slate-700">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Modal Actions */}
+            {/* Modal Actions - Con Botón Principal 'Guardar datos actualizados' */}
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
               <button
                 onClick={() => setSelectedProject(null)}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
               >
                 Cerrar
               </button>
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     handleOpenInObraSuite(selectedProject);
                     setSelectedProject(null);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                  className="bg-slate-800 hover:bg-slate-900 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <HardHat className="w-3.5 h-3.5" />
-                  Abrir en Control de Obras
+                  <span>Abrir en Control de Obras</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSavingFichaAsync}
+                  onClick={handleSaveFichaDatesAsync}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingFichaAsync ? (
+                    <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5 text-slate-950" />
+                  )}
+                  <span>{isSavingFichaAsync ? "Guardando en Base Municipal..." : "Guardar datos actualizados"}</span>
                 </button>
               </div>
             </div>
@@ -2490,6 +3229,14 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal para Registrar Nueva Obra en la Matriz de la Municipalidad */}
+      <NewCarteraObraModal
+        isOpen={isNewCarteraModalOpen}
+        onClose={() => setIsNewCarteraModalOpen(false)}
+        onSaveObra={handleCreateNewObra}
+        entityDisplayName={entityDisplayName}
+      />
     </div>
   );
 };

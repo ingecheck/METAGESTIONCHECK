@@ -21,6 +21,11 @@ export interface HitoNormativo {
   monto?: number;
   diasAmpliacion?: number;
   numeroRelacionado?: number;
+  // Soporte de documento adjunto probatorio
+  adjuntoNombre?: string;
+  adjuntoUrl?: string;
+  adjuntoTipo?: string;
+  adjuntoTamano?: string;
 }
 
 export interface ExpedienteAdicional {
@@ -70,8 +75,20 @@ export interface ProyectoCartera {
   // Hitos de Plazo y Terreno
   entregaTerrenoFecha?: string;
   inicioObraFecha?: string;
+  suspensionFecha?: string;
+  reinicioFecha?: string;
   plazoDias?: number;
   fechaTerminoActualizado?: string;
+  adjuntosEventos?: Record<
+    string,
+    {
+      nombre: string;
+      fecha?: string;
+      tipoDocumento?: string; // "Acta", "Resolución", "Informe", "Carta"
+      tamano?: string;
+      base64?: string;
+    }
+  >;
   
   // Observaciones y Estado
   observaciones: string;
@@ -101,6 +118,9 @@ export interface PartidaValorizacion {
   metradoAcumulado: number; // metradoAnterior + metradoActual
   montoAcumulado: number; // metradoAcumulado * precioUnitario
   porcentajeAvance: number; // (metradoAcumulado / metradoContratado) * 100
+  saldoMetrado?: number; // Metrado restante por ejecutar
+  saldoMonto?: number; // Monto restante por ejecutar
+  alertaExceso?: boolean; // Alerta si supera el saldo contratado
 }
 
 export interface ValorizacionObra {
@@ -118,6 +138,7 @@ export interface ValorizacionObra {
   porcentajeProgramadoAcumulado: number;
   porcentajeEjecutadoAcumulado: number;
   estado: "APROBADA" | "EN_TRAMITE" | "OBSERVADA";
+  documentoAprobacion?: string; // Documento de la entidad / supervisión con que se aprobó
   esAtrasada?: boolean; // Alerta Art. 198 RLCE (< 80% de lo programado)
   observacionesSupervisor?: string;
   partidas?: PartidaValorizacion[];
@@ -154,13 +175,34 @@ export const HITOS_NORMATIVOS_BASE: Omit<HitoNormativo, "cumplido">[] = [
     baseLegal: "Art. 186 RLCE",
   },
 
-  // FASE 2: CONDICIONES PREVIAS PARA INICIO DE OBRA (Art. 176 RLCE)
+  // FASE 2: CONDICIONES PREVIAS PARA INICIO DE OBRA (Art. 176 RLCE - Orden Normativo Requerido)
   {
     id: "hito-notif-sup",
     fase: "CONDICIONES_INICIO",
     codigo: "ART-176.1.a",
-    nombre: "Notificación y Designación de Inspector / Supervisor",
-    baseLegal: "Art. 176.1.a RLCE (D.S. 344-2018-EF / D.S. 009-2025-EF)",
+    nombre: "Comunicación al Residente de Designación de Supervisor",
+    baseLegal: "Art. 176.1.a RLCE (Obligatoria previa a la apertura de obra)",
+  },
+  {
+    id: "hito-cod",
+    fase: "CONDICIONES_INICIO",
+    codigo: "DIR-OSCE-COD",
+    nombre: "Apertura de Cuaderno de Obra / Apertura de Obra",
+    baseLegal: "Directiva N° 009-2020-OSCE/CD / Art. 191 RLCE",
+  },
+  {
+    id: "hito-terreno",
+    fase: "CONDICIONES_INICIO",
+    codigo: "ART-176.1.b",
+    nombre: "Entrega Total de Terreno (o entrega parcial con cronograma)",
+    baseLegal: "Art. 176.1.b RLCE (Posterior a la apertura de obra)",
+  },
+  {
+    id: "hito-acta-inicio",
+    fase: "CONDICIONES_INICIO",
+    codigo: "ART-176.1-2",
+    nombre: "Suscripción de Acta de Inicio de Obra y Cómputo de Plazo",
+    baseLegal: "Art. 176.1 y 176.2 RLCE (Día siguiente de cumplidas condiciones)",
   },
   {
     id: "hito-expediente",
@@ -168,27 +210,6 @@ export const HITOS_NORMATIVOS_BASE: Omit<HitoNormativo, "cumplido">[] = [
     codigo: "ART-176.1.c",
     nombre: "Entrega del Expediente Técnico Completo",
     baseLegal: "Art. 176.1.c RLCE",
-  },
-  {
-    id: "hito-terreno",
-    fase: "CONDICIONES_INICIO",
-    codigo: "ART-176.1.b",
-    nombre: "Entrega Total o Parcial de Terreno (Acta in situ)",
-    baseLegal: "Art. 176.1.b RLCE",
-  },
-  {
-    id: "hito-cod",
-    fase: "CONDICIONES_INICIO",
-    codigo: "DIR-OSCE-COD",
-    nombre: "Apertura y Asignación de Cuaderno de Obra Digital",
-    baseLegal: "Directiva N° 009-2020-OSCE/CD",
-  },
-  {
-    id: "hito-acta-inicio",
-    fase: "CONDICIONES_INICIO",
-    codigo: "ART-176.2",
-    nombre: "Suscripción de Acta de Inicio de Obra",
-    baseLegal: "Art. 176.2 RLCE",
   },
 
   // FASE 3: EJECUCIÓN & VALORIZACIONES
