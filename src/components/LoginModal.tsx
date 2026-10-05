@@ -33,6 +33,7 @@ import {
   ADMIN_MASTER_EMAIL,
   INITIAL_DEFAULT_SESSIONS,
   EntityType,
+  mergeLicenseSessionWithExisting,
 } from "../types/auth";
 import { auth, googleProvider, isUserAdmin } from "../lib/firebase";
 import { signInWithPopup } from "firebase/auth";
@@ -221,6 +222,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           }) || null;
       }
 
+      // Merge with local session if available to ensure no locally added collaborators are lost
+      const localMatch = availableSessions.find((s) => {
+        if (!s.licenseKey) return false;
+        return s.licenseKey.replace(/\s+/g, "").toUpperCase() === cleanKey;
+      });
+      if (localMatch && foundSession) {
+        foundSession = mergeLicenseSessionWithExisting(localMatch, foundSession);
+      }
+
       if (!foundSession) {
         setErrorMsg(
           "Clave de licencia no encontrada o inválida. Verifique que coincida exactamente con la clave que le proporcionó el Administrador o solicite una nueva en la pestaña 'Solicitar Licencia'."
@@ -310,13 +320,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsValidatingKey(true);
 
     try {
-      // 1. Gather all local sessions and cloud licenses
+      // 1. Gather all local sessions and cloud licenses without losing local collaborators
       let allSessions = [...availableSessions];
       try {
         const cloudLicenses = await fetchFirebaseLicenses();
         const map = new Map<string, LicenseSession>();
         allSessions.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
-        cloudLicenses.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+        cloudLicenses.forEach((s) => {
+          const key = s.licenseKey.toUpperCase();
+          const existing = map.get(key);
+          map.set(key, mergeLicenseSessionWithExisting(existing, s));
+        });
         allSessions = Array.from(map.values());
       } catch (e) {
         // use local
@@ -497,15 +511,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         {/* Header */}
         <div className="bg-slate-900 text-white p-5 relative">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center font-black text-slate-950 shadow-md text-base">
               MGC
             </div>
             <div>
               <h2 className="text-base font-bold tracking-tight">
                 METAGESTIONCHECK
               </h2>
-              <p className="text-xs text-slate-400">
-                Portal Privado de Licitaciones SEACE & Control de Obras
+              <p className="text-xs text-amber-400 font-medium">
+                Sistema de Control de Obras & Seguimiento de Cartera
               </p>
             </div>
           </div>

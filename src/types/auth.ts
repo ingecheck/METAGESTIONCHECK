@@ -204,13 +204,13 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
         allowedModules: ["all"],
       },
       {
-        id: "tm-rioja-josue-pico",
-        name: "Ing. Josué Pico",
-        email: "jpico@munirioja.gob.pe",
+        id: "tm-rioja-josue-pilco",
+        name: "Ing. Josué Pilco",
+        email: "jpilco@munirioja.gob.pe",
         dni: "45892147",
         cip: "CIP 214589",
         role: "supervisor",
-        cargoText: "Especialista OEI / Seguimiento de Inversiones y Obras",
+        cargoText: "Especialista OEI / Seguimiento de Inversiones y Obras (Pilco)",
         accessPin: "1234",
         status: "active",
         createdAt: "2026-03-02",
@@ -266,6 +266,19 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
         accessPin: "5566",
         status: "active",
         createdAt: "2026-03-10",
+        allowedModules: ["all"],
+      },
+      {
+        id: "tm-rioja-jhon",
+        name: "Ing. Jhon Franklin",
+        email: "jhon.obras@munirioja.gob.pe",
+        dni: "71289410",
+        cip: "CIP 230182",
+        role: "supervisor",
+        cargoText: "Especialista OEI / Seguimiento de Obras & Valorizaciones",
+        accessPin: "1234",
+        status: "active",
+        createdAt: "2026-03-12",
         allowedModules: ["all"],
       },
     ],
@@ -330,3 +343,47 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
     ],
   },
 ];
+
+/**
+ * Safely merge two versions of a LicenseSession, ensuring teamMembers are never lost or wiped out.
+ */
+export function mergeLicenseSessionWithExisting(
+  existing: LicenseSession | undefined,
+  incoming: LicenseSession
+): LicenseSession {
+  if (!existing) return incoming;
+
+  const memberMap = new Map<string, TeamMember>();
+
+  // 1. Put incoming members
+  (incoming.teamMembers || []).forEach((m) => {
+    if (m && (m.id || m.email)) {
+      const key = m.id || m.email;
+      memberMap.set(key, m);
+    }
+  });
+
+  // 2. Put existing members (preserve local collaborators, unioning lists)
+  (existing.teamMembers || []).forEach((m) => {
+    if (m && (m.id || m.email)) {
+      const key = m.id || m.email;
+      const current = memberMap.get(key);
+      if (!current) {
+        memberMap.set(key, m);
+      } else {
+        memberMap.set(key, {
+          ...current,
+          ...m,
+          allowedModules: m.allowedModules || current.allowedModules || ["all"],
+        });
+      }
+    }
+  });
+
+  return {
+    ...incoming,
+    ...existing,
+    teamMembers: Array.from(memberMap.values()),
+    status: existing.status === "suspended" ? "suspended" : (incoming.status || existing.status),
+  };
+}

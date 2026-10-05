@@ -1,6 +1,6 @@
 {
   "name": "METAGESTIONCHECK",
-  "description": "Suite integral para empresarios, contratistas y consorcios para ganar Concursos Públicos y Licitaciones del Estado (Ley N° 32069 / TUO Ley 30225), con análisis de bases, armado de ofertas técnicas, experiencia Anexo 8, y gestión completa de obras públicas.",
+  "description": "Sistema de Control de Obras y Seguimiento de Cartera de Proyectos Públicos (Ley N° 32069 / TUO Ley 30225), con checklist normativo, valorizaciones, expedientes técnicos y ampliaciones de plazo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

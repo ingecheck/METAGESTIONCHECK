@@ -13,9 +13,36 @@ export interface HitoNormativo {
   nombre: string;
   baseLegal: string;
   cumplido: boolean;
-  fecha?: string;
+  fecha?: string; // Fecha de emisión / asignada del documento
   documentoSustento?: string;
   observacion?: string;
+  // Campos dinámicos integrados
+  tipo?: "normativo" | "valorizacion" | "expediente" | "ampliacion_plazo";
+  monto?: number;
+  diasAmpliacion?: number;
+  numeroRelacionado?: number;
+}
+
+export interface ExpedienteAdicional {
+  id: string;
+  numero: number;
+  tipo: "ADICIONAL" | "DEDUCTIVO" | "MAYOR_METRADO";
+  descripcion: string;
+  monto: number;
+  resolucionAprobacion: string;
+  fechaEmision: string;
+  estado: "APROBADO" | "EN_TRAMITE" | "OBSERVADO";
+  plazoAdicionalDias?: number;
+}
+
+export interface AmpliacionPlazo {
+  id: string;
+  numero: number;
+  dias: number;
+  resolucion: string;
+  fechaEmision: string;
+  motivo: string;
+  estado: "APROBADA" | "EN_TRAMITE" | "DENEGADA";
 }
 
 export interface ProyectoCartera {
@@ -52,6 +79,48 @@ export interface ProyectoCartera {
 
   // Checklist de Hitos Normativos Interactivos (1-click)
   hitos: HitoNormativo[];
+
+  // Valorizaciones y Control de Avance de Obra Físico/Financiero
+  valorizaciones?: ValorizacionObra[];
+
+  // Expedientes y Ampliaciones de Plazo integrados
+  expedientes?: ExpedienteAdicional[];
+  ampliacionesPlazo?: AmpliacionPlazo[];
+}
+
+export interface PartidaValorizacion {
+  id: string;
+  item: string; // ej. "01.01"
+  descripcion: string;
+  unidad: string; // "m2", "m3", "glb", "und", "kg"
+  metradoContratado: number;
+  precioUnitario: number;
+  metradoAnterior: number;
+  metradoActual: number;
+  montoParcial: number; // metradoActual * precioUnitario
+  metradoAcumulado: number; // metradoAnterior + metradoActual
+  montoAcumulado: number; // metradoAcumulado * precioUnitario
+  porcentajeAvance: number; // (metradoAcumulado / metradoContratado) * 100
+}
+
+export interface ValorizacionObra {
+  id: string;
+  numero: number; // 1, 2, 3...
+  periodo: string; // ej. "Setiembre 2026"
+  fechaValorizacion: string; // "30/09/2026"
+  fechaAprobacionSupervisor?: string;
+  montoProgramadoMes: number;
+  montoEjecutadoMes: number;
+  porcentajeProgramadoMes: number;
+  porcentajeEjecutadoMes: number;
+  montoProgramadoAcumulado: number;
+  montoEjecutadoAcumulado: number;
+  porcentajeProgramadoAcumulado: number;
+  porcentajeEjecutadoAcumulado: number;
+  estado: "APROBADA" | "EN_TRAMITE" | "OBSERVADA";
+  esAtrasada?: boolean; // Alerta Art. 198 RLCE (< 80% de lo programado)
+  observacionesSupervisor?: string;
+  partidas?: PartidaValorizacion[];
 }
 
 export const HITOS_NORMATIVOS_BASE: Omit<HitoNormativo, "cumplido">[] = [
@@ -280,6 +349,149 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
       "hito-informe-compatibilidad": true,
       "hito-valo-01": true,
     }),
+    valorizaciones: [
+      {
+        id: "val-pj-01",
+        numero: 1,
+        periodo: "Mes 1 - Agosto 2026",
+        fechaValorizacion: "31/08/2026",
+        fechaAprobacionSupervisor: "05/09/2026",
+        montoProgramadoMes: 450000.0,
+        montoEjecutadoMes: 462150.0,
+        porcentajeProgramadoMes: 36.33,
+        porcentajeEjecutadoMes: 37.31,
+        montoProgramadoAcumulado: 450000.0,
+        montoEjecutadoAcumulado: 462150.0,
+        porcentajeProgramadoAcumulado: 36.33,
+        porcentajeEjecutadoAcumulado: 37.31,
+        estado: "APROBADA",
+        esAtrasada: false,
+        observacionesSupervisor:
+          "Avance físico conforme según cronograma. Se verificaron metrados de corte y subrasante.",
+        partidas: [
+          {
+            id: "p-01",
+            item: "01.01",
+            descripcion: "Cartel de identificación de la obra de 3.60 x 2.40 m",
+            unidad: "und",
+            metradoContratado: 2,
+            precioUnitario: 1200.0,
+            metradoAnterior: 0,
+            metradoActual: 2,
+            montoParcial: 2400.0,
+            metradoAcumulado: 2,
+            montoAcumulado: 2400.0,
+            porcentajeAvance: 100,
+          },
+          {
+            id: "p-02",
+            item: "02.01",
+            descripcion: "Corte masivo de terreno con maquinaria pesada a nivel de subrasante",
+            unidad: "m3",
+            metradoContratado: 4500,
+            precioUnitario: 35.5,
+            metradoAnterior: 0,
+            metradoActual: 3800,
+            montoParcial: 134900.0,
+            metradoAcumulado: 3800,
+            montoAcumulado: 134900.0,
+            porcentajeAvance: 84.44,
+          },
+          {
+            id: "p-03",
+            item: "02.02",
+            descripcion: "Perfilado y compactación de subrasante en zonas de corte",
+            unidad: "m2",
+            metradoContratado: 8200,
+            precioUnitario: 18.2,
+            metradoAnterior: 0,
+            metradoActual: 6500,
+            montoParcial: 118300.0,
+            metradoAcumulado: 6500,
+            montoAcumulado: 118300.0,
+            porcentajeAvance: 79.27,
+          },
+          {
+            id: "p-04",
+            item: "03.01",
+            descripcion: "Base granular e = 0.20 m para pavimento rígido",
+            unidad: "m2",
+            metradoContratado: 7800,
+            precioUnitario: 26.5,
+            metradoAnterior: 0,
+            metradoActual: 5100,
+            montoParcial: 135150.0,
+            metradoAcumulado: 5100,
+            montoAcumulado: 135150.0,
+            porcentajeAvance: 65.38,
+          },
+          {
+            id: "p-05",
+            item: "04.01",
+            descripcion: "Concreto f'c=210 kg/cm2 para pavimento rígido e=0.20 m",
+            unidad: "m3",
+            metradoContratado: 1200,
+            precioUnitario: 420.0,
+            metradoAnterior: 0,
+            metradoActual: 170,
+            montoParcial: 71400.0,
+            metradoAcumulado: 170,
+            montoAcumulado: 71400.0,
+            porcentajeAvance: 14.17,
+          },
+        ],
+      },
+      {
+        id: "val-pj-02",
+        numero: 2,
+        periodo: "Mes 2 - Setiembre 2026",
+        fechaValorizacion: "30/09/2026",
+        fechaAprobacionSupervisor: "04/10/2026",
+        montoProgramadoMes: 520000.0,
+        montoEjecutadoMes: 548200.0,
+        porcentajeProgramadoMes: 41.98,
+        porcentajeEjecutadoMes: 44.26,
+        montoProgramadoAcumulado: 970000.0,
+        montoEjecutadoAcumulado: 1010350.0,
+        porcentajeProgramadoAcumulado: 78.31,
+        porcentajeEjecutadoAcumulado: 81.57,
+        estado: "APROBADA",
+        esAtrasada: false,
+        observacionesSupervisor:
+          "Vaciado continuo de losas de concreto rígido y veredas peatonales. Avance favorable por encima del programado.",
+        partidas: [
+          {
+            id: "p-05",
+            item: "04.01",
+            descripcion: "Concreto f'c=210 kg/cm2 para pavimento rígido e=0.20 m",
+            unidad: "m3",
+            metradoContratado: 1200,
+            precioUnitario: 420.0,
+            metradoAnterior: 170,
+            metradoActual: 850,
+            montoParcial: 357000.0,
+            metradoAcumulado: 1020,
+            montoAcumulado: 428400.0,
+            porcentajeAvance: 85.0,
+          },
+          {
+            id: "p-06",
+            item: "05.01",
+            descripcion:
+              "Veredas de concreto f'c=175 kg/cm2 e=0.10 m con acabado frotachado y bruñado",
+            unidad: "m2",
+            metradoContratado: 3200,
+            precioUnitario: 59.75,
+            metradoAnterior: 0,
+            metradoActual: 3200,
+            montoParcial: 191200.0,
+            metradoAcumulado: 3200,
+            montoAcumulado: 191200.0,
+            porcentajeAvance: 100,
+          },
+        ],
+      },
+    ],
   },
   {
     id: 6,

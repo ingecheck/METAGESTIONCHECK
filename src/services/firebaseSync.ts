@@ -63,6 +63,23 @@ export function unmarkLicenseAsDeleted(idOrKey: string) {
 }
 
 export function isLicenseDeleted(session: { id?: string; licenseKey?: string }): boolean {
+  // Master demo and initial official licenses must never be locked or deleted
+  const protectedKeys = [
+    "ADMIN-OSCE-MASTER-2026",
+    "ADMIN-OSCE-2026",
+    "LIC-JHON-FRANKLIN-2026",
+    "LIC-MUNI-RIOJA-2026",
+    "LIC-MUNI-CHICLAYO-2026",
+  ];
+  const protectedIds = [
+    "lic-postor-jhon-franklin",
+    "lic-muni-rioja",
+    "lic-muni-chiclayo",
+    "admin-master-session",
+  ];
+  if (session.licenseKey && protectedKeys.includes(session.licenseKey.trim().toUpperCase())) return false;
+  if (session.id && protectedIds.includes(session.id.toLowerCase())) return false;
+
   const list = getDeletedLicensesBlacklist();
   if (session.id && list.includes(session.id.toUpperCase())) return true;
   if (session.licenseKey && list.includes(session.licenseKey.trim().toUpperCase())) return true;

@@ -7,7 +7,6 @@ import React, { useState, useEffect } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { Sidebar } from "./components/Sidebar";
-import { TopHeader } from "./components/TopHeader";
 import { TenderAnalyzer } from "./components/TenderAnalyzer";
 import { OfferBuilder } from "./components/OfferBuilder";
 import { PersonnelManager } from "./components/PersonnelManager";
@@ -50,6 +49,7 @@ import {
   LicenseSession,
   INITIAL_DEFAULT_SESSIONS,
   ADMIN_MASTER_EMAIL,
+  mergeLicenseSessionWithExisting,
 } from "./types/auth";
 import {
   EMPTY_TENDER,
@@ -101,7 +101,7 @@ const SESSIONS_STORAGE_KEY = "osce_license_sessions_free_v1";
 const ACTIVE_USER_STORAGE_KEY = "osce_current_user_free_v1";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [activeTab, setActiveTab] = useState<string>("seguimiento-cartera");
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   // License Sessions & Authentication State - 100% Local & Free
@@ -582,7 +582,7 @@ export default function App() {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeOption>("slate");
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 
   const selectedThemeConfig = THEMES.find((t) => t.id === currentTheme) || THEMES[0];
 
@@ -619,7 +619,11 @@ export default function App() {
               if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
             });
             cloudLicenses.forEach((s) => {
-              if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+              if (!isLicenseDeleted(s)) {
+                const key = s.licenseKey.toUpperCase();
+                const existing = map.get(key);
+                map.set(key, mergeLicenseSessionWithExisting(existing, s));
+              }
             });
             return Array.from(map.values());
           });
@@ -639,7 +643,11 @@ export default function App() {
             if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
           });
           cloudLicenses.forEach((s) => {
-            if (!isLicenseDeleted(s)) map.set(s.licenseKey.toUpperCase(), s);
+            if (!isLicenseDeleted(s)) {
+              const key = s.licenseKey.toUpperCase();
+              const existing = map.get(key);
+              map.set(key, mergeLicenseSessionWithExisting(existing, s));
+            }
           });
           return Array.from(map.values());
         });
@@ -744,12 +752,43 @@ export default function App() {
     if (newSession.licenseKey) unmarkLicenseAsDeleted(newSession.licenseKey);
 
     setSessions((prev) => {
-      const updated = [newSession, ...prev.filter((s) => s.licenseKey !== newSession.licenseKey && s.id !== newSession.id)];
+      const existing = prev.find(
+        (s) =>
+          (s.id && s.id === newSession.id) ||
+          (s.licenseKey && s.licenseKey.toUpperCase() === newSession.licenseKey.toUpperCase())
+      );
+      const merged = existing ? mergeLicenseSessionWithExisting(existing, newSession) : newSession;
+      const updated = [
+        merged,
+        ...prev.filter(
+          (s) =>
+            s.id !== newSession.id &&
+            s.licenseKey.toUpperCase() !== newSession.licenseKey.toUpperCase()
+        ),
+      ];
       try {
         localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
+
+    if (
+      currentUser &&
+      (currentUser.id === newSession.id ||
+        currentUser.licenseKey.toUpperCase() === newSession.licenseKey.toUpperCase())
+    ) {
+      setCurrentUser((prev) => {
+        const mergedUser = prev ? { ...prev, ...newSession } : null;
+        try {
+          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(mergedUser));
+        } catch (e) {}
+        return mergedUser;
+      });
+    }
+
+    updateFirebaseUserLicense(newSession).catch((err) =>
+      console.warn("Cloud sync error for session:", err)
+    );
   };
 
   const handleUpdateSessionStatus = (sessionId: string, status: "active" | "suspended" | "expired") => {
@@ -907,28 +946,16 @@ export default function App() {
         setIsCollapsed={setIsSidebarCollapsed}
       />
 
-      {/* Main Content Area with Top Header and Scrollable Body */}
+      {/* Main Content Area without top white header */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Top Header */}
-        <TopHeader
-          tender={tender}
-          company={company}
-          obra={obra}
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          currentUser={currentUser}
-          onOpenAudit={() => setIsAuditOpen(true)}
-          onDownloadAllZip={handleDownloadAllZip}
-          isDownloadingZip={isDownloadingZip}
-          onOpenThemeSelector={() => setIsThemeModalOpen(true)}
-          onLogout={handleLogout}
-          onOpenLoginModal={() => setIsLoginModalOpen(true)}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-
         {/* Main Content Body */}
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main
+          className={`flex-1 w-full ${
+            activeTab === "seguimiento-cartera"
+              ? "max-w-full px-2 sm:px-5 py-3"
+              : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5"
+          }`}
+        >
           {/* ======================================================== */}
           {/* APARTADO 1: OFERTADOR / POSTOR (LICITACIONES SEACE)     */}
           {/* ======================================================== */}
@@ -1191,6 +1218,7 @@ export default function App() {
           {/* ======================================================== */}
           {activeTab === "seguimiento-cartera" && (
             <WorksPortfolioTracker
+              currentUser={currentUser}
               onSelectObra={(partialObra) =>
                 setObra((prev) => ({
                   ...prev,
@@ -1252,7 +1280,10 @@ export default function App() {
             onUpdateSession={(updated) => {
               setSessions((prev) => {
                 const updatedList = prev.map((s) =>
-                  s.id === updated.id || s.licenseKey === updated.licenseKey ? updated : s
+                  s.id === updated.id ||
+                  s.licenseKey.toUpperCase() === updated.licenseKey.toUpperCase()
+                    ? updated
+                    : s
                 );
                 try {
                   localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updatedList));

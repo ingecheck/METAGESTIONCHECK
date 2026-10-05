@@ -47,6 +47,7 @@ import {
 } from "../types/auth";
 import {
   createFirebaseUserLicense,
+  updateFirebaseUserLicense,
   updateFirebaseLicenseStatus,
   extendFirebaseLicense,
   deleteFirebaseUserLicense,
@@ -1216,6 +1217,9 @@ Como Titular, puede registrar a su Ingeniero Residente, Supervisor de Obra y Esp
           onUpdateSession={(updatedSession) => {
             onAddSession(updatedSession);
             setInspectTeamLicense(updatedSession);
+            updateFirebaseUserLicense(updatedSession).catch((err) =>
+              console.warn("Cloud sync error for team license:", err)
+            );
           }}
         />
       )}
