@@ -52,7 +52,7 @@ export interface AmpliacionPlazo {
 
 export interface ProyectoCartera {
   id: number;
-  encargado: string; // "JHON" | "JHENIFER" | "JEZER" | "-"
+  encargado: string; // "ING. RESIDENTE" | "SUPERVISOR" | "OEI" | "-"
   proyecto: string; // Nombre del proyecto o vía
   cui: string; // Código Único de Inversiones
   
@@ -271,7 +271,7 @@ export function createDefaultHitos(
 export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   {
     id: 1,
-    encargado: "JHON",
+    encargado: "-",
     proyecto: "PISTAS JR.ARICA",
     cui: "2619826",
     contratoEjecucionNumero: "CONTRATO 023-2025",
@@ -306,7 +306,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 4,
-    encargado: "JHENIFER",
+    encargado: "-",
     proyecto: "MATADERO",
     cui: "2235100",
     contratoEjecucionNumero: "CONTRATO N°049-2026-GAF/MPR",
@@ -339,7 +339,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 5,
-    encargado: "JHON",
+    encargado: "-",
     proyecto: "PISTAS JERUSALEN",
     cui: "2707147",
     contratoEjecucionNumero: "CONTRATO N°051-2026-GAF/MPR",
@@ -516,7 +516,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 6,
-    encargado: "JHON",
+    encargado: "-",
     proyecto: "PISTAS TEOBALDO",
     cui: "2507075",
     contratoEjecucionNumero: "CONTRATO N°052-2026-GAF/MPR",
@@ -549,7 +549,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 7,
-    encargado: "JEZER",
+    encargado: "-",
     proyecto: "PUESTO DE AUXILIO SAN FRANCISCO",
     cui: "2655193",
     contratoEjecucionNumero: "CONTRATO N°053-2026-GAF/MPR",
@@ -586,7 +586,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 8,
-    encargado: "JEZER",
+    encargado: "-",
     proyecto: "COBERTURA SAGRADO CORAZON DE JESUS",
     cui: "2684433",
     contratoEjecucionNumero: "CONTRATO N°057-2026-GAF/MPR",
@@ -619,7 +619,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 10,
-    encargado: "JOSUE",
+    encargado: "-",
     proyecto: "COBERTURA-SAN AGUSTIN",
     cui: "2722218",
     contratoEjecucionNumero: "CONTRATO N° 065-2026-GAF/MPR",
@@ -652,7 +652,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 11,
-    encargado: "JOSUE",
+    encargado: "-",
     proyecto: "COBERTURA-MANUEL GONZALES PRADA",
     cui: "2724099",
     contratoEjecucionNumero: "PUBLICADO 31/07",
@@ -685,7 +685,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 12,
-    encargado: "LUIS",
+    encargado: "-",
     proyecto: "COBERTURA-BARRIOS ALTOS",
     cui: "2723034",
     contratoEjecucionNumero: "CONTRATO N° 064-2026-GAF/MPR",
@@ -720,7 +720,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 13,
-    encargado: "LUIS",
+    encargado: "-",
     proyecto: "FONDES-IE DEL",
     cui: "2689751",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -738,7 +738,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 14,
-    encargado: "PICO",
+    encargado: "-",
     proyecto: "FONDES-IE JUAN",
     cui: "2689748",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -756,7 +756,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 15,
-    encargado: "PICO",
+    encargado: "-",
     proyecto: "FONDES-IE",
     cui: "2689756",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -774,7 +774,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 16,
-    encargado: "JOSUE",
+    encargado: "-",
     proyecto: "FONDES-IE SANTA",
     cui: "2689539",
     contratoEjecucionNumero: "SE ELABORARON LAS BASES",
@@ -792,7 +792,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 17,
-    encargado: "LUIS",
+    encargado: "-",
     proyecto: "PUENTE-PABLO MORI",
     cui: "2677501",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -810,7 +810,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 18,
-    encargado: "PICO",
+    encargado: "-",
     proyecto: "PUENTE-2677502",
     cui: "2677502",
     contratoEjecucionNumero: "BASES INTEGRADAS 24/07",
@@ -828,7 +828,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 19,
-    encargado: "LUIS",
+    encargado: "-",
     proyecto: "PUENTE-EL",
     cui: "2677531",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -846,7 +846,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 20,
-    encargado: "JOSUE",
+    encargado: "-",
     proyecto: "PUENTE-2677528",
     cui: "2677528",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -864,7 +864,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 21,
-    encargado: "PICO",
+    encargado: "-",
     proyecto: "PUENTE-TUMBARO",
     cui: "2677530",
     contratoEjecucionNumero: "PUBLICADO 17/07",
@@ -882,7 +882,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 9,
-    encargado: "LUIS",
+    encargado: "-",
     proyecto: "PISTAS PACHACUTEC",
     cui: "2521144",
     contratoEjecucionNumero: "INTEGRADO BASES 08/07",
@@ -900,7 +900,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 3,
-    encargado: "JHENIFER",
+    encargado: "-",
     proyecto: "PUESTO TUMBARO",
     cui: "2705819",
     contratoEjecucionNumero: "CONTRATO N°046-2026",
@@ -933,7 +933,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 2,
-    encargado: "JEZER",
+    encargado: "-",
     proyecto: "MERCADO ZONAL",
     cui: "2709063",
     contratoEjecucionNumero: "CONTRATO N°041-2026",
@@ -972,7 +972,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 22,
-    encargado: "JEZER",
+    encargado: "-",
     proyecto: "COBERTURA SAN JUAN",
     cui: "2688943",
     contratoEjecucionNumero: "CONTRATO N° 047-2026",
@@ -1007,7 +1007,7 @@ export const PROYECTOS_RIOJA_SEED: ProyectoCartera[] = [
   },
   {
     id: 23,
-    encargado: "JHENIFER",
+    encargado: "-",
     proyecto: "CERCO VISTA ALEGRE",
     cui: "2695908",
     contratoEjecucionNumero: "CONTRATO N°048-2026-GAF/MPR",

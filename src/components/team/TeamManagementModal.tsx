@@ -155,6 +155,7 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({
   const buildWhatsAppMessage = (member: TeamMember) => {
     const appUrl = window.location.origin;
     const roleLabel = member.cargoText || ROLE_DEFINITIONS[member.role]?.label || "Colaborador Técnico";
+    const memberPin = member.accessPin || "1234";
     
     return `🏛️ *METAGESTIONCHECK - ACCESO AL EQUIPO TÉCNICO*
 Hola estimado(a) *${member.name}*, se ha habilitado tu acceso individual a la plataforma de gestión SEACE y control de obras:
@@ -162,16 +163,17 @@ Hola estimado(a) *${member.name}*, se ha habilitado tu acceso individual a la pl
 🏢 *Entidad / Empresa:* ${currentUser.companyName} (RUC: ${currentUser.ruc})
 👷 *Cargo / Especialidad:* ${roleLabel}
 ${member.dni ? `🪪 *DNI Registrado:* ${member.dni}\n` : ""}${member.cip ? `📐 *Colegiatura:* ${member.cip}\n` : ""}━━━━━━━━━━━━━━━━━━━━━
-🔑 *TUS DATOS DE ACCESO:*
+🔑 *TUS CREDENCIALES DE ACCESO:*
 • *Usuario / Correo:* ${member.email}
-• *Modalidad:* Acceso directo con correo (Sin requerir PIN)
+• *PIN de Acceso Personal:* *${memberPin}*
 ━━━━━━━━━━━━━━━━━━━━━
 📲 *CÓMO INGRESAR AL SISTEMA:*
 1️⃣ Ingresa al portal: ${appUrl}
-2️⃣ Digita tu correo: *${member.email}* y presiona "Ingresar al Sistema"
-3️⃣ ¡Listo! Ingresarás directamente a tu mesa de trabajo técnica individual con aislamiento de expedientes y trazabilidad OSCE.
+2️⃣ Digita tu correo y tu PIN: *${memberPin}*
+3️⃣ Deja marcada la casilla "Guardar PIN en este equipo" para que quede guardado y no tengas que escribirlo cada vez.
+4️⃣ Presiona "Ingresar al Sistema" y entrarás a tu mesa técnica individual.
 
-💡 *Seguridad:* Tu acceso está verificado mediante tu correo electrónico registrado.`;
+💡 *Seguridad:* Tu PIN queda guardado automáticamente en tu navegador para tu comodidad.`;
   };
 
   const handleOpenWhatsAppDirect = (member: TeamMember, customPhone?: string) => {
@@ -346,15 +348,16 @@ ${member.dni ? `🪪 *DNI Registrado:* ${member.dni}\n` : ""}${member.cip ? `�
   const handleCopyInvitation = (member: TeamMember) => {
     const appUrl = window.location.origin;
     const roleInfo = ROLE_DEFINITIONS[member.role];
+    const memberPin = member.accessPin || "1234";
     const message = `🏛️ *INVITACIÓN AL EQUIPO DE TRABAJO - METAGESTIONCHECK*
 Hola *${member.name}*, se te ha asignado acceso como *${member.cargoText || roleInfo.label}* en la cartera de:
 🏢 *Entidad / Empresa:* ${currentUser.companyName} (RUC: ${currentUser.ruc})
 
 👤 *Usuario / Correo Registrado:* ${member.email}
+🔐 *PIN de Acceso Personal:* ${memberPin}
 🌐 *Acceso al Sistema:* ${appUrl}
-🔑 *Modalidad:* Acceso directo con correo (sin requerir PIN)
 
-Ingresa con tu correo registrado para acceder a la mesa de trabajo limpia, gestionar tus valorizaciones, partidas y propuestas técnicas conforme a la normativa OSCE.`;
+Ingresa con tu correo y tu PIN. El sistema lo guardará automáticamente en tu navegador para que no tengas que escribirlo a cada rato.`;
 
     navigator.clipboard.writeText(message);
     setCopiedInviteId(member.id);
@@ -828,21 +831,32 @@ Ingresa con tu correo registrado para acceder a la mesa de trabajo limpia, gesti
                           )}
                         </div>
 
-                        {/* Email Access & WhatsApp Actions Bar */}
+                        {/* Email & PIN Access & WhatsApp Actions Bar */}
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-[11px]">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-1.5">
-                              <Mail className="w-3.5 h-3.5 text-indigo-600" />
-                              <span className="text-slate-600 font-medium">Acceso:</span>
-                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs truncate max-w-[180px]">
+                              <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span className="text-slate-600 font-medium">Correo:</span>
+                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs truncate max-w-[150px]">
                                 {member.email}
                               </span>
                             </div>
 
-                            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>Solo con correo</span>
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="text-slate-600 font-medium">PIN:</span>
+                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                                {showPins[member.id] ? member.accessPin || "1234" : "••••"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleShowPin(member.id)}
+                                className="p-1 hover:bg-slate-200 rounded text-slate-500 cursor-pointer"
+                                title={showPins[member.id] ? "Ocultar PIN" : "Ver PIN"}
+                              >
+                                {showPins[member.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              </button>
+                            </div>
                           </div>
 
                           {/* WhatsApp Action Buttons */}

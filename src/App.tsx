@@ -133,7 +133,11 @@ export default function App() {
                     mergedTeamMembers.push(dm);
                   }
                 });
-                s.teamMembers = mergedTeamMembers;
+                s.teamMembers = mergedTeamMembers.filter(
+                  (m) =>
+                    m.id !== "tm-rioja-pico-asistente" &&
+                    !["PICO", "MARIELA", "EDSON"].some((n) => m.name.toUpperCase().includes(n))
+                );
               }
               map.set(s.licenseKey.toUpperCase(), s);
             }
@@ -171,7 +175,11 @@ export default function App() {
                 merged.push(dm);
               }
             });
-            parsed.teamMembers = merged;
+            parsed.teamMembers = merged.filter(
+              (m: any) =>
+                m.id !== "tm-rioja-pico-asistente" &&
+                !["PICO", "MARIELA", "EDSON"].some((n) => (m.name || "").toUpperCase().includes(n))
+            );
           }
           return parsed;
         }

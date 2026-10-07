@@ -173,7 +173,7 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
   },
   {
     id: "lic-muni-rioja",
-    userName: "Ing. Carlos Mendoza Pinedo (Gerente de Infraestructura)",
+    userName: "Gerencia de Infraestructura (Muni Rioja)",
     userEmail: "infraestructura@munirioja.gob.pe",
     companyName: "MUNICIPALIDAD PROVINCIAL DE RIOJA",
     ruc: "20148174415",
@@ -193,7 +193,7 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
     teamMembers: [
       {
         id: "tm-rioja-1",
-        name: "Ing. Carlos Mendoza Pinedo",
+        name: "Gerente de Infraestructura",
         email: "infraestructura@munirioja.gob.pe",
         dni: "41982341",
         cip: "CIP 178290",
@@ -219,7 +219,7 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
       },
       {
         id: "tm-rioja-luis",
-        name: "Ing. Luis Alberto Mendoza Vásquez",
+        name: "Ing. Luis Vásquez",
         email: "luis.oei@munirioja.gob.pe",
         dni: "46781203",
         cip: "CIP 198542",
@@ -228,19 +228,6 @@ export const INITIAL_DEFAULT_SESSIONS: LicenseSession[] = [
         accessPin: "1234",
         status: "active",
         createdAt: "2026-03-03",
-        allowedModules: ["all"],
-      },
-      {
-        id: "tm-rioja-pico-asistente",
-        name: "Ing. Christian Pico Reátegui",
-        email: "cpico@munirioja.gob.pe",
-        dni: "47120934",
-        cip: "CIP 223190",
-        role: "asistente",
-        cargoText: "Asistente Técnico OEI / Liquidaciones y Obras",
-        accessPin: "1234",
-        status: "active",
-        createdAt: "2026-03-04",
         allowedModules: ["all"],
       },
       {

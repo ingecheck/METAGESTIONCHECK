@@ -60,7 +60,7 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
   // Identificación
   const [proyecto, setProyecto] = useState("");
   const [cui, setCui] = useState("");
-  const [encargado, setEncargado] = useState("JHON");
+  const [encargado, setEncargado] = useState("-");
   const [estado, setEstado] = useState<EstadoCartera>("EN_EJECUCION");
   const [plazoDias, setPlazoDias] = useState<number>(180);
 
@@ -211,7 +211,7 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
     const randomCui = `2${Math.floor(Math.random() * 899999 + 100000)}`;
     setProyecto("MEJORAMIENTO Y AMPLIACIÓN DEL SERVICIO DE TRANSITABILIDAD VIAL Y PEATONAL EN EL DISTRITO");
     setCui(randomCui);
-    setEncargado("JHON");
+    setEncargado("-");
     setEstado("EN_EJECUCION");
     setPlazoDias(180);
 
@@ -225,7 +225,7 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
     setContratoSupervisionNumero(`CONTRATO N° 0${Math.floor(randomNum / 3) + 1}-2026-MPR-CS`);
     setContratoSupervisionMonto(189500.0);
     setContratoSupervisionEmpresa("SUPERVISIÓN Y CONSULTORÍA DEL PERÚ S.A.C.");
-    setSupervisorNombre("Ing. Carlos Mendoza Pinedo (CIP 178290)");
+    setSupervisorNombre("Consorcio Supervisor Nor Oriente");
 
     // Fechas
     setEntregaTerrenoFecha("15/02/2026");
@@ -273,7 +273,7 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
   const handleResetForm = () => {
     setProyecto("");
     setCui("");
-    setEncargado("JHON");
+    setEncargado("-");
     setEstado("EN_EJECUCION");
     setPlazoDias(180);
     setContratoEjecucionNumero("");
@@ -507,21 +507,16 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
                 <input
                   type="text"
                   list="quick-encargados-list"
-                  placeholder="JHON, JOSUE, LUIS..."
+                  placeholder="ej. Ing. Residente, Supervisor u OEI..."
                   value={encargado}
                   onChange={(e) => setEncargado(e.target.value.toUpperCase())}
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
                 <datalist id="quick-encargados-list">
-                  <option value="JHON" />
-                  <option value="JHENIFER" />
-                  <option value="JEZER" />
-                  <option value="JOSUE" />
-                  <option value="LUIS" />
-                  <option value="PICO" />
-                  <option value="CARLOS" />
-                  <option value="MARIELA" />
-                  <option value="EDSON" />
+                  <option value="SIN ASIGNAR" />
+                  <option value="OEI - INFRAESTRUCTURA" />
+                  <option value="ING. RESIDENTE" />
+                  <option value="SUPERVISIÓN EXTERNA" />
                 </datalist>
               </div>
 

@@ -114,7 +114,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     isMasterAdmin ||
     currentUser?.licenseKey?.toUpperCase().includes("RIOJA") ||
     currentUser?.companyName?.toUpperCase().includes("RIOJA") ||
-    ["JOSUE", "LUIS", "PICO", "PILCO", "JHON", "CARLOS", "WILSON", "VANESSA"].some((n) =>
+    ["JOSUE", "PILCO", "JHON", "WILSON", "VANESSA"].some((n) =>
       (currentUser?.userName || "").toUpperCase().includes(n)
     );
 
@@ -171,15 +171,27 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     return selectedEntityKey === "RIOJA" ? PROYECTOS_RIOJA_SEED : [];
   });
 
+  // Sanitize obsolete or dummy mock encargados (e.g. Pico, Carlos, Mariela, Edson)
+  const sanitizeProyectosEncargados = (list: ProyectoCartera[]): ProyectoCartera[] => {
+    return list.map((p) => {
+      if (
+        p.encargado &&
+        ["PICO", "CARLOS", "MARIELA", "EDSON"].includes(p.encargado.trim().toUpperCase())
+      ) {
+        return { ...p, encargado: "-" };
+      }
+      return p;
+    });
+  };
+
   // Real-time Firestore Multi-tenant Synchronization
-  // Ensures that when Pilco, Luis, Jhon, Carlos, etc. upload an Excel, all members receive it live
   useEffect(() => {
     let isCancelled = false;
 
     // Initial check from Cloud Firestore
     loadCarteraFromFirestore(selectedEntityKey).then((cloudData) => {
       if (!isCancelled && cloudData && Array.isArray(cloudData.proyectos) && cloudData.proyectos.length > 0) {
-        setProyectos(cloudData.proyectos);
+        setProyectos(sanitizeProyectosEncargados(cloudData.proyectos));
         setLastSyncInfo({
           lastUpdated: cloudData.lastUpdated,
           updatedBy: cloudData.updatedBy,
@@ -190,13 +202,12 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
     // Real-time subscription: when ANY member of this municipality updates or uploads an Excel,
     // all other members of this municipality receive the update instantly.
-    // Other municipalities have their own isolated entityId and never see this data.
     const unsubscribe = subscribeToCartera(
       selectedEntityKey,
       (remotePayload) => {
         if (isCancelled) return;
         if (remotePayload && Array.isArray(remotePayload.proyectos)) {
-          setProyectos(remotePayload.proyectos);
+          setProyectos(sanitizeProyectosEncargados(remotePayload.proyectos));
           setLastSyncInfo({
             lastUpdated: remotePayload.lastUpdated,
             updatedBy: remotePayload.updatedBy,
@@ -231,7 +242,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setProyectos(parsed);
+          setProyectos(sanitizeProyectosEncargados(parsed));
           return;
         }
       }
@@ -255,7 +266,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   const [filterEncargado, setFilterEncargado] = useState<string>("TODOS");
   const [filterEstado, setFilterEstado] = useState<string>("TODOS");
   const [filterSoloAlertas, setFilterSoloAlertas] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<"matriz" | "pipeline" | "cuadro_avance" | "valorizaciones">("matriz");
+  const [activeView, setActiveView] = useState<"matriz" | "pipeline" | "valorizaciones">("matriz");
 
   // Selected project for quick modal or checklist
   const [selectedProject, setSelectedProject] = useState<ProyectoCartera | null>(null);
@@ -278,16 +289,41 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   const [editingEncargadoId, setEditingEncargadoId] = useState<number | null>(null);
   const [customEncargadoText, setCustomEncargadoText] = useState<string>("");
 
-  // List of all known encargados across projects + common defaults
+  // List of all known encargados across projects (derived strictly from active team members & assigned projects, no dummy names)
   const allKnownEncargados = useMemo(() => {
-    const defaultSet = new Set(["JHON", "JHENIFER", "JEZER", "JOSUE", "LUIS", "PICO", "CARLOS", "MARIELA", "EDSON"]);
+    const listSet = new Set<string>();
+
+    // 1. Add real active team members if configured
+    if (currentUser?.teamMembers && currentUser.teamMembers.length > 0) {
+      currentUser.teamMembers
+        .filter((m) => m.status === "active")
+        .forEach((m) => {
+          const clean = m.name
+            .replace(/^(ING\.?|LIC\.?|ARQ\.?|CPC\.?|BACH\.?)\s+/i, "")
+            .trim();
+          const firstWord = clean.split(" ")[0]?.toUpperCase();
+          if (
+            firstWord &&
+            firstWord.length > 1 &&
+            !["PICO", "CARLOS", "MARIELA", "EDSON"].includes(firstWord)
+          ) {
+            listSet.add(firstWord);
+          }
+        });
+    }
+
+    // 2. Add legitimate encargados assigned across the current projects
     proyectos.forEach((p) => {
       if (p.encargado && p.encargado.trim() && p.encargado !== "-") {
-        defaultSet.add(p.encargado.trim().toUpperCase());
+        const encUpper = p.encargado.trim().toUpperCase();
+        if (!["PICO", "CARLOS", "MARIELA", "EDSON"].includes(encUpper)) {
+          listSet.add(encUpper);
+        }
       }
     });
-    return Array.from(defaultSet);
-  }, [proyectos]);
+
+    return Array.from(listSet).sort();
+  }, [proyectos, currentUser]);
 
   // Quick change of encargado directly from the table matrix
   const handleUpdateEncargado = (proyectoId: number, newEncargado: string) => {
@@ -1682,17 +1718,6 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               Checklist Normativo
             </button>
             <button
-              onClick={() => setActiveView("cuadro_avance")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeView === "cuadro_avance"
-                  ? "bg-amber-500 text-slate-950 font-black shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <BarChart3 className={`w-3.5 h-3.5 ${activeView === "cuadro_avance" ? "text-slate-950" : "text-amber-600"}`} />
-              Cuadro Situacional
-            </button>
-            <button
               onClick={() => setActiveView("valorizaciones")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 activeView === "valorizaciones"
@@ -1733,7 +1758,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <Filter className="w-3 h-3" />
               Encargado:
             </span>
-            {["TODOS", "JOSUE", "LUIS", "PICO", "JHON", "JHENIFER", "JEZER", "SIN_ASIGNAR"].map((enc) => (
+            {["TODOS", ...allKnownEncargados, "SIN_ASIGNAR"].map((enc) => (
               <button
                 key={enc}
                 onClick={() => setFilterEncargado(enc)}
@@ -2123,8 +2148,6 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   ? "bg-cyan-100 text-cyan-800 border-cyan-300"
                                   : p.encargado === "LUIS"
                                   ? "bg-indigo-100 text-indigo-800 border-indigo-300"
-                                  : p.encargado === "PICO"
-                                  ? "bg-amber-100 text-amber-900 border-amber-300"
                                   : p.encargado === "JHON"
                                   ? "bg-purple-100 text-purple-800 border-purple-200"
                                   : p.encargado === "JHENIFER"
@@ -2886,118 +2909,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* VISTA 3: CUADRO DE AVANCE SITUACIONAL                    */}
-      {/* ======================================================== */}
-      {activeView === "cuadro_avance" && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-            <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-blue-600" />
-                  <span>Cuadro de Avance y Estado Situacional de Inversiones (OEI)</span>
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Informe consolidado para Despacho de Gerencia de Desarrollo Urbano e Infraestructura
-                </p>
-              </div>
-              <button
-                onClick={() => window.print()}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition self-start cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5 text-slate-600" />
-                Imprimir Cuadro
-              </button>
-            </div>
-
-            {/* Distribution by Encargado */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {["JOSUE", "LUIS", "PICO", "JHON", "JHENIFER", "JEZER"].map((enc) => {
-                const encProjs = proyectos.filter((p) => p.encargado === enc);
-                const encMonto = encProjs.reduce((sum, p) => sum + (p.contratoEjecucionMonto || 0), 0);
-                const encAvg =
-                  encProjs.length > 0
-                    ? Math.round(
-                        encProjs.reduce((sum, p) => sum + getProgresoPorcentaje(p.hitos), 0) /
-                          encProjs.length
-                      )
-                    : 0;
-
-                return (
-                  <div key={enc} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-xs text-slate-900">Ing. {enc}</span>
-                      <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                        {encProjs.length} Proyectos
-                      </span>
-                    </div>
-                    <div className="text-sm font-mono font-black text-slate-800">
-                      {formatPEN(encMonto)}
-                    </div>
-                    <div className="space-y-1 pt-1">
-                      <div className="flex justify-between text-[11px] text-slate-600">
-                        <span>Avance Promedio:</span>
-                        <span className="font-bold text-blue-700">{encAvg}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                        <div className="bg-blue-600 h-full rounded-full" style={{ width: `${encAvg}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Critical Bottlenecks */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-              <h3 className="font-extrabold text-xs text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Resumen de Cuellos de Botella y Actos Pendientes según Normativa
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-1">
-                  <div className="font-bold text-amber-900">
-                    1. Falta de TDR / Elaboración de Bases (Supervisión):
-                  </div>
-                  <div className="text-slate-600 text-[11px] leading-relaxed">
-                    Existen 10 proyectos con bases publicadas o por convocar a los que les falta la culminación del TDR de supervisión (e.g. Coberturas San Agustín, Barrios Altos, Puentes Pablo Mori, El, Tumbaro, Pachacutec).
-                  </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-1">
-                  <div className="font-bold text-amber-900">
-                    2. Pendientes de Entrega de Terreno & Acta de Inicio (Art. 176):
-                  </div>
-                  <div className="text-slate-600 text-[11px] leading-relaxed">
-                    Cobertura Sagrado Corazón de Jesús (CUI 2684433) cuenta con contrato suscrito el 25/08/2026 y supervisión contratada el 18/08/2026; pendiente programar entrega de terreno e inicio in situ.
-                  </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-1">
-                  <div className="font-bold text-amber-900">
-                    3. Trámite de Valorización N° 01 de Supervisión:
-                  </div>
-                  <div className="text-slate-600 text-[11px] leading-relaxed">
-                    Puesto de Auxilio San Francisco (CUI 2655193): Obra en ejecución con supervisión activa (Z & Z Center Fish); pendiente dar trámite a la Valorización N° 01 de supervisión.
-                  </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-1">
-                  <div className="font-bold text-amber-900">
-                    4. Obras Finalizadas pendientes de Liquidación:
-                  </div>
-                  <div className="text-slate-600 text-[11px] leading-relaxed">
-                    Mercado Zonal (Acta de Recepción 25/09/2026) y Cobertura San (Finalizó): Corresponde elaborar y aprobar las liquidaciones técnicas y financieras dentro del plazo legal (Art. 209 RLCE).
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* VISTA 4: AVANCE & VALORIZACIONES                         */}
+      {/* VISTA: AVANCE & VALORIZACIONES                           */}
       {/* ======================================================== */}
       {activeView === "valorizaciones" && (
         <WorksValorizacionesView

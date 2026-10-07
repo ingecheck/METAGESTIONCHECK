@@ -58,7 +58,7 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
 }) => {
   const [proyecto, setProyecto] = useState("");
   const [cui, setCui] = useState("");
-  const [encargado, setEncargado] = useState("JHON");
+  const [encargado, setEncargado] = useState("-");
   const [estado, setEstado] = useState<EstadoCartera>("PENDIENTE_INICIO_CONDICIONES");
 
   // Contrato Ejecución
@@ -194,7 +194,7 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
     if (initialObra) {
       setProyecto(initialObra.proyecto || "");
       setCui(initialObra.cui || "");
-      setEncargado(initialObra.encargado || "JHON");
+      setEncargado(initialObra.encargado || "-");
       setEstado(initialObra.estado || "PENDIENTE_INICIO_CONDICIONES");
       setContratoEjecucionNumero(initialObra.contratoEjecucionNumero || "");
       setContratoEjecucionMonto(initialObra.contratoEjecucionMonto || 0);
@@ -218,7 +218,7 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
     } else {
       setProyecto("");
       setCui("");
-      setEncargado("JHON");
+      setEncargado("-");
       setEstado("PENDIENTE_INICIO_CONDICIONES");
       setContratoEjecucionNumero("");
       setContratoEjecucionMonto(0);
@@ -417,22 +417,16 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
                   <input
                     type="text"
                     list="encargados-datalist"
-                    placeholder="ej. JHON, CARLOS, MARIELA..."
+                    placeholder="ej. Ing. Residente, Supervisor u OEI..."
                     value={encargado}
                     onChange={(e) => setEncargado(e.target.value.toUpperCase())}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                   />
                   <datalist id="encargados-datalist">
-                    <option value="JHON" />
-                    <option value="JHENIFER" />
-                    <option value="JEZER" />
-                    <option value="JOSUE" />
-                    <option value="LUIS" />
-                    <option value="PICO" />
-                    <option value="CARLOS" />
-                    <option value="MARIELA" />
-                    <option value="EDSON" />
                     <option value="SIN ASIGNAR" />
+                    <option value="OEI - INFRAESTRUCTURA" />
+                    <option value="ING. RESIDENTE" />
+                    <option value="SUPERVISIÓN EXTERNA" />
                   </datalist>
                 </div>
               </div>
