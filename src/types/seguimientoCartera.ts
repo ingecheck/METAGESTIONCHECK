@@ -1117,46 +1117,40 @@ export function getAvanceFisicoObra(p: ProyectoCartera): {
 export function getEstadoLabel(estado: EstadoCartera): { label: string; color: string; bg: string; border: string } {
   switch (estado) {
     case "ACTOS_PREPARATORIOS":
-      return {
-        label: "Actos Preparatorios",
-        color: "text-amber-800",
-        bg: "bg-amber-100",
-        border: "border-amber-300",
-      };
     case "EN_SELECCION_SEACE":
       return {
-        label: "En Selección (SEACE)",
-        color: "text-blue-800",
+        label: "En Selección SEACE",
+        color: "text-blue-900 font-extrabold",
         bg: "bg-blue-100",
-        border: "border-blue-300",
+        border: "border-blue-400",
       };
     case "PENDIENTE_INICIO_CONDICIONES":
       return {
-        label: "Pendiente Inicio (Art. 176)",
-        color: "text-rose-800",
-        bg: "bg-rose-100",
-        border: "border-rose-300",
+        label: "Pendiente Inicio",
+        color: "text-sky-900 font-extrabold",
+        bg: "bg-sky-100",
+        border: "border-sky-400",
       };
     case "EN_EJECUCION":
       return {
-        label: "En Ejecución de Obra",
-        color: "text-emerald-800",
+        label: "En Ejecución",
+        color: "text-emerald-900 font-extrabold",
         bg: "bg-emerald-100",
-        border: "border-emerald-300",
+        border: "border-emerald-400",
       };
     case "RECEPCIONADA":
       return {
-        label: "Recepcionada",
-        color: "text-teal-800",
-        bg: "bg-teal-100",
-        border: "border-teal-300",
+        label: "Culminó la Obra",
+        color: "text-rose-900 font-extrabold",
+        bg: "bg-rose-100",
+        border: "border-rose-400",
       };
     case "FINALIZADA_LIQUIDADA":
       return {
-        label: "Liquidada / Finalizada",
-        color: "text-purple-800",
-        bg: "bg-purple-100",
-        border: "border-purple-300",
+        label: "En Liquidación",
+        color: "text-amber-900 font-extrabold",
+        bg: "bg-amber-100",
+        border: "border-amber-400",
       };
   }
 }
@@ -1324,12 +1318,22 @@ export function detectProjectCategory(proyectoName: string): ProjectCategoryInfo
 }
 
 export function getChecklistColorTheme(p: ProyectoCartera) {
+  const isSeleccionSeace =
+    p.estado === "EN_SELECCION_SEACE" ||
+    p.estado === "ACTOS_PREPARATORIOS" ||
+    (p.estado as string).toLowerCase().includes("selecc") ||
+    (p.estado as string).toLowerCase().includes("seace") ||
+    (p.estado as string).toLowerCase().includes("convocator") ||
+    (p.estado as string).toLowerCase().includes("preparator");
+
   const isLiquidacion =
-    p.estado === "FINALIZADA_LIQUIDADA" ||
-    (p.estado as string).toLowerCase().includes("liquid") ||
-    !!p.hitos?.find((h) => h.id === "hito-liquidacion")?.cumplido;
+    !isSeleccionSeace &&
+    (p.estado === "FINALIZADA_LIQUIDADA" ||
+      (p.estado as string).toLowerCase().includes("liquid") ||
+      !!p.hitos?.find((h) => h.id === "hito-liquidacion")?.cumplido);
 
   const isCulminada =
+    !isSeleccionSeace &&
     !isLiquidacion &&
     (p.estado === "RECEPCIONADA" ||
       (p.estado as string).toLowerCase().includes("recep") ||
@@ -1337,74 +1341,156 @@ export function getChecklistColorTheme(p: ProyectoCartera) {
       !!p.hitos?.find((h) => h.id === "hito-recepcion")?.cumplido);
 
   const isEjecucion =
+    !isSeleccionSeace &&
     !isCulminada &&
     !isLiquidacion &&
     (p.estado === "EN_EJECUCION" || !!p.inicioObraFecha);
 
+  // 1. En Selección SEACE / Actos Preparatorios -> AZUL
+  if (isSeleccionSeace) {
+    return {
+      statusKey: "seleccion_seace" as const,
+      container: "bg-blue-50/70 border-blue-400 ring-2 ring-blue-500/20 text-blue-950 shadow-xs",
+      title: "text-blue-950",
+      count: "text-blue-700",
+      pct: "text-blue-800",
+      barTrack: "border-blue-300 bg-blue-100/80",
+      barFill: "bg-blue-600",
+      badge: "bg-blue-100 text-blue-900 border-blue-300 font-extrabold",
+      label: "En Selección SEACE (Azul)",
+      shortLabel: "En Selección SEACE",
+      tagColor: "bg-blue-100 text-blue-800 border-blue-200",
+      icon: "🔵",
+      borderAccent: "border-l-4 border-l-blue-600",
+      outerGlow: "ring-2 ring-blue-400/25",
+      cardBorder: "border-blue-400/50 hover:border-blue-500",
+      cardBgFulfilled: "bg-blue-500/15 text-blue-950 border-blue-400/60 shadow-2xs",
+      cardBgPending: "bg-blue-500/5 text-blue-900 border-blue-300/40 hover:bg-blue-500/15",
+      tarjetaFulfilled: "bg-blue-500/15 hover:bg-blue-500/25 text-blue-950 border-blue-400/60 shadow-2xs",
+      tarjetaPending: "bg-blue-500/5 hover:bg-blue-500/15 text-blue-900 border-blue-300/40",
+      tarjetaTitle: "text-blue-950 font-extrabold",
+      tarjetaDoc: "bg-blue-500/10 text-blue-900 border-blue-300/40",
+      tarjetaDate: "text-blue-700/80 font-mono",
+      cardTag: "bg-blue-500/15 text-blue-900 border-blue-300/50",
+      dot: "bg-blue-600",
+    };
+  }
+
+  // 2. Culminó la Obra / Recepcionada -> ROJO BAJO
   if (isCulminada) {
     return {
       statusKey: "culminada" as const,
-      container: "bg-rose-50/90 border-rose-300 text-rose-950",
+      container: "bg-rose-50/70 border-rose-400 ring-2 ring-rose-500/20 text-rose-950 shadow-xs",
       title: "text-rose-950",
       count: "text-rose-700",
       pct: "text-rose-800",
-      barTrack: "border-rose-200 bg-rose-100/70",
+      barTrack: "border-rose-300 bg-rose-100/80",
       barFill: "bg-rose-500",
-      badge: "bg-rose-100 text-rose-800 border-rose-300",
+      badge: "bg-rose-100 text-rose-900 border-rose-300 font-extrabold",
       label: "Culminó la Obra (Rojo Bajo)",
       shortLabel: "Culminada",
       tagColor: "bg-rose-100 text-rose-800 border-rose-200",
-      icon: "🏁",
-      borderAccent: "border-l-4 border-l-rose-400",
+      icon: "🔴",
+      borderAccent: "border-l-4 border-l-rose-500",
+      outerGlow: "ring-2 ring-rose-400/25",
+      cardBorder: "border-rose-400/50 hover:border-rose-500",
+      cardBgFulfilled: "bg-rose-500/15 text-rose-950 border-rose-400/60 shadow-2xs",
+      cardBgPending: "bg-rose-500/5 text-rose-900 border-rose-300/40 hover:bg-rose-500/15",
+      tarjetaFulfilled: "bg-rose-500/15 hover:bg-rose-500/25 text-rose-950 border-rose-400/60 shadow-2xs",
+      tarjetaPending: "bg-rose-500/5 hover:bg-rose-500/15 text-rose-900 border-rose-300/40",
+      tarjetaTitle: "text-rose-950 font-extrabold",
+      tarjetaDoc: "bg-rose-500/10 text-rose-900 border-rose-300/40",
+      tarjetaDate: "text-rose-700/80 font-mono",
+      cardTag: "bg-rose-500/15 text-rose-900 border-rose-300/50",
+      dot: "bg-rose-500",
     };
   }
+
+  // 3. En Liquidación -> AMARILLO BAJO
   if (isLiquidacion) {
     return {
       statusKey: "liquidacion" as const,
-      container: "bg-amber-50/90 border-amber-300 text-amber-950",
+      container: "bg-amber-50/70 border-amber-400 ring-2 ring-amber-500/20 text-amber-950 shadow-xs",
       title: "text-amber-950",
       count: "text-amber-700",
       pct: "text-amber-800",
-      barTrack: "border-amber-200 bg-amber-100/70",
+      barTrack: "border-amber-300 bg-amber-100/80",
       barFill: "bg-amber-500",
-      badge: "bg-amber-100 text-amber-800 border-amber-300",
+      badge: "bg-amber-100 text-amber-900 border-amber-300 font-extrabold",
       label: "En Liquidación (Amarillo Bajo)",
       shortLabel: "En Liquidación",
       tagColor: "bg-amber-100 text-amber-800 border-amber-200",
-      icon: "⚖️",
-      borderAccent: "border-l-4 border-l-amber-400",
+      icon: "🟡",
+      borderAccent: "border-l-4 border-l-amber-500",
+      outerGlow: "ring-2 ring-amber-400/25",
+      cardBorder: "border-amber-400/50 hover:border-amber-500",
+      cardBgFulfilled: "bg-amber-500/15 text-amber-950 border-amber-400/60 shadow-2xs",
+      cardBgPending: "bg-amber-500/5 text-amber-900 border-amber-300/40 hover:bg-amber-500/15",
+      tarjetaFulfilled: "bg-amber-500/15 hover:bg-amber-500/25 text-amber-950 border-amber-400/60 shadow-2xs",
+      tarjetaPending: "bg-amber-500/5 hover:bg-amber-500/15 text-amber-900 border-amber-300/40",
+      tarjetaTitle: "text-amber-950 font-extrabold",
+      tarjetaDoc: "bg-amber-500/10 text-amber-900 border-amber-300/40",
+      tarjetaDate: "text-amber-700/80 font-mono",
+      cardTag: "bg-amber-500/15 text-amber-900 border-amber-300/50",
+      dot: "bg-amber-500",
     };
   }
+
+  // 4. En Ejecución -> VERDE
   if (isEjecucion) {
     return {
       statusKey: "ejecucion" as const,
-      container: "bg-emerald-50/90 border-emerald-300 text-emerald-950",
+      container: "bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-500/20 text-emerald-950 shadow-xs",
       title: "text-emerald-950",
       count: "text-emerald-700",
       pct: "text-emerald-800",
-      barTrack: "border-emerald-200 bg-emerald-100/70",
+      barTrack: "border-emerald-300 bg-emerald-100/80",
       barFill: "bg-emerald-600",
-      badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
+      badge: "bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold",
       label: "En Ejecución (Verde)",
       shortLabel: "En Ejecución",
       tagColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
-      icon: "🚧",
-      borderAccent: "border-l-4 border-l-emerald-500",
+      icon: "🟢",
+      borderAccent: "border-l-4 border-l-emerald-600",
+      outerGlow: "ring-2 ring-emerald-400/25",
+      cardBorder: "border-emerald-400/50 hover:border-emerald-500",
+      cardBgFulfilled: "bg-emerald-500/15 text-emerald-950 border-emerald-400/60 shadow-2xs",
+      cardBgPending: "bg-emerald-500/5 text-emerald-900 border-emerald-300/40 hover:bg-emerald-500/15",
+      tarjetaFulfilled: "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-950 border-emerald-400/60 shadow-2xs",
+      tarjetaPending: "bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-900 border-emerald-300/40",
+      tarjetaTitle: "text-emerald-950 font-extrabold",
+      tarjetaDoc: "bg-emerald-500/10 text-emerald-900 border-emerald-300/40",
+      tarjetaDate: "text-emerald-700/80 font-mono",
+      cardTag: "bg-emerald-500/15 text-emerald-900 border-emerald-300/50",
+      dot: "bg-emerald-600",
     };
   }
+
+  // 5. Pendiente Inicio
   return {
     statusKey: "inicio" as const,
-    container: "bg-sky-50/90 border-sky-300 text-sky-950",
+    container: "bg-sky-50/70 border-sky-400 ring-2 ring-sky-500/20 text-sky-950 shadow-xs",
     title: "text-sky-950",
     count: "text-sky-700",
     pct: "text-sky-800",
-    barTrack: "border-sky-200 bg-sky-100/70",
+    barTrack: "border-sky-300 bg-sky-100/80",
     barFill: "bg-sky-500",
-    badge: "bg-sky-100 text-sky-800 border-sky-300",
+    badge: "bg-sky-100 text-sky-900 border-sky-300 font-extrabold",
     label: "Pendiente Inicio",
     shortLabel: "Pendiente",
     tagColor: "bg-sky-100 text-sky-800 border-sky-200",
     icon: "⏳",
-    borderAccent: "border-l-4 border-l-sky-400",
+    borderAccent: "border-l-4 border-l-sky-500",
+    outerGlow: "ring-2 ring-sky-400/25",
+    cardBorder: "border-sky-400/50 hover:border-sky-500",
+    cardBgFulfilled: "bg-sky-500/15 text-sky-950 border-sky-400/60 shadow-2xs",
+    cardBgPending: "bg-sky-500/5 text-sky-900 border-sky-300/40 hover:bg-sky-500/15",
+    tarjetaFulfilled: "bg-sky-500/15 hover:bg-sky-500/25 text-sky-950 border-sky-400/60 shadow-2xs",
+    tarjetaPending: "bg-sky-500/5 hover:bg-sky-500/15 text-sky-900 border-sky-300/40",
+    tarjetaTitle: "text-sky-950 font-extrabold",
+    tarjetaDoc: "bg-sky-500/10 text-sky-900 border-sky-300/40",
+    tarjetaDate: "text-sky-700/80 font-mono",
+    cardTag: "bg-sky-500/15 text-sky-900 border-sky-300/50",
+    dot: "bg-sky-500",
   };
 }

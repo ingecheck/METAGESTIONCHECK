@@ -446,10 +446,12 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
                   onChange={(e) => setEstado(e.target.value as EstadoCartera)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                 >
+                  <option value="EN_SELECCION_SEACE">🔵 En Selección SEACE (Azul)</option>
+                  <option value="EN_EJECUCION">🟢 En Ejecución de Obra (Verde)</option>
+                  <option value="RECEPCIONADA">🔴 Culminó la Obra / Recepcionada (Rojo Bajo)</option>
+                  <option value="FINALIZADA_LIQUIDADA">🟡 En Liquidación (Amarillo Bajo)</option>
                   <option value="PENDIENTE_INICIO_CONDICIONES">⏳ Pendiente Inicio (Condiciones Previas)</option>
-                  <option value="EN_EJECUCION">🚧 En Ejecución Física</option>
-                  <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios / Selección</option>
-                  <option value="RECEPCIONADA">🏁 Recepcionada</option>
+                  <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios / Convocatoria SEACE (Azul)</option>
                 </select>
               </div>
 

@@ -1277,14 +1277,38 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
     const montoSupervision = proyectos.reduce((sum, p) => sum + (p.contratoSupervisionMonto || 0), 0);
     const totalEjecutadoFisico = proyectos.reduce((sum, p) => sum + getAvanceFisicoObra(p).montoEjecutadoTotal, 0);
     const avanceFisicoPromedio = montoTotal > 0 ? Math.round((totalEjecutadoFisico / montoTotal) * 10000) / 100 : 0;
-    const actosPrep = proyectos.filter(
-      (p) => p.estado === "ACTOS_PREPARATORIOS" || p.estado === "EN_SELECCION_SEACE"
+    
+    // Conteo por estados normativos según paleta oficial
+    const seleccionSeace = proyectos.filter(
+      (p) =>
+        p.estado === "ACTOS_PREPARATORIOS" ||
+        p.estado === "EN_SELECCION_SEACE" ||
+        (p.estado as string).toLowerCase().includes("selecc") ||
+        (p.estado as string).toLowerCase().includes("seace") ||
+        (p.estado as string).toLowerCase().includes("convocator") ||
+        (p.estado as string).toLowerCase().includes("preparator")
     ).length;
+
+    const enLiquidacion = proyectos.filter(
+      (p) =>
+        p.estado === "FINALIZADA_LIQUIDADA" ||
+        (p.estado as string).toLowerCase().includes("liquid") ||
+        !!p.hitos?.find((h) => h.id === "hito-liquidacion")?.cumplido
+    ).length;
+
+    const culminadas = proyectos.filter(
+      (p) =>
+        p.estado === "RECEPCIONADA" ||
+        (p.estado as string).toLowerCase().includes("recep") ||
+        (p.estado as string).toLowerCase().includes("culmin") ||
+        !!p.hitos?.find((h) => h.id === "hito-recepcion")?.cumplido
+    ).length;
+
+    const enEjecucion = proyectos.filter(
+      (p) => p.estado === "EN_EJECUCION" || !!p.inicioObraFecha
+    ).length;
+
     const pendienteInicio = proyectos.filter((p) => p.estado === "PENDIENTE_INICIO_CONDICIONES").length;
-    const enEjecucion = proyectos.filter((p) => p.estado === "EN_EJECUCION").length;
-    const finalizadas = proyectos.filter(
-      (p) => p.estado === "RECEPCIONADA" || p.estado === "FINALIZADA_LIQUIDADA"
-    ).length;
     const conAlertas = proyectos.filter((p) => getAlertasNormativas(p).length > 0).length;
 
     return {
@@ -1293,10 +1317,11 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       montoSupervision,
       totalEjecutadoFisico,
       avanceFisicoPromedio,
-      actosPrep,
-      pendienteInicio,
+      seleccionSeace,
       enEjecucion,
-      finalizadas,
+      culminadas,
+      enLiquidacion,
+      pendienteInicio,
       conAlertas,
     };
   }, [proyectos]);
@@ -1555,7 +1580,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           </div>
         </div>
 
-        {/* KPI Counter Cards - Compact & Snappy */}
+        {/* KPI Counter Cards - Compact & Snappy con Colores Oficiales */}
         <div className="mt-4 pt-3 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
           <div className="bg-slate-800/60 border border-slate-700/60 p-2.5 rounded-xl">
             <div className="text-[10px] font-semibold text-slate-400 uppercase">Cartera Total</div>
@@ -1563,31 +1588,39 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             <div className="text-[10px] text-blue-300 font-mono mt-0.5">{formatPEN(stats.montoTotal)}</div>
           </div>
 
-          <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl">
-            <div className="text-[10px] font-semibold text-amber-300 uppercase">Actos Preparatorios</div>
-            <div className="text-base font-black text-amber-400 mt-0.5">{stats.actosPrep}</div>
-            <div className="text-[10px] text-amber-200/80 mt-0.5">TDR / Bases / SEACE</div>
+          <div className="bg-blue-500/15 border border-blue-500/40 p-2.5 rounded-xl">
+            <div className="text-[10px] font-bold text-blue-300 uppercase flex items-center gap-1">
+              <span>🔵 En Selección SEACE</span>
+            </div>
+            <div className="text-base font-black text-blue-300 mt-0.5">{stats.seleccionSeace}</div>
+            <div className="text-[10px] text-blue-200/80 mt-0.5">Azul • TDR / SEACE</div>
           </div>
 
-          <div className="bg-rose-500/10 border border-rose-500/30 p-2.5 rounded-xl">
-            <div className="text-[10px] font-semibold text-rose-300 uppercase">Pendiente Inicio</div>
-            <div className="text-base font-black text-rose-400 mt-0.5">{stats.pendienteInicio}</div>
-            <div className="text-[10px] text-rose-200/80 mt-0.5">Art. 176 RLCE</div>
+          <div className="bg-emerald-500/15 border border-emerald-500/40 p-2.5 rounded-xl">
+            <div className="text-[10px] font-bold text-emerald-300 uppercase flex items-center gap-1">
+              <span>🟢 En Ejecución</span>
+            </div>
+            <div className="text-base font-black text-emerald-300 mt-0.5">{stats.enEjecucion}</div>
+            <div className="text-[10px] text-emerald-200/80 mt-0.5">Verde • Obras en Campo</div>
           </div>
 
-          <div className="bg-blue-500/10 border border-blue-500/30 p-2.5 rounded-xl">
-            <div className="text-[10px] font-semibold text-blue-300 uppercase">En Ejecución</div>
-            <div className="text-base font-black text-blue-400 mt-0.5">{stats.enEjecucion}</div>
-            <div className="text-[10px] text-blue-200/80 mt-0.5">Obras en Campo</div>
+          <div className="bg-rose-500/15 border border-rose-500/40 p-2.5 rounded-xl">
+            <div className="text-[10px] font-bold text-rose-300 uppercase flex items-center gap-1">
+              <span>🔴 Culminó la Obra</span>
+            </div>
+            <div className="text-base font-black text-rose-300 mt-0.5">{stats.culminadas}</div>
+            <div className="text-[10px] text-rose-200/80 mt-0.5">Rojo Bajo • Recepcionada</div>
           </div>
 
-          <div className="bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-xl">
-            <div className="text-[10px] font-semibold text-emerald-300 uppercase">Finalizadas / Recep.</div>
-            <div className="text-base font-black text-emerald-400 mt-0.5">{stats.finalizadas}</div>
-            <div className="text-[10px] text-emerald-200/80 mt-0.5">Acta / Liquidación</div>
+          <div className="bg-amber-500/15 border border-amber-500/40 p-2.5 rounded-xl">
+            <div className="text-[10px] font-bold text-amber-300 uppercase flex items-center gap-1">
+              <span>🟡 En Liquidación</span>
+            </div>
+            <div className="text-base font-black text-amber-300 mt-0.5">{stats.enLiquidacion}</div>
+            <div className="text-[10px] text-amber-200/80 mt-0.5">Amarillo Bajo • Cierre</div>
           </div>
 
-          <div className="bg-orange-500/10 border border-orange-500/30 p-2.5 rounded-xl">
+          <div className="bg-orange-500/15 border border-orange-500/40 p-2.5 rounded-xl">
             <div className="text-[10px] font-semibold text-orange-300 uppercase">Alertas Normativas</div>
             <div className="text-base font-black text-orange-400 mt-0.5">{stats.conAlertas}</div>
             <div className="text-[10px] text-orange-200/80 mt-0.5">Requieren Acción</div>
@@ -1723,12 +1756,12 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700"
             >
               <option value="TODOS">Todos los Estados</option>
-              <option value="ACTOS_PREPARATORIOS">Actos Preparatorios</option>
-              <option value="EN_SELECCION_SEACE">En Selección (SEACE)</option>
-              <option value="PENDIENTE_INICIO_CONDICIONES">Pendiente Inicio (Art. 176)</option>
-              <option value="EN_EJECUCION">En Ejecución</option>
-              <option value="RECEPCIONADA">Recepcionada</option>
-              <option value="FINALIZADA_LIQUIDADA">Finalizada / Liquidada</option>
+              <option value="EN_SELECCION_SEACE">🔵 En Selección SEACE (Azul)</option>
+              <option value="EN_EJECUCION">🟢 En Ejecución (Verde)</option>
+              <option value="RECEPCIONADA">🔴 Culminó la Obra (Rojo Bajo)</option>
+              <option value="FINALIZADA_LIQUIDADA">🟡 En Liquidación (Amarillo Bajo)</option>
+              <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios / SEACE</option>
+              <option value="PENDIENTE_INICIO_CONDICIONES">⏳ Pendiente Inicio (Art. 176)</option>
             </select>
 
             <button
@@ -1862,6 +1895,10 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <span className="font-extrabold text-slate-800 flex items-center gap-1.5 text-[11px]">
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
                 <span>Colores en Checklist Normativo:</span>
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                <span>Azul: En Selección SEACE</span>
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-600" />
@@ -2346,7 +2383,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
                           {/* 2. SECCIÓN B: Checklist Normativo (Cumplimiento de Hitos según Estado Situacional) */}
                           <div
-                            className={`p-2 rounded-xl border shadow-2xs space-y-1 transition ${checklistTheme.container} ${checklistTheme.borderAccent}`}
+                            className={`p-2 rounded-xl border shadow-xs space-y-1 transition ${checklistTheme.container} ${checklistTheme.borderAccent} ${checklistTheme.outerGlow}`}
                           >
                             <div className="flex items-center justify-between text-[10px]">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -2374,7 +2411,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                               />
                             </div>
 
-                            {/* Checklist Items with Visibly Formatted Document & Emission Dates */}
+                            {/* Checklist Items: Tarjetitas con color translúcido según estado */}
                             <div className="grid grid-cols-2 gap-1 pt-0.5">
                               {/* 1. Notif Supervisor */}
                               <div
@@ -2382,25 +2419,25 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   e.stopPropagation();
                                   handleOpenValoModal(p, "valorizacion");
                                 }}
-                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                className={`p-1.5 rounded-lg text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
                                   hitoNotifSup?.cumplido
-                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
-                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                    ? checklistTheme.tarjetaFulfilled
+                                    : checklistTheme.tarjetaPending
                                 }`}
                                 title={`Notificación al Supervisor (Art. 176.1.a) • Doc: ${hitoNotifSup?.documentoSustento || "No especificado"} • Fecha: ${hitoNotifSup?.fecha || "Sin fecha"}`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="truncate text-amber-900 font-extrabold">1. Notif. Sup</span>
-                                  <span className="font-mono text-[8px] text-slate-500">
+                                  <span className={`truncate font-extrabold ${checklistTheme.tarjetaTitle}`}>1. Notif. Sup</span>
+                                  <span className={`font-mono text-[8px] ${checklistTheme.tarjetaDate}`}>
                                     {hitoNotifSup?.fecha || "-"}
                                   </span>
                                 </div>
                                 {hitoNotifSup?.documentoSustento ? (
-                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                  <span className={`font-mono text-[7px] truncate px-1 py-0.2 rounded border ${checklistTheme.tarjetaDoc}`}>
                                     📄 {hitoNotifSup.documentoSustento}
                                   </span>
                                 ) : (
-                                  <span className="text-[7px] text-slate-400 font-normal">
+                                  <span className={`text-[7px] font-normal ${checklistTheme.count}`}>
                                     {hitoNotifSup?.cumplido ? "Aprobado" : "Pendiente"}
                                   </span>
                                 )}
@@ -2412,25 +2449,25 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   e.stopPropagation();
                                   handleOpenValoModal(p, "valorizacion");
                                 }}
-                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                className={`p-1.5 rounded-lg text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
                                   hitoTerreno?.cumplido
-                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
-                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                    ? checklistTheme.tarjetaFulfilled
+                                    : checklistTheme.tarjetaPending
                                 }`}
                                 title={`Entrega de Terreno (Art. 176.1.b) • Doc: ${hitoTerreno?.documentoSustento || "No especificado"} • Fecha: ${hitoTerreno?.fecha || "Sin fecha"}`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="truncate text-amber-900 font-extrabold">2. Terreno</span>
-                                  <span className="font-mono text-[8px] text-slate-500">
+                                  <span className={`truncate font-extrabold ${checklistTheme.tarjetaTitle}`}>2. Terreno</span>
+                                  <span className={`font-mono text-[8px] ${checklistTheme.tarjetaDate}`}>
                                     {hitoTerreno?.fecha || "-"}
                                   </span>
                                 </div>
                                 {hitoTerreno?.documentoSustento ? (
-                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                  <span className={`font-mono text-[7px] truncate px-1 py-0.2 rounded border ${checklistTheme.tarjetaDoc}`}>
                                     📄 {hitoTerreno.documentoSustento}
                                   </span>
                                 ) : (
-                                  <span className="text-[7px] text-slate-400 font-normal">
+                                  <span className={`text-[7px] font-normal ${checklistTheme.count}`}>
                                     {hitoTerreno?.cumplido ? "Aprobado" : "Pendiente"}
                                   </span>
                                 )}
@@ -2442,25 +2479,25 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   e.stopPropagation();
                                   handleOpenValoModal(p, "valorizacion");
                                 }}
-                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                className={`p-1.5 rounded-lg text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
                                   hitoExpediente?.cumplido
-                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
-                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                    ? checklistTheme.tarjetaFulfilled
+                                    : checklistTheme.tarjetaPending
                                 }`}
                                 title={`Entrega Expediente Técnico (Art. 176.1.c) • Doc: ${hitoExpediente?.documentoSustento || "No especificado"} • Fecha: ${hitoExpediente?.fecha || "Sin fecha"}`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="truncate text-amber-900 font-extrabold">3. Expediente</span>
-                                  <span className="font-mono text-[8px] text-slate-500">
+                                  <span className={`truncate font-extrabold ${checklistTheme.tarjetaTitle}`}>3. Expediente</span>
+                                  <span className={`font-mono text-[8px] ${checklistTheme.tarjetaDate}`}>
                                     {hitoExpediente?.fecha || "-"}
                                   </span>
                                 </div>
                                 {hitoExpediente?.documentoSustento ? (
-                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                  <span className={`font-mono text-[7px] truncate px-1 py-0.2 rounded border ${checklistTheme.tarjetaDoc}`}>
                                     📄 {hitoExpediente.documentoSustento}
                                   </span>
                                 ) : (
-                                  <span className="text-[7px] text-slate-400 font-normal">
+                                  <span className={`text-[7px] font-normal ${checklistTheme.count}`}>
                                     {hitoExpediente?.cumplido ? "Aprobado" : "Pendiente"}
                                   </span>
                                 )}
@@ -2472,25 +2509,25 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   e.stopPropagation();
                                   handleOpenValoModal(p, "valorizacion");
                                 }}
-                                className={`p-1.5 rounded text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
+                                className={`p-1.5 rounded-lg text-[9px] font-bold border flex flex-col gap-0.5 cursor-pointer transition ${
                                   hitoCod?.cumplido
-                                    ? "bg-white text-slate-900 border-amber-300/90 hover:bg-amber-50"
-                                    : "bg-white/60 text-slate-500 border-slate-200 hover:border-amber-400"
+                                    ? checklistTheme.tarjetaFulfilled
+                                    : checklistTheme.tarjetaPending
                                 }`}
                                 title={`Cuaderno de Obra Digital (Art. 176.1.d) • Doc: ${hitoCod?.documentoSustento || "No especificado"} • Fecha: ${hitoCod?.fecha || "Sin fecha"}`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="truncate text-amber-900 font-extrabold">4. C.O.D.</span>
-                                  <span className="font-mono text-[8px] text-slate-500">
+                                  <span className={`truncate font-extrabold ${checklistTheme.tarjetaTitle}`}>4. C.O.D.</span>
+                                  <span className={`font-mono text-[8px] ${checklistTheme.tarjetaDate}`}>
                                     {hitoCod?.fecha || "-"}
                                   </span>
                                 </div>
                                 {hitoCod?.documentoSustento ? (
-                                  <span className="font-mono text-[7px] text-slate-600 truncate bg-slate-50 px-1 py-0.2 rounded border border-slate-200">
+                                  <span className={`font-mono text-[7px] truncate px-1 py-0.2 rounded border ${checklistTheme.tarjetaDoc}`}>
                                     📄 {hitoCod.documentoSustento}
                                   </span>
                                 ) : (
-                                  <span className="text-[7px] text-slate-400 font-normal">
+                                  <span className={`text-[7px] font-normal ${checklistTheme.count}`}>
                                     {hitoCod?.cumplido ? "Aprobado" : "Pendiente"}
                                   </span>
                                 )}
@@ -2509,18 +2546,18 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                     e.stopPropagation();
                                     handleOpenValoModal(p, "valorizacion");
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-amber-50 text-slate-900 border border-amber-300/80 text-[9px] font-bold flex items-center justify-between gap-1 cursor-pointer hover:bg-amber-100 transition shadow-2xs"
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition shadow-2xs ${checklistTheme.tarjetaFulfilled}`}
                                   title={`Valorización N° ${val.numero} • Fecha de Emisión: ${val.fechaValorizacion || "-"}`}
                                 >
                                   <div className="flex items-center gap-1.5 truncate">
-                                    <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded text-[7px] uppercase font-black tracking-wider">
+                                    <span className={`px-1.5 py-0.2 rounded text-[7px] uppercase font-black tracking-wider ${checklistTheme.badge}`}>
                                       Valorización
                                     </span>
-                                    <span className="truncate font-extrabold">Val N° 0{val.numero}</span>
+                                    <span className={`truncate font-extrabold ${checklistTheme.tarjetaTitle}`}>Val N° 0{val.numero}</span>
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0 font-mono text-[8px]">
-                                    <span className="text-slate-600 font-semibold">{val.fechaValorizacion ? `Emisión: ${val.fechaValorizacion}` : "-"}</span>
-                                    <span className="text-amber-900 font-black">{formatPEN(val.montoEjecutadoMes || 0)}</span>
+                                    <span className={`font-semibold ${checklistTheme.tarjetaDate}`}>{val.fechaValorizacion ? `Emisión: ${val.fechaValorizacion}` : "-"}</span>
+                                    <span className={`font-black ${checklistTheme.pct}`}>{formatPEN(val.montoEjecutadoMes || 0)}</span>
                                   </div>
                                 </div>
                               ))
@@ -2533,18 +2570,18 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                                   }}
                                   className={`px-2 py-1 rounded-lg text-[9px] font-bold border flex items-center justify-between gap-1 cursor-pointer transition ${
                                     hitoValo1.cumplido
-                                      ? "bg-amber-50 text-slate-900 border-amber-300"
-                                      : "bg-white text-slate-600 border-slate-200 hover:border-amber-400"
+                                      ? checklistTheme.tarjetaFulfilled
+                                      : checklistTheme.tarjetaPending
                                   }`}
                                   title="Valorización N° 01 • Clic para registrar cálculo de avance y partidas"
                                 >
                                   <div className="flex items-center gap-1.5 truncate">
-                                    <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded text-[7px] uppercase font-black">
+                                    <span className={`px-1.5 py-0.2 rounded text-[7px] uppercase font-black ${checklistTheme.badge}`}>
                                       Valorización
                                     </span>
                                     <span className="truncate">Val N° 01 (Art. 194)</span>
                                   </div>
-                                  <span className="font-mono text-[8px] text-amber-900 font-bold shrink-0">
+                                  <span className={`font-mono text-[8px] font-bold shrink-0 ${checklistTheme.pct}`}>
                                     {hitoValo1.fecha ? `Emisión: ${hitoValo1.fecha}` : "Registrar"}
                                   </span>
                                 </div>
@@ -2668,7 +2705,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             return (
               <div
                 key={p.id}
-                className={`bg-white rounded-2xl border shadow-2xs hover:shadow-md transition p-4 flex flex-col justify-between ${checklistTheme.borderAccent}`}
+                className={`bg-white rounded-2xl border shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between ${checklistTheme.borderAccent} ${checklistTheme.outerGlow}`}
               >
                 <div>
                   {/* Card Header */}
@@ -2770,14 +2807,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                           }}
                           className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition select-none ${
                             hito.cumplido
-                              ? isValo
-                                ? "bg-amber-50 text-slate-900 border-amber-300 font-semibold"
-                                : isExp
-                                ? "bg-slate-900 text-amber-300 border-slate-700 font-semibold"
-                                : isAmp
-                                ? "bg-orange-50 text-orange-950 border-orange-300 font-semibold"
-                                : "bg-amber-50/60 border-amber-200 text-slate-800"
-                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-amber-50/50 hover:border-amber-300"
+                              ? checklistTheme.tarjetaFulfilled
+                              : checklistTheme.tarjetaPending
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate pr-2">
@@ -3243,27 +3274,24 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  {selectedProject.hitos.map((hito) => {
-                    const isValo = hito.tipo === "valorizacion" || hito.codigo.startsWith("VALO-");
-                    const isExp = hito.tipo === "expediente" || hito.codigo.startsWith("EXP-");
-                    const isAmp = hito.tipo === "ampliacion_plazo" || hito.codigo.startsWith("AMP-");
+                {(() => {
+                  const drawerTheme = getChecklistColorTheme(selectedProject);
+                  return (
+                    <div className={`space-y-2 p-3 rounded-xl border transition ${drawerTheme.container} ${drawerTheme.outerGlow}`}>
+                      {selectedProject.hitos.map((hito) => {
+                        const isValo = hito.tipo === "valorizacion" || hito.codigo.startsWith("VALO-");
+                        const isExp = hito.tipo === "expediente" || hito.codigo.startsWith("EXP-");
+                        const isAmp = hito.tipo === "ampliacion_plazo" || hito.codigo.startsWith("AMP-");
 
-                    return (
-                      <div
-                        key={hito.id}
-                        className={`p-2.5 rounded-lg border transition ${
-                          hito.cumplido
-                            ? isValo
-                              ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold"
-                              : isExp
-                              ? "bg-amber-50/80 border-amber-300 text-amber-950 font-semibold"
-                              : isAmp
-                              ? "bg-purple-50/80 border-purple-300 text-purple-950 font-semibold"
-                              : "bg-emerald-50/70 border-emerald-300 text-emerald-950 font-semibold"
-                            : "bg-white border-slate-200 text-slate-700"
-                        }`}
-                      >
+                        return (
+                          <div
+                            key={hito.id}
+                            className={`p-2.5 rounded-lg border transition ${
+                              hito.cumplido
+                                ? drawerTheme.tarjetaFulfilled
+                                : drawerTheme.tarjetaPending
+                            }`}
+                          >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                           <div
                             onClick={() => handleToggleHito(selectedProject.id, hito.id)}
@@ -3420,7 +3448,9 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                     );
                   })}
                 </div>
-              </div>
+              );
+            })()}
+          </div>
 
               {/* Contrato de Ejecución Details */}
               <div className="space-y-2">

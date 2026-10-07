@@ -534,11 +534,12 @@ export const QuickContratosObraModal: React.FC<QuickContratosObraModalProps> = (
                   onChange={(e) => setEstado(e.target.value as EstadoCartera)}
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
-                  <option value="EN_EJECUCION">🚧 En Ejecución de Obra</option>
+                  <option value="EN_SELECCION_SEACE">🔵 En Selección SEACE (Azul)</option>
+                  <option value="EN_EJECUCION">🟢 En Ejecución de Obra (Verde)</option>
+                  <option value="RECEPCIONADA">🔴 Culminó la Obra / Recepcionada (Rojo Bajo)</option>
+                  <option value="FINALIZADA_LIQUIDADA">🟡 En Liquidación (Amarillo Bajo)</option>
                   <option value="PENDIENTE_INICIO_CONDICIONES">⏳ Pendiente Inicio (Art. 176)</option>
-                  <option value="RECEPCIONADA">🏁 Obra Culminada / Recepcionada</option>
-                  <option value="FINALIZADA_LIQUIDADA">⚖️ En Liquidación / Liquidada</option>
-                  <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios</option>
+                  <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios / Convocatoria SEACE (Azul)</option>
                 </select>
               </div>
 

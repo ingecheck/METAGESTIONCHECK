@@ -163,17 +163,15 @@ Hola estimado(a) *${member.name}*, se ha habilitado tu acceso individual a la pl
 👷 *Cargo / Especialidad:* ${roleLabel}
 ${member.dni ? `🪪 *DNI Registrado:* ${member.dni}\n` : ""}${member.cip ? `📐 *Colegiatura:* ${member.cip}\n` : ""}━━━━━━━━━━━━━━━━━━━━━
 🔑 *TUS DATOS DE ACCESO:*
-• *Clave Institucional:* \`${currentUser.licenseKey}\`
-• *PIN Privado de Acceso:* \`${member.accessPin || "1234"}\`
 • *Usuario / Correo:* ${member.email}
+• *Modalidad:* Acceso directo con correo (Sin requerir PIN)
 ━━━━━━━━━━━━━━━━━━━━━
 📲 *CÓMO INGRESAR AL SISTEMA:*
 1️⃣ Ingresa al portal: ${appUrl}
-2️⃣ Digita tu correo: *${member.email}* y tu PIN: *${member.accessPin || "1234"}*
-3️⃣ Marca "Mantener sesión iniciada" para ingresar siempre de forma automática.
-4️⃣ ¡Listo! Ingresarás directamente a tu mesa de trabajo técnica individual con aislamiento de expedientes y trazabilidad OSCE.
+2️⃣ Digita tu correo: *${member.email}* y presiona "Ingresar al Sistema"
+3️⃣ ¡Listo! Ingresarás directamente a tu mesa de trabajo técnica individual con aislamiento de expedientes y trazabilidad OSCE.
 
-💡 *Seguridad:* Tu PIN de acceso es personal e intransferible.`;
+💡 *Seguridad:* Tu acceso está verificado mediante tu correo electrónico registrado.`;
   };
 
   const handleOpenWhatsAppDirect = (member: TeamMember, customPhone?: string) => {
@@ -352,12 +350,11 @@ ${member.dni ? `🪪 *DNI Registrado:* ${member.dni}\n` : ""}${member.cip ? `�
 Hola *${member.name}*, se te ha asignado acceso como *${member.cargoText || roleInfo.label}* en la cartera de:
 🏢 *Entidad / Empresa:* ${currentUser.companyName} (RUC: ${currentUser.ruc})
 
-🔑 *Clave de Licencia Institucional:* \`${currentUser.licenseKey}\`
-🔢 *Tu PIN de Acceso Colaborador:* \`${member.accessPin || "1234"}\`
-👤 *Usuario Registrado:* ${member.email}
+👤 *Usuario / Correo Registrado:* ${member.email}
 🌐 *Acceso al Sistema:* ${appUrl}
+🔑 *Modalidad:* Acceso directo con correo (sin requerir PIN)
 
-Ingresa con la Clave Institucional y tu PIN para acceder a la mesa de trabajo limpia, gestionar tus valorizaciones, partidas y propuestas técnicas conforme a la normativa OSCE.`;
+Ingresa con tu correo registrado para acceder a la mesa de trabajo limpia, gestionar tus valorizaciones, partidas y propuestas técnicas conforme a la normativa OSCE.`;
 
     navigator.clipboard.writeText(message);
     setCopiedInviteId(member.id);
@@ -831,27 +828,20 @@ Ingresa con la Clave Institucional y tu PIN para acceder a la mesa de trabajo li
                           )}
                         </div>
 
-                        {/* PIN & Credentials / WhatsApp Actions Bar */}
+                        {/* Email Access & WhatsApp Actions Bar */}
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-[11px]">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
-                              <Key className="w-3.5 h-3.5 text-indigo-600" />
-                              <span className="text-slate-600 font-medium">PIN:</span>
-                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
-                                {isPinVisible ? member.accessPin || "1234" : "••••"}
+                              <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                              <span className="text-slate-600 font-medium">Acceso:</span>
+                              <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs truncate max-w-[180px]">
+                                {member.email}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleShowPin(member.id)}
-                                className="text-slate-400 hover:text-slate-700 p-0.5"
-                                title={isPinVisible ? "Ocultar PIN" : "Ver PIN"}
-                              >
-                                {isPinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
                             </div>
 
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              Ingreso con DNI / PIN
+                            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Solo con correo</span>
                             </span>
                           </div>
 
