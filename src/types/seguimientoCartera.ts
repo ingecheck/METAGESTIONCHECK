@@ -1208,3 +1208,203 @@ export function getAlertasNormativas(p: ProyectoCartera): string[] {
 
   return alertas;
 }
+
+export interface ProjectCategoryInfo {
+  key: "pistas" | "coberturas" | "fondes" | "puentes" | "saneamiento" | "otros";
+  label: string;
+  shortLabel: string;
+  icon: string;
+  order: number;
+}
+
+export function detectProjectCategory(proyectoName: string): ProjectCategoryInfo {
+  const u = (proyectoName || "").toUpperCase();
+
+  if (
+    u.includes("PISTA") ||
+    u.includes("VEREDA") ||
+    u.includes("PAVIMENT") ||
+    u.includes("TRANSITABILIDAD") ||
+    u.includes("VIAL") ||
+    u.includes("CALLE") ||
+    u.includes("JIRÓN") ||
+    u.includes("JIRON") ||
+    u.includes("AVENIDA") ||
+    u.includes("PASAJE")
+  ) {
+    return {
+      key: "pistas",
+      label: "Pistas y Veredas",
+      shortLabel: "Pistas",
+      icon: "🛣️",
+      order: 1,
+    };
+  }
+
+  if (
+    u.includes("COBERTURA") ||
+    u.includes("TECHADO") ||
+    u.includes("TECHO") ||
+    u.includes("TINGLADO") ||
+    u.includes("ESTRUCTURA METÁLICA") ||
+    u.includes("ESTRUCTURA METALICA") ||
+    u.includes("POLIDEPORTIVO") ||
+    u.includes("LOSA") ||
+    u.includes("CANCHA")
+  ) {
+    return {
+      key: "coberturas",
+      label: "Coberturas y Espacios Deportivos",
+      shortLabel: "Coberturas",
+      icon: "🏟️",
+      order: 2,
+    };
+  }
+
+  if (
+    u.includes("FONDES") ||
+    u.includes("DEFENSA") ||
+    u.includes("QUEBRADA") ||
+    u.includes("RÍO") ||
+    u.includes("RIO") ||
+    u.includes("MURO") ||
+    u.includes("PROTECCIÓN") ||
+    u.includes("PROTECCION") ||
+    u.includes("DESCOLMATACI") ||
+    u.includes("ENROCADO")
+  ) {
+    return {
+      key: "fondes",
+      label: "FONDES y Defensas Ribereñas",
+      shortLabel: "FONDES",
+      icon: "🌊",
+      order: 3,
+    };
+  }
+
+  if (
+    u.includes("PUENTE") ||
+    u.includes("PONTON") ||
+    u.includes("PONTÓN") ||
+    u.includes("PASARELA")
+  ) {
+    return {
+      key: "puentes",
+      label: "Puentes y Pontones",
+      shortLabel: "Puentes",
+      icon: "🌉",
+      order: 4,
+    };
+  }
+
+  if (
+    u.includes("AGUA") ||
+    u.includes("SANEAMIENTO") ||
+    u.includes("ALCANTARILLADO") ||
+    u.includes("DESAGÜE") ||
+    u.includes("DESAGUE") ||
+    u.includes("RESERVORIO")
+  ) {
+    return {
+      key: "saneamiento",
+      label: "Agua y Saneamiento",
+      shortLabel: "Saneamiento",
+      icon: "💧",
+      order: 5,
+    };
+  }
+
+  return {
+    key: "otros",
+    label: "Otros Proyectos de Infraestructura (Edificaciones, Mercados, etc.)",
+    shortLabel: "Otros",
+    icon: "📁",
+    order: 6,
+  };
+}
+
+export function getChecklistColorTheme(p: ProyectoCartera) {
+  const isLiquidacion =
+    p.estado === "FINALIZADA_LIQUIDADA" ||
+    (p.estado as string).toLowerCase().includes("liquid") ||
+    !!p.hitos?.find((h) => h.id === "hito-liquidacion")?.cumplido;
+
+  const isCulminada =
+    !isLiquidacion &&
+    (p.estado === "RECEPCIONADA" ||
+      (p.estado as string).toLowerCase().includes("recep") ||
+      (p.estado as string).toLowerCase().includes("culmin") ||
+      !!p.hitos?.find((h) => h.id === "hito-recepcion")?.cumplido);
+
+  const isEjecucion =
+    !isCulminada &&
+    !isLiquidacion &&
+    (p.estado === "EN_EJECUCION" || !!p.inicioObraFecha);
+
+  if (isCulminada) {
+    return {
+      statusKey: "culminada" as const,
+      container: "bg-rose-50/90 border-rose-300 text-rose-950",
+      title: "text-rose-950",
+      count: "text-rose-700",
+      pct: "text-rose-800",
+      barTrack: "border-rose-200 bg-rose-100/70",
+      barFill: "bg-rose-500",
+      badge: "bg-rose-100 text-rose-800 border-rose-300",
+      label: "Culminó la Obra (Rojo Bajo)",
+      shortLabel: "Culminada",
+      tagColor: "bg-rose-100 text-rose-800 border-rose-200",
+      icon: "🏁",
+      borderAccent: "border-l-4 border-l-rose-400",
+    };
+  }
+  if (isLiquidacion) {
+    return {
+      statusKey: "liquidacion" as const,
+      container: "bg-amber-50/90 border-amber-300 text-amber-950",
+      title: "text-amber-950",
+      count: "text-amber-700",
+      pct: "text-amber-800",
+      barTrack: "border-amber-200 bg-amber-100/70",
+      barFill: "bg-amber-500",
+      badge: "bg-amber-100 text-amber-800 border-amber-300",
+      label: "En Liquidación (Amarillo Bajo)",
+      shortLabel: "En Liquidación",
+      tagColor: "bg-amber-100 text-amber-800 border-amber-200",
+      icon: "⚖️",
+      borderAccent: "border-l-4 border-l-amber-400",
+    };
+  }
+  if (isEjecucion) {
+    return {
+      statusKey: "ejecucion" as const,
+      container: "bg-emerald-50/90 border-emerald-300 text-emerald-950",
+      title: "text-emerald-950",
+      count: "text-emerald-700",
+      pct: "text-emerald-800",
+      barTrack: "border-emerald-200 bg-emerald-100/70",
+      barFill: "bg-emerald-600",
+      badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
+      label: "En Ejecución (Verde)",
+      shortLabel: "En Ejecución",
+      tagColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      icon: "🚧",
+      borderAccent: "border-l-4 border-l-emerald-500",
+    };
+  }
+  return {
+    statusKey: "inicio" as const,
+    container: "bg-sky-50/90 border-sky-300 text-sky-950",
+    title: "text-sky-950",
+    count: "text-sky-700",
+    pct: "text-sky-800",
+    barTrack: "border-sky-200 bg-sky-100/70",
+    barFill: "bg-sky-500",
+    badge: "bg-sky-100 text-sky-800 border-sky-300",
+    label: "Pendiente Inicio",
+    shortLabel: "Pendiente",
+    tagColor: "bg-sky-100 text-sky-800 border-sky-200",
+    icon: "⏳",
+    borderAccent: "border-l-4 border-l-sky-400",
+  };
+}

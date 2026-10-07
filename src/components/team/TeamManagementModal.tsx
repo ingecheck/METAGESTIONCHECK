@@ -169,8 +169,8 @@ ${member.dni ? `🪪 *DNI Registrado:* ${member.dni}\n` : ""}${member.cip ? `�
 ━━━━━━━━━━━━━━━━━━━━━
 📲 *CÓMO INGRESAR AL SISTEMA:*
 1️⃣ Ingresa al portal: ${appUrl}
-2️⃣ Haz clic en la pestaña *👥 Colaborador / PIN*
-3️⃣ Digita tu DNI (${member.dni || member.email}) y tu PIN *${member.accessPin || "1234"}*
+2️⃣ Digita tu correo: *${member.email}* y tu PIN: *${member.accessPin || "1234"}*
+3️⃣ Marca "Mantener sesión iniciada" para ingresar siempre de forma automática.
 4️⃣ ¡Listo! Ingresarás directamente a tu mesa de trabajo técnica individual con aislamiento de expedientes y trazabilidad OSCE.
 
 💡 *Seguridad:* Tu PIN de acceso es personal e intransferible.`;

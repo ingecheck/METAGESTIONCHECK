@@ -12,8 +12,14 @@ import {
   User,
   ShieldCheck,
   CheckCircle2,
+  FileUp,
+  Upload,
+  Loader2,
+  AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import { EstadoCartera, ProyectoCartera } from "../../types/seguimientoCartera";
+import { parseContractPdfFile } from "../../services/contractPdfParser";
 
 interface NewCarteraObraModalProps {
   isOpen: boolean;
@@ -77,6 +83,112 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
   const [observaciones, setObservaciones] = useState("");
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isScanningPdf, setIsScanningPdf] = useState(false);
+  const [scanNotice, setScanNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>, forceType?: "ejecucion" | "supervision") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setScanNotice({
+        message: "Por favor seleccione un archivo en formato PDF (.pdf).",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsScanningPdf(true);
+    setScanNotice(null);
+    setErrorMsg(null);
+
+    try {
+      const { data, fileName } = await parseContractPdfFile(file);
+      const isSupervision = forceType === "supervision" || data.tipoDetectado === "supervision";
+
+      if (data.proyecto && (!proyecto || proyecto.length < data.proyecto.length)) {
+        setProyecto(data.proyecto);
+      }
+      if (data.cui && !cui) {
+        setCui(data.cui);
+      }
+      if (data.plazoDias && data.plazoDias > 0) {
+        setPlazoDias(data.plazoDias);
+      }
+      if (data.fechaEntregaTerreno && !entregaTerrenoFecha) {
+        setEntregaTerrenoFecha(data.fechaEntregaTerreno);
+      }
+      if (data.fechaInicio && !inicioObraFecha) {
+        setInicioObraFecha(data.fechaInicio);
+      }
+
+      const detectedFields: string[] = [];
+
+      if (isSupervision) {
+        if (data.contratoSupervisionNumero) {
+          setContratoSupervisionNumero(data.contratoSupervisionNumero);
+          detectedFields.push(`Contrato Sup: ${data.contratoSupervisionNumero}`);
+        } else if (data.contratoEjecucionNumero) {
+          setContratoSupervisionNumero(data.contratoEjecucionNumero);
+          detectedFields.push(`Contrato Sup: ${data.contratoEjecucionNumero}`);
+        }
+
+        if (data.contratoSupervisionMonto && data.contratoSupervisionMonto > 0) {
+          setContratoSupervisionMonto(data.contratoSupervisionMonto);
+          detectedFields.push(`Monto: S/ ${data.contratoSupervisionMonto.toLocaleString("es-PE")}`);
+        } else if (data.contratoEjecucionMonto && data.contratoEjecucionMonto > 0) {
+          setContratoSupervisionMonto(data.contratoEjecucionMonto);
+        }
+
+        if (data.contratoSupervisionEmpresa) {
+          setContratoSupervisionEmpresa(data.contratoSupervisionEmpresa);
+          detectedFields.push(`Supervisora: ${data.contratoSupervisionEmpresa}`);
+        } else if (data.contratoEjecucionEmpresa) {
+          setContratoSupervisionEmpresa(data.contratoEjecucionEmpresa);
+        }
+
+        if (data.supervisorNombre) {
+          setSupervisorNombre(data.supervisorNombre);
+          detectedFields.push(`Supervisor: ${data.supervisorNombre}`);
+        } else if (data.residenteNombre) {
+          setSupervisorNombre(data.residenteNombre);
+        }
+      } else {
+        if (data.contratoEjecucionNumero) {
+          setContratoEjecucionNumero(data.contratoEjecucionNumero);
+          detectedFields.push(`Contrato: ${data.contratoEjecucionNumero}`);
+        }
+        if (data.contratoEjecucionMonto && data.contratoEjecucionMonto > 0) {
+          setContratoEjecucionMonto(data.contratoEjecucionMonto);
+          detectedFields.push(`Monto: S/ ${data.contratoEjecucionMonto.toLocaleString("es-PE")}`);
+        }
+        if (data.contratoEjecucionEmpresa) {
+          setContratoEjecucionEmpresa(data.contratoEjecucionEmpresa);
+          detectedFields.push(`Contratista: ${data.contratoEjecucionEmpresa}`);
+        }
+        if (data.residenteNombre) {
+          setResidenteNombre(data.residenteNombre);
+          detectedFields.push(`Residente: ${data.residenteNombre}`);
+        }
+      }
+
+      setScanNotice({
+        message: `¡PDF Escaneado con Éxito! Archivo: "${fileName}". Se capturaron: ${
+          detectedFields.length > 0 ? detectedFields.join(" • ") : "Datos detectados del documento"
+        }.`,
+        type: "success",
+      });
+    } catch (err: any) {
+      console.error("Error escaneando PDF:", err);
+      setScanNotice({
+        message: "No se pudo leer el archivo PDF seleccionado.",
+        type: "error",
+      });
+    } finally {
+      setIsScanningPdf(false);
+      e.target.value = "";
+    }
+  };
 
   useEffect(() => {
     if (initialObra) {
@@ -193,6 +305,69 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+          {/* Banner de Escaneo Inteligente de Contratos PDF */}
+          <div className="p-3.5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white rounded-2xl border border-blue-800/80 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center shrink-0">
+                  <FileUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-white flex items-center gap-2">
+                    <span>Escanear Contrato en PDF y Capturar Datos</span>
+                    <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">
+                      Lector OCR / Texto
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    Sube tu Contrato de Obra o Supervisión en PDF: detecta N° de Contrato, CUI, Montos S/., Contratista, Residente, Supervisor y Plazo.
+                  </div>
+                </div>
+              </div>
+
+              {/* Botón de Carga PDF */}
+              <div className="flex items-center gap-2 shrink-0">
+                <label className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm">
+                  {isScanningPdf ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Escaneando PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 text-white" />
+                      <span>Subir Contrato PDF</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    disabled={isScanningPdf}
+                    onChange={(e) => handlePdfUpload(e)}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {scanNotice && (
+              <div
+                className={`mt-3 p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 border ${
+                  scanNotice.type === "success"
+                    ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/40"
+                    : "bg-rose-500/20 text-rose-200 border-rose-400/40"
+                }`}
+              >
+                {scanNotice.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span>{scanNotice.message}</span>
+              </div>
+            )}
+          </div>
+
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 font-bold">
               {errorMsg}
@@ -295,10 +470,22 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
 
           {/* 2. Contrato de Ejecución */}
           <div className="space-y-3 pt-2">
-            <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] border-b border-slate-100 pb-1 flex items-center gap-1.5">
-              <HardHat className="w-3.5 h-3.5 text-amber-600" />
-              <span>2. Contrato de Ejecución de Obra (Contratista)</span>
-            </h4>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+              <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <HardHat className="w-3.5 h-3.5 text-amber-600" />
+                <span>2. Contrato de Ejecución de Obra (Contratista)</span>
+              </h4>
+              <label className="text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded cursor-pointer transition flex items-center gap-1">
+                <FileUp className="w-3 h-3 text-amber-700" />
+                <span>PDF Obra</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handlePdfUpload(e, "ejecucion")}
+                />
+              </label>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
@@ -359,10 +546,22 @@ export const NewCarteraObraModal: React.FC<NewCarteraObraModalProps> = ({
 
           {/* 3. Contrato de Supervisión */}
           <div className="space-y-3 pt-2">
-            <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] border-b border-slate-100 pb-1 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>3. Contrato u Orden de Supervisión / Inspectoría</span>
-            </h4>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+              <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span>3. Contrato u Orden de Supervisión / Inspectoría</span>
+              </h4>
+              <label className="text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold px-2 py-0.5 rounded cursor-pointer transition flex items-center gap-1">
+                <FileUp className="w-3 h-3 text-blue-700" />
+                <span>PDF Supervisión</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handlePdfUpload(e, "supervision")}
+                />
+              </label>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>

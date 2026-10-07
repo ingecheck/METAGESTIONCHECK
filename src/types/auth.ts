@@ -81,6 +81,7 @@ export interface AuthState {
 }
 
 export const ADMIN_MASTER_EMAIL = "ingecheckplus@gmail.com";
+export const ACTIVE_USER_STORAGE_KEY = "osce_current_user_free_v1";
 
 export const ADMIN_MASTER_CREDENTIALS = {
   email: "ingecheckplus@gmail.com",

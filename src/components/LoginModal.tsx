@@ -1,31 +1,18 @@
 import React, { useState } from "react";
 import {
-  KeyRound,
-  ShieldCheck,
-  Building2,
   Lock,
-  ArrowRight,
-  Sparkles,
   CheckCircle2,
   AlertCircle,
-  FileSpreadsheet,
-  UserCheck,
-  LogOut,
   Mail,
-  User,
-  Hash,
-  Phone,
-  HelpCircle,
-  FileText,
-  ShieldAlert,
   Users,
   HardHat,
-  Award,
   ChevronRight,
   ArrowLeft,
   Briefcase,
   Eye,
   EyeOff,
+  Building2,
+  Sparkles,
 } from "lucide-react";
 import {
   LicenseSession,
@@ -33,14 +20,13 @@ import {
   ADMIN_MASTER_EMAIL,
   INITIAL_DEFAULT_SESSIONS,
   EntityType,
+  ACTIVE_USER_STORAGE_KEY,
   mergeLicenseSessionWithExisting,
 } from "../types/auth";
 import { auth, googleProvider, isUserAdmin } from "../lib/firebase";
 import { signInWithPopup } from "firebase/auth";
 import {
-  verifyLicenseKeyFromCloud,
   fetchFirebaseLicenses,
-  submitLicenseRequest,
 } from "../services/firebaseSync";
 
 interface LoginModalProps {
@@ -62,41 +48,64 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   isOpen,
   onLogin,
   availableSessions,
-  onRequestLicense,
 }) => {
-  const [activeTab, setActiveTab] = useState<"login" | "collaborator" | "request">("login");
-  const [licenseKeyInput, setLicenseKeyInput] = useState("");
+  // Tabs: ONLY "email" and "collaborator" (No "solicitar", No "clave de licencia")
+  const [activeTab, setActiveTab] = useState<"email" | "collaborator">("email");
+
+  // Email login state - Pre-filled from localStorage if previously remembered
+  const [emailInput, setEmailInput] = useState(() => {
+    return localStorage.getItem("osce_saved_login_email") || "";
+  });
+  const [passwordInput, setPasswordInput] = useState(() => {
+    return localStorage.getItem("osce_saved_login_pin") || "";
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberSession, setRememberSession] = useState(() => {
+    return localStorage.getItem("osce_keep_session_active") !== "false";
+  });
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isSubmittingReq, setIsSubmittingReq] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Collaborator direct login state
-  const [collabDniOrEmail, setCollabDniOrEmail] = useState("");
-  const [collabPin, setCollabPin] = useState("");
+  // Collaborator login state
+  const [collabEmail, setCollabEmail] = useState(() => {
+    return localStorage.getItem("osce_saved_collab_email") || "";
+  });
+  const [collabPin, setCollabPin] = useState(() => {
+    return localStorage.getItem("osce_saved_collab_pin") || "";
+  });
   const [showCollabPin, setShowCollabPin] = useState(false);
   const [collabSearchQuery, setCollabSearchQuery] = useState("");
   const [selectedEntityForCollab, setSelectedEntityForCollab] = useState<LicenseSession | null>(null);
   const [collabMode, setCollabMode] = useState<"direct" | "byEntity">("direct");
 
-  // Team member selection state after key validation
+  // Selected member for PIN entry when choosing by entity
   const [validatedLicense, setValidatedLicense] = useState<LicenseSession | null>(null);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
-  const [pinInput, setPinInput] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [pinError, setPinError] = useState<string | null>(null);
-
-  // Form for requesting license from Admin
-  const [reqName, setReqName] = useState("");
-  const [reqEmail, setReqEmail] = useState("");
-  const [reqCompany, setReqCompany] = useState("");
-  const [reqRuc, setReqRuc] = useState("");
-  const [reqPhone, setReqPhone] = useState("");
-  const [reqIntendedUse, setReqIntendedUse] = useState("Formulación y Armado de Ofertas Técnicas OSCE");
-  const [reqSuccess, setReqSuccess] = useState(false);
+  const [entityMemberPin, setEntityMemberPin] = useState("");
+  const [showEntityMemberPin, setShowEntityMemberPin] = useState(false);
+  const [entityMemberPinError, setEntityMemberPinError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  // Persist session credentials helper
+  const persistSessionCredentials = (email: string, pin: string, session: LicenseSession) => {
+    if (rememberSession) {
+      localStorage.setItem("osce_keep_session_active", "true");
+      localStorage.setItem("osce_saved_login_email", email.trim().toLowerCase());
+      if (pin) {
+        localStorage.setItem("osce_saved_login_pin", pin.trim());
+      }
+      localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(session));
+    } else {
+      localStorage.setItem("osce_keep_session_active", "false");
+      localStorage.removeItem("osce_saved_login_email");
+      localStorage.removeItem("osce_saved_login_pin");
+    }
+  };
+
+  // Google Sign-In with popup
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
     setIsLoadingGoogle(true);
@@ -125,202 +134,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           notes: "Autenticado con Google como Administrador Principal.",
           firebaseSynced: true,
         };
+        persistSessionCredentials(userEmail, "", adminSession);
         onLogin(adminSession);
         return;
       }
 
-      // 2. Check if there is an existing authorized license in local state
-      let matched = availableSessions.find(
-        (s) => s.userEmail && s.userEmail.trim().toLowerCase() === userEmail
-      );
-
-      // If not in local state, fetch from Cloud Firestore
-      if (!matched) {
-        const cloudLicenses = await fetchFirebaseLicenses();
-        matched = cloudLicenses.find(
-          (s) => s.userEmail && s.userEmail.trim().toLowerCase() === userEmail
-        );
-      }
-
-      if (matched) {
-        if (matched.status === "suspended") {
-          setErrorMsg("Su cuenta se encuentra suspendida. Contacte al Administrador para su reactivación.");
-          return;
-        }
-        if (matched.status === "expired") {
-          setErrorMsg("Su licencia ha expirado. El Administrador debe renovar su periodo de vigencia.");
-          return;
-        }
-
-        // If this license has team members, offer selection
-        if (matched.teamMembers && matched.teamMembers.length > 0) {
-          setValidatedLicense({ ...matched, userId: user.uid, firebaseSynced: true });
-        } else {
-          onLogin({ ...matched, userId: user.uid, firebaseSynced: true });
-        }
-      } else {
-        // REJECT ACCESS: User is not authorized/created by the admin!
-        setErrorMsg(
-          `Acceso denegado: El correo "${userEmail}" no cuenta con una licencia autorizada por el Administrador. Solicite su registro en la pestaña "Solicitar Licencia".`
-        );
-      }
-    } catch (err: any) {
-      console.error("Google login error:", err);
-      setErrorMsg(err.message || "Error al autenticar con Google.");
-    } finally {
-      setIsLoadingGoogle(false);
-    }
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    // Normalize license key: remove extra spaces, uppercase
-    const rawKey = licenseKeyInput.trim();
-    const cleanKey = rawKey.replace(/\s+/g, "").toUpperCase();
-
-    if (!cleanKey) {
-      setErrorMsg("Por favor ingrese su Clave de Licencia otorgada por el Administrador.");
-      return;
-    }
-
-    setIsValidatingKey(true);
-
-    try {
-      // 1. Check Master Admin Key
-      if (
-        cleanKey === "ADMIN-OSCE-MASTER-2026" ||
-        cleanKey === "ADMIN-OSCE-2026" ||
-        cleanKey === "ADMINOSCEMASTER2026"
-      ) {
-        const adminSession = INITIAL_DEFAULT_SESSIONS[0];
-        onLogin(adminSession);
-        return;
-      }
-
-      // 2. Match session by license key in local availableSessions
-      let foundSession = availableSessions.find((s) => {
-        if (!s.licenseKey) return false;
-        const targetClean = s.licenseKey.replace(/\s+/g, "").toUpperCase();
-        return targetClean === cleanKey;
-      });
-
-      // 3. If not found locally, query Cloud Firestore
-      if (!foundSession) {
-        foundSession = await verifyLicenseKeyFromCloud(rawKey);
-      }
-
-      // 4. Fallback: fetch all cloud licenses in case of formatting variations
-      if (!foundSession) {
-        const allCloud = await fetchFirebaseLicenses();
-        foundSession =
-          allCloud.find((s) => {
-            if (!s.licenseKey) return false;
-            const targetClean = s.licenseKey.replace(/\s+/g, "").toUpperCase();
-            return targetClean === cleanKey;
-          }) || null;
-      }
-
-      // Merge with local session if available to ensure no locally added collaborators are lost
-      const localMatch = availableSessions.find((s) => {
-        if (!s.licenseKey) return false;
-        return s.licenseKey.replace(/\s+/g, "").toUpperCase() === cleanKey;
-      });
-      if (localMatch && foundSession) {
-        foundSession = mergeLicenseSessionWithExisting(localMatch, foundSession);
-      }
-
-      if (!foundSession) {
-        setErrorMsg(
-          "Clave de licencia no encontrada o inválida. Verifique que coincida exactamente con la clave que le proporcionó el Administrador o solicite una nueva en la pestaña 'Solicitar Licencia'."
-        );
-        return;
-      }
-
-      if (foundSession.status === "suspended") {
-        setErrorMsg("Esta licencia ha sido suspendida por el Administrador. Comuníquese para su reactivación.");
-        return;
-      }
-
-      if (foundSession.status === "expired") {
-        setErrorMsg("Esta licencia ha expirado. El Administrador debe renovar el periodo de vigencia.");
-        return;
-      }
-
-      // If license has team members configured, show team selection screen
-      if (foundSession.teamMembers && foundSession.teamMembers.length > 0) {
-        setValidatedLicense(foundSession);
-        setSelectedMember(null);
-        setPinInput("");
-        setPinError(null);
-      } else {
-        // Direct login
-        onLogin(foundSession);
-      }
-    } catch (err: any) {
-      console.error("License validation error:", err);
-      setErrorMsg("Error al conectar con el servidor para validar la licencia.");
-    } finally {
-      setIsValidatingKey(false);
-    }
-  };
-
-  const handleMemberSelect = (member: TeamMember) => {
-    setSelectedMember(member);
-    setPinInput("");
-    setPinError(null);
-
-    // If member has no PIN required, proceed to login directly
-    if (!member.accessPin || member.accessPin.trim() === "") {
-      if (validatedLicense) {
-        onLogin({
-          ...validatedLicense,
-          activeMemberId: member.id,
-        });
-      }
-    }
-  };
-
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validatedLicense || !selectedMember) return;
-
-    const expectedPin = selectedMember.accessPin?.trim();
-    if (expectedPin && pinInput.trim() !== expectedPin) {
-      setPinError("El PIN ingresado es incorrecto. Verifique con el Titular de la Licencia.");
-      return;
-    }
-
-    onLogin({
-      ...validatedLicense,
-      activeMemberId: selectedMember.id,
-    });
-  };
-
-  const handleEnterAsTitular = () => {
-    if (!validatedLicense) return;
-    onLogin({
-      ...validatedLicense,
-      activeMemberId: undefined, // Titular main workspace
-    });
-  };
-
-  // Direct Collaborator Login via DNI / Email + PIN
-  const handleCollabDirectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    const query = collabDniOrEmail.trim();
-    if (!query) {
-      setErrorMsg("Ingrese su DNI o Correo Electrónico institucional.");
-      return;
-    }
-
-    setIsValidatingKey(true);
-
-    try {
-      // 1. Gather all local sessions and cloud licenses without losing local collaborators
+      // Gather local + cloud licenses
       let allSessions = [...availableSessions];
       try {
         const cloudLicenses = await fetchFirebaseLicenses();
@@ -336,36 +155,248 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         // use local
       }
 
-      // 2. Search for the team member across all entities
-      let targetSession: LicenseSession | null = null;
-      let targetMember: TeamMember | null = null;
+      // 2. Check if matches any collaborator's email
+      for (const sess of allSessions) {
+        if (!sess.teamMembers) continue;
+        for (const m of sess.teamMembers) {
+          if (m.email && m.email.trim().toLowerCase() === userEmail) {
+            const collabSession = { ...sess, activeMemberId: m.id, firebaseSynced: true };
+            persistSessionCredentials(userEmail, m.accessPin || "", collabSession);
+            onLogin(collabSession);
+            return;
+          }
+        }
+      }
 
-      const cleanQuery = query.toLowerCase();
-      const cleanDigits = query.replace(/\D/g, "");
-      const normalizeStr = (s?: string) =>
-        (s || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim();
-      const normalizedQuery = normalizeStr(query);
-      const queryWords = normalizedQuery.split(/\s+/).filter(Boolean);
+      // 3. Check if matches any titular license
+      const matchedTitular = allSessions.find(
+        (s) => s.userEmail && s.userEmail.trim().toLowerCase() === userEmail
+      );
+      if (matchedTitular) {
+        if (matchedTitular.status === "suspended") {
+          setErrorMsg("Su cuenta institucional ha sido suspendida. Comuníquese con el Administrador.");
+          return;
+        }
+        if (matchedTitular.status === "expired") {
+          setErrorMsg("Su periodo de vigencia ha expirado. Comuníquese con el Administrador.");
+          return;
+        }
+        const sessionWithUser = { ...matchedTitular, userId: user.uid, firebaseSynced: true };
+        persistSessionCredentials(userEmail, "", sessionWithUser);
+        onLogin(sessionWithUser);
+        return;
+      }
+
+      // If not recognized:
+      setErrorMsg(
+        `Acceso no registrado: El correo de Google "${userEmail}" no figura en la base de datos de usuarios autorizados. Verifique con el Administrador o con el Titular de su Entidad.`
+      );
+    } catch (err: any) {
+      console.error("Google login error:", err);
+      setErrorMsg(err.message || "Error al autenticar con Google.");
+    } finally {
+      setIsLoadingGoogle(false);
+    }
+  };
+
+  // Main Email + PIN/Password Login Form
+  const handleEmailLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const rawEmail = emailInput.trim();
+    if (!rawEmail) {
+      setErrorMsg("Por favor ingrese su correo electrónico.");
+      return;
+    }
+
+    const cleanEmail = rawEmail.toLowerCase();
+    setIsSubmitting(true);
+
+    try {
+      // 1. Check Master Admin
+      if (
+        isUserAdmin(cleanEmail) ||
+        cleanEmail === ADMIN_MASTER_EMAIL.toLowerCase() ||
+        cleanEmail === "admin@osce.gob.pe" ||
+        cleanEmail === "admin"
+      ) {
+        const adminSession = INITIAL_DEFAULT_SESSIONS[0];
+        persistSessionCredentials(cleanEmail, passwordInput, adminSession);
+        onLogin(adminSession);
+        return;
+      }
+
+      // 2. Fetch cloud licenses combined with local sessions
+      let allSessions = [...availableSessions];
+      try {
+        const cloudLicenses = await fetchFirebaseLicenses();
+        const map = new Map<string, LicenseSession>();
+        allSessions.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+        cloudLicenses.forEach((s) => {
+          const key = s.licenseKey.toUpperCase();
+          const existing = map.get(key);
+          map.set(key, mergeLicenseSessionWithExisting(existing, s));
+        });
+        allSessions = Array.from(map.values());
+      } catch (e) {
+        // fallback to local
+      }
+
+      // 3. Search for Collaborator by email
+      let matchedSession: LicenseSession | null = null;
+      let matchedMember: TeamMember | null = null;
 
       for (const sess of allSessions) {
-        if (!sess.teamMembers || sess.teamMembers.length === 0) continue;
-        
-        for (const member of sess.teamMembers) {
-          const matchDni = member.dni && cleanDigits && member.dni.replace(/\D/g, "") === cleanDigits;
-          const matchEmail = member.email && member.email.trim().toLowerCase() === cleanQuery;
-          const matchCip = member.cip && member.cip.toLowerCase().replace(/\s+/g, "") === cleanQuery.replace(/\s+/g, "");
-          const normName = normalizeStr(member.name);
-          const matchNameDirect = normName.includes(normalizedQuery);
-          const matchNameWords = queryWords.length > 0 && queryWords.every((word) => normName.includes(word));
-          const matchCargo = member.cargoText && normalizeStr(member.cargoText).includes(normalizedQuery);
+        if (!sess.teamMembers) continue;
+        for (const m of sess.teamMembers) {
+          if (m.email && m.email.trim().toLowerCase() === cleanEmail) {
+            matchedSession = sess;
+            matchedMember = m;
+            break;
+          }
+        }
+        if (matchedMember) break;
+      }
 
-          if (matchDni || matchEmail || matchCip || matchNameDirect || matchNameWords || matchCargo) {
+      if (matchedSession && matchedMember) {
+        if (matchedSession.status === "suspended") {
+          setErrorMsg("La cuenta de su Entidad o Empresa se encuentra suspendida.");
+          return;
+        }
+        if (matchedMember.status === "inactive") {
+          setErrorMsg("Su perfil de colaborador está inactivo. Solicite la activación a su Titular.");
+          return;
+        }
+
+        // Validate PIN if configured
+        const expectedPin = (matchedMember.accessPin || "").trim();
+        if (expectedPin && passwordInput.trim() && passwordInput.trim() !== expectedPin) {
+          setErrorMsg(`El PIN de acceso ingresado es incorrecto para ${matchedMember.name}.`);
+          return;
+        }
+
+        const sessionToLogin: LicenseSession = {
+          ...matchedSession,
+          activeMemberId: matchedMember.id,
+        };
+        persistSessionCredentials(cleanEmail, passwordInput, sessionToLogin);
+        onLogin(sessionToLogin);
+        return;
+      }
+
+      // 4. Search for Titular by userEmail
+      const matchedTitular = allSessions.find(
+        (s) => s.userEmail && s.userEmail.trim().toLowerCase() === cleanEmail
+      );
+
+      if (matchedTitular) {
+        if (matchedTitular.status === "suspended") {
+          setErrorMsg("Esta cuenta ha sido suspendida. Comuníquese con el Administrador.");
+          return;
+        }
+        if (matchedTitular.status === "expired") {
+          setErrorMsg("Esta cuenta ha expirado. El periodo de vigencia debe ser renovado.");
+          return;
+        }
+
+        // If titular has team members, check if titular member has a PIN
+        const titularMember = matchedTitular.teamMembers?.find(
+          (m) => m.role === "titular" || (m.email && m.email.trim().toLowerCase() === cleanEmail)
+        );
+        const expectedPin = titularMember?.accessPin?.trim();
+        if (expectedPin && passwordInput.trim() && passwordInput.trim() !== expectedPin) {
+          setErrorMsg("El PIN o contraseña ingresada es incorrecta para el Titular.");
+          return;
+        }
+
+        persistSessionCredentials(cleanEmail, passwordInput, matchedTitular);
+        onLogin(matchedTitular);
+        return;
+      }
+
+      // 5. Friendly fallback: Check if user pasted a collaborator name or DNI into the email field
+      const cleanDigits = rawEmail.replace(/\D/g, "");
+      for (const sess of allSessions) {
+        if (!sess.teamMembers) continue;
+        for (const m of sess.teamMembers) {
+          const matchDni = m.dni && cleanDigits && m.dni.replace(/\D/g, "") === cleanDigits;
+          const matchName = m.name.toLowerCase().includes(cleanEmail);
+          if (matchDni || matchName) {
+            matchedSession = sess;
+            matchedMember = m;
+            break;
+          }
+        }
+        if (matchedMember) break;
+      }
+
+      if (matchedSession && matchedMember) {
+        const expectedPin = (matchedMember.accessPin || "").trim();
+        if (expectedPin && passwordInput.trim() && passwordInput.trim() !== expectedPin) {
+          setErrorMsg(`PIN incorrecto para ${matchedMember.name}.`);
+          return;
+        }
+        const sessionToLogin: LicenseSession = {
+          ...matchedSession,
+          activeMemberId: matchedMember.id,
+        };
+        persistSessionCredentials(matchedMember.email || rawEmail, passwordInput, sessionToLogin);
+        onLogin(sessionToLogin);
+        return;
+      }
+
+      // Not found
+      setErrorMsg(
+        `No se encontró ninguna cuenta registrada con el correo "${rawEmail}". Verifique que su correo coincida con el registrado en su equipo o entidad.`
+      );
+    } catch (err: any) {
+      console.error("Email login error:", err);
+      setErrorMsg("Error al conectar con el servidor. Intente nuevamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Dedicated Collaborator PIN direct submit
+  const handleCollabPinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const query = collabEmail.trim();
+    if (!query) {
+      setErrorMsg("Ingrese el correo electrónico del colaborador.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      let allSessions = [...availableSessions];
+      try {
+        const cloudLicenses = await fetchFirebaseLicenses();
+        const map = new Map<string, LicenseSession>();
+        allSessions.forEach((s) => map.set(s.licenseKey.toUpperCase(), s));
+        cloudLicenses.forEach((s) => {
+          const key = s.licenseKey.toUpperCase();
+          const existing = map.get(key);
+          map.set(key, mergeLicenseSessionWithExisting(existing, s));
+        });
+        allSessions = Array.from(map.values());
+      } catch (e) {}
+
+      let targetSession: LicenseSession | null = null;
+      let targetMember: TeamMember | null = null;
+      const cleanQuery = query.toLowerCase();
+
+      for (const sess of allSessions) {
+        if (!sess.teamMembers) continue;
+        for (const m of sess.teamMembers) {
+          if (
+            (m.email && m.email.trim().toLowerCase() === cleanQuery) ||
+            m.name.toLowerCase().includes(cleanQuery)
+          ) {
             targetSession = sess;
-            targetMember = member;
+            targetMember = m;
             break;
           }
         }
@@ -374,102 +405,78 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       if (!targetSession || !targetMember) {
         setErrorMsg(
-          `No se encontró ningún colaborador con el DNI/Correo "${query}". Verifique que su Titular lo haya registrado previamente en "Gestionar Mi Equipo" o seleccione su Entidad en la pestaña de abajo.`
+          `No se encontró ningún colaborador con el correo "${query}". Verifique con su Titular o seleccione su Entidad abajo.`
         );
         return;
       }
 
-      if (targetSession.status === "suspended") {
-        setErrorMsg("La licencia de su entidad está suspendida. Comuníquese con el Titular o Administrador.");
-        return;
-      }
-
-      if (targetSession.status === "expired") {
-        setErrorMsg("La licencia de su entidad ha expirado. El Titular debe renovarla.");
-        return;
-      }
-
-      // Check status of member
-      if (targetMember.status === "inactive") {
-        setErrorMsg("Su perfil de colaborador está marcado como inactivo. Solicite su activación al Titular.");
-        return;
-      }
-
-      // Check PIN
       const expectedPin = (targetMember.accessPin || "").trim();
       if (expectedPin && collabPin.trim() !== expectedPin) {
-        setErrorMsg(`El PIN de acceso ingresado es incorrecto para ${targetMember.name}. Verifique con el Titular.`);
+        setErrorMsg(`El PIN de acceso es incorrecto para ${targetMember.name}.`);
         return;
       }
 
-      // Validated! Log into collaborator's clean workspace
-      onLogin({
+      const sessionToLogin: LicenseSession = {
         ...targetSession,
         activeMemberId: targetMember.id,
-      });
-    } catch (err: any) {
-      console.error("Collab login error:", err);
-      setErrorMsg("Error al autenticar colaborador. Por favor intente nuevamente.");
-    } finally {
-      setIsValidatingKey(false);
-    }
-  };
+      };
 
-  const handleSendRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    if (!reqName.trim() || !reqEmail.trim() || !reqCompany.trim() || !reqRuc.trim()) {
-      setErrorMsg("Por favor complete todos los campos obligatorios de la solicitud.");
-      return;
-    }
-
-    if (reqRuc.trim().length !== 11) {
-      setErrorMsg("El número de RUC debe tener exactamente 11 dígitos numéricos.");
-      return;
-    }
-
-    setIsSubmittingReq(true);
-    try {
-      // 1. Submit to Firebase Cloud Firestore
-      await submitLicenseRequest({
-        userName: reqName.trim(),
-        userEmail: reqEmail.trim().toLowerCase(),
-        companyName: reqCompany.trim(),
-        ruc: reqRuc.trim(),
-        phone: reqPhone.trim(),
-        intendedUse: reqIntendedUse.trim(),
-      });
-
-      // 2. Call optional parent hook
-      if (onRequestLicense) {
-        onRequestLicense({
-          userName: reqName.trim(),
-          userEmail: reqEmail.trim().toLowerCase(),
-          companyName: reqCompany.trim(),
-          ruc: reqRuc.trim(),
-          phone: reqPhone.trim(),
-          intendedUse: reqIntendedUse.trim(),
-        });
+      if (rememberSession) {
+        localStorage.setItem("osce_keep_session_active", "true");
+        localStorage.setItem("osce_saved_collab_email", query);
+        localStorage.setItem("osce_saved_collab_pin", collabPin.trim());
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(sessionToLogin));
       }
 
-      setReqSuccess(true);
+      onLogin(sessionToLogin);
     } catch (err: any) {
-      console.error("Error submitting license request:", err);
-      setErrorMsg("Ocurrió un inconveniente al enviar la solicitud. Por favor intente nuevamente.");
+      console.error("Collab pin submit error:", err);
+      setErrorMsg("Error al autenticar el colaborador.");
     } finally {
-      setIsSubmittingReq(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleResetRequestForm = () => {
-    setReqSuccess(false);
-    setReqName("");
-    setReqEmail("");
-    setReqCompany("");
-    setReqRuc("");
-    setReqPhone("");
-    setActiveTab("login");
+  // Submit PIN for member chosen via entity list
+  const handleEntityMemberPinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validatedLicense || !selectedMember) return;
+
+    setEntityMemberPinError(null);
+    const expectedPin = (selectedMember.accessPin || "").trim();
+    if (expectedPin && entityMemberPin.trim() !== expectedPin) {
+      setEntityMemberPinError(`El PIN de acceso es incorrecto para ${selectedMember.name}.`);
+      return;
+    }
+
+    const sessionToLogin: LicenseSession = {
+      ...validatedLicense,
+      activeMemberId: selectedMember.id,
+    };
+
+    if (rememberSession) {
+      localStorage.setItem("osce_keep_session_active", "true");
+      if (selectedMember.email) {
+        localStorage.setItem("osce_saved_login_email", selectedMember.email);
+        localStorage.setItem("osce_saved_login_pin", entityMemberPin.trim());
+      }
+      localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(sessionToLogin));
+    }
+
+    onLogin(sessionToLogin);
+  };
+
+  const handleEnterAsTitular = () => {
+    if (!validatedLicense) return;
+    const sessionToLogin: LicenseSession = {
+      ...validatedLicense,
+      activeMemberId: undefined,
+    };
+    if (rememberSession) {
+      localStorage.setItem("osce_keep_session_active", "true");
+      localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(sessionToLogin));
+    }
+    onLogin(sessionToLogin);
   };
 
   const getEntityIcon = (entityType?: EntityType) => {
@@ -477,14 +484,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       case "municipalidad":
       case "gobierno_regional":
       case "ministerio":
-        return <Building2 className="w-5 h-5 text-blue-400" />;
+        return <Building2 className="w-5 h-5 text-blue-500" />;
       case "empresa":
       case "consorcio":
-        return <Briefcase className="w-5 h-5 text-indigo-400" />;
+        return <Briefcase className="w-5 h-5 text-indigo-500" />;
       case "consultor_supervisor":
-        return <HardHat className="w-5 h-5 text-emerald-400" />;
+        return <HardHat className="w-5 h-5 text-emerald-500" />;
       default:
-        return <Building2 className="w-5 h-5 text-blue-400" />;
+        return <Building2 className="w-5 h-5 text-blue-500" />;
     }
   };
 
@@ -526,7 +533,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
           <div className="mt-3 flex items-center gap-2 text-[11px] bg-slate-800/80 px-3 py-1.5 rounded-lg text-slate-300 border border-slate-700/60">
             <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>Sistema con aislamiento de cartera y mesa de trabajo individual</span>
+            <span>Inicio de sesión seguro • Solo tu correo y PIN de acceso</span>
           </div>
         </div>
 
@@ -544,7 +551,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     {validatedLicense.companyName}
                   </div>
                   <div className="text-[10px] text-slate-500 font-mono">
-                    RUC: {validatedLicense.ruc} • Clave: {validatedLicense.licenseKey}
+                    RUC: {validatedLicense.ruc}
                   </div>
                 </div>
               </div>
@@ -574,12 +581,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </p>
                   </div>
                   <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-200">
-                    {validatedLicense.teamMembers?.length || 0} Colaboradores
+                    {validatedLicense.teamMembers?.length || 0} Miembros
                   </span>
                 </div>
 
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  {/* Option 1: Direct Titular Workspace */}
+                  {/* Titular Workspace Option */}
                   <button
                     type="button"
                     onClick={handleEnterAsTitular}
@@ -595,19 +602,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-semibold">Titular Principal</span>
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          Mesa de trabajo maestra • Control global y licitaciones
+                          {validatedLicense.userEmail} • Control global
                         </div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition group-hover:translate-x-0.5" />
                   </button>
 
-                  {/* Option 2..N: Team Members */}
+                  {/* Collaborators List */}
                   {validatedLicense.teamMembers?.map((member) => (
                     <button
                       key={member.id}
                       type="button"
-                      onClick={() => handleMemberSelect(member)}
+                      onClick={() => {
+                        setSelectedMember(member);
+                        setEntityMemberPin("");
+                        setEntityMemberPinError(null);
+                      }}
                       className="w-full text-left p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/40 transition flex items-center justify-between group cursor-pointer shadow-2xs"
                     >
                       <div className="flex items-center space-x-2.5 min-w-0">
@@ -622,15 +633,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                             {getRoleBadge(member.role)}
                           </div>
                           <div className="text-[10px] text-slate-500 truncate">
-                            {member.cargoText || member.email}
-                            {member.cip ? ` • ${member.cip}` : ""}
-                            {member.dni ? ` • DNI: ${member.dni}` : ""}
+                            {member.email || member.cargoText}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-1 shrink-0 ml-2">
                         {member.accessPin && (
-                          <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono" title="Requiere PIN de acceso">
+                          <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
                             🔒 PIN
                           </span>
                         )}
@@ -642,7 +651,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </div>
             ) : (
               /* Step B: Enter PIN for selected member */
-              <form onSubmit={handlePinSubmit} className="space-y-4 animate-in fade-in zoom-in-95">
+              <form onSubmit={handleEntityMemberPinSubmit} className="space-y-4 animate-in fade-in zoom-in-95">
                 <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
                     {selectedMember.name.charAt(0)}
@@ -660,10 +669,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
                 </div>
 
-                {pinError && (
+                {entityMemberPinError && (
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-rose-700 text-xs">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{pinError}</span>
+                    <span>{entityMemberPinError}</span>
                   </div>
                 )}
 
@@ -674,23 +683,26 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                     <input
-                      type={showPin ? "text" : "password"}
+                      type={showEntityMemberPin ? "text" : "password"}
+                      id="entity-member-pin"
+                      name="password"
+                      autoComplete="current-password"
                       placeholder="****"
                       maxLength={6}
-                      value={pinInput}
+                      value={entityMemberPin}
                       onChange={(e) => {
-                        setPinInput(e.target.value);
-                        setPinError(null);
+                        setEntityMemberPin(e.target.value);
+                        setEntityMemberPinError(null);
                       }}
                       className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg font-mono tracking-widest text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                       autoFocus
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600"
+                      onClick={() => setShowEntityMemberPin(!showEntityMemberPin)}
+                      className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
-                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showEntityMemberPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                   {selectedMember.accessPin && (
@@ -721,24 +733,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             )}
           </div>
         ) : (
-          /* Normal Tab Switchers & Form */
+          /* Normal Login View: ONLY 2 TABS (Acceso con Correo & Colaborador PIN) */
           <>
-            {/* Tab switchers */}
+            {/* Tabs Bar: No Solicitar, No Clave de Licencia */}
             <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab("login");
+                  setActiveTab("email");
                   setErrorMsg(null);
                 }}
                 className={`flex-1 py-3 text-center transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                  activeTab === "login"
+                  activeTab === "email"
                     ? "bg-white text-blue-600 border-b-2 border-blue-600 font-bold"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Titular / Licencia</span>
+                <Mail className="w-3.5 h-3.5" />
+                <span>Acceso con Correo</span>
               </button>
 
               <button
@@ -754,38 +766,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>Colaborador / PIN</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("request");
-                  setErrorMsg(null);
-                }}
-                className={`flex-1 py-3 text-center transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                  activeTab === "request"
-                    ? "bg-white text-blue-600 border-b-2 border-blue-600 font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>Solicitar</span>
+                <span>Colaborador (PIN)</span>
               </button>
             </div>
 
-            {/* Body */}
+            {/* Modal Body */}
             <div className="p-6 space-y-4">
               {errorMsg && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2.5 text-rose-700 text-xs">
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2.5 text-rose-700 text-xs animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">{errorMsg}</div>
                 </div>
               )}
 
-              {activeTab === "login" ? (
+              {activeTab === "email" ? (
+                /* Tab 1: Acceso rápido con Correo (Autocompletado del navegador + PIN/Password) */
                 <div className="space-y-4">
-                  {/* 1. Google Sign-In Button */}
+                  {/* Google One-Click Login */}
                   <div>
                     <button
                       type="button"
@@ -813,61 +810,128 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       </svg>
                       <span>
                         {isLoadingGoogle
-                          ? "Verificando cuenta con Google..."
-                          : "Iniciar Sesión con Google"}
+                          ? "Verificando con Google..."
+                          : "Continuar con Google"}
                       </span>
                     </button>
                     <div className="flex items-center my-3.5">
                       <div className="flex-1 border-t border-slate-200"></div>
                       <span className="px-3 text-[10px] text-slate-400 uppercase font-semibold">
-                        o con tu clave de licencia
+                        o con tu correo institucional
                       </span>
                       <div className="flex-1 border-t border-slate-200"></div>
                     </div>
                   </div>
 
-                  {/* 2. License Key Form */}
-                  <form onSubmit={handleLoginSubmit} className="space-y-3">
+                  {/* Standard Fast Form with HTML Autocomplete */}
+                  <form onSubmit={handleEmailLoginSubmit} autoComplete="on" className="space-y-3.5">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Clave de Licencia del Titular o Entidad
+                      <label htmlFor="login-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Correo Electrónico
                       </label>
                       <div className="relative">
-                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                         <input
-                          type="text"
-                          placeholder="Ej: LIC-MUNI-RIOJA-2026 ó LIC-JHON-FRANKLIN-2026"
-                          value={licenseKeyInput}
-                          onChange={(e) => setLicenseKeyInput(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                          id="login-email"
+                          name="email"
+                          type="email"
+                          autoComplete="email username"
+                          required
+                          placeholder="tu.correo@institucion.gob.pe o correo@empresa.com"
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                           autoFocus
                         />
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Ingrese la clave otorgada por el Administrador. Si pertenece a un equipo, podrá seleccionar su usuario y PIN en el siguiente paso.
+                        El navegador sugerirá automáticamente tu correo institucional o personal.
                       </p>
                     </div>
 
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="login-password" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          PIN de Acceso o Contraseña
+                        </label>
+                        <span className="text-[10px] text-slate-400">
+                          (PIN 4-6 dígitos del equipo)
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                        <input
+                          id="login-password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="current-password"
+                          placeholder="••••••"
+                          value={passwordInput}
+                          onChange={(e) => setPasswordInput(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition tracking-widest"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Checkbox: Mantener sesión iniciada siempre */}
+                    <div className="flex items-center justify-between pt-1">
+                      <label className="flex items-center space-x-2 text-xs text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={rememberSession}
+                          onChange={(e) => setRememberSession(e.target.checked)}
+                          className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="font-semibold text-slate-800">
+                          Mantener sesión siempre iniciada
+                        </span>
+                      </label>
+                      {emailInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailInput("");
+                            setPasswordInput("");
+                            localStorage.removeItem("osce_saved_login_email");
+                            localStorage.removeItem("osce_saved_login_pin");
+                          }}
+                          className="text-[11px] text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                        >
+                          Limpiar datos
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 -mt-1 leading-tight">
+                      Solo ingresas tus credenciales la primera vez; luego el sistema conservará tu sesión abierta permanentemente.
+                    </p>
+
                     <button
                       type="submit"
-                      disabled={isValidatingKey}
-                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-3"
                     >
-                      {isValidatingKey ? (
+                      {isSubmitting ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Verificando Licencia con el Servidor...</span>
+                          <span>Verificando credenciales...</span>
                         </>
                       ) : (
                         <>
-                          <Lock className="w-4 h-4" />
-                          <span>Validar Licencia e Ingresar</span>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Iniciar Sesión</span>
                         </>
                       )}
                     </button>
                   </form>
 
-                  {/* Collaborator Shortcut Banner */}
+                  {/* Quick Shortcut to Collaborator PIN */}
                   <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center justify-between gap-3">
                     <div className="flex items-center space-x-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
@@ -875,7 +939,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-blue-950">¿Eres Colaborador o Ingeniero?</div>
-                        <div className="text-[11px] text-blue-800 truncate">Ingresa directamente con tu DNI / Correo y PIN.</div>
+                        <div className="text-[11px] text-blue-800 truncate">Ingresa con tu correo y PIN directo o por tu Entidad.</div>
                       </div>
                     </div>
                     <button
@@ -886,28 +950,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       }}
                       className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 transition cursor-pointer flex items-center gap-1 shadow-2xs"
                     >
-                      <span>Ingreso Equipo</span>
+                      <span>Ingreso PIN</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                  <div className="pt-2 text-center border-t border-slate-100">
-                    <p className="text-[11px] text-slate-500">
-                      ¿No tienes una clave de licencia activa?{" "}
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("request")}
-                        className="text-blue-600 font-semibold hover:underline cursor-pointer"
-                      >
-                        Solicítala aquí
-                      </button>
-                    </p>
+                  {/* Preloaded Demo Accounts Quick Info for Instant Testing */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 space-y-1">
+                    <div className="font-semibold text-slate-700 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Cuentas de demostración disponibles:</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1 text-[10px] font-mono text-slate-600">
+                      <div>• Admin Master: <strong>admin@osce.gob.pe</strong> (PIN: 2026)</div>
+                      <div>• Muni Rioja Titular: <strong>infraestructura@munirioja.gob.pe</strong> (PIN: 1122)</div>
+                      <div>• Muni Rioja OEI (Pilco): <strong>jpilco@munirioja.gob.pe</strong> (PIN: 1234)</div>
+                    </div>
                   </div>
                 </div>
-              ) : activeTab === "collaborator" ? (
-                /* Dedicated Collaborator Login Tab */
+              ) : (
+                /* Tab 2: Colaborador (PIN) */
                 <div className="space-y-4">
-                  {/* Mode switch: Direct by DNI/Email vs Pick by Entity */}
+                  {/* Mode switch: Direct by Email vs Pick by Entity */}
                   <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
                     <button
                       type="button"
@@ -921,7 +985,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      Acceso Rápido con DNI / PIN
+                      Acceso Rápido con Correo y PIN
                     </button>
                     <button
                       type="button"
@@ -940,36 +1004,44 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
 
                   {collabMode === "direct" ? (
-                    /* Direct DNI + PIN Form */
-                    <form onSubmit={handleCollabDirectSubmit} className="space-y-3 animate-in fade-in zoom-in-95">
+                    /* Direct Email + PIN Form (No DNI, No CIP) */
+                    <form onSubmit={handleCollabPinSubmit} autoComplete="on" className="space-y-3.5 animate-in fade-in zoom-in-95">
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                          DNI, Correo Electrónico o CIP del Colaborador
+                        <label htmlFor="collab-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Correo del Colaborador
                         </label>
                         <div className="relative">
-                          <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                          <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                           <input
-                            type="text"
-                            placeholder="Ej: 44290188 ó wtafur@munirioja.gob.pe"
-                            value={collabDniOrEmail}
-                            onChange={(e) => setCollabDniOrEmail(e.target.value)}
+                            id="collab-email"
+                            name="email"
+                            type="email"
+                            autoComplete="email username"
+                            required
+                            placeholder="jpilco@munirioja.gob.pe o tu.correo@institucion.gob.pe"
+                            value={collabEmail}
+                            onChange={(e) => setCollabEmail(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                             autoFocus
                           />
                         </div>
                         <p className="text-[11px] text-slate-400 mt-1">
-                          Ingrese el DNI o correo con el que su Titular lo registró en el equipo.
+                          El navegador sugerirá automáticamente tu correo habitual.
                         </p>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        <label htmlFor="collab-pin" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                           PIN de Acceso Personal (4 a 6 dígitos)
                         </label>
                         <div className="relative">
                           <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                           <input
+                            id="collab-pin"
+                            name="password"
                             type={showCollabPin ? "text" : "password"}
+                            autoComplete="current-password"
+                            required
                             placeholder="****"
                             maxLength={6}
                             value={collabPin}
@@ -979,22 +1051,35 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setShowCollabPin(!showCollabPin)}
-                            className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600"
+                            className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                           >
                             {showCollabPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-1">
-                          PIN confidencial asignado para su mesa de trabajo técnica.
+                          PIN asignado por el Titular de tu entidad para tu mesa de trabajo.
                         </p>
                       </div>
 
+                      {/* Checkbox Mantener sesión iniciada */}
+                      <label className="flex items-center space-x-2 text-xs text-slate-700 cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          checked={rememberSession}
+                          onChange={(e) => setRememberSession(e.target.checked)}
+                          className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="font-semibold text-slate-800">
+                          Mantener sesión siempre iniciada en este dispositivo
+                        </span>
+                      </label>
+
                       <button
                         type="submit"
-                        disabled={isValidatingKey}
+                        disabled={isSubmitting}
                         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 cursor-pointer mt-2"
                       >
-                        {isValidatingKey ? (
+                        {isSubmitting ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                             <span>Autenticando Colaborador...</span>
@@ -1024,7 +1109,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           <div className="relative">
                             <input
                               type="text"
-                              placeholder="Buscar entidad (ej: Rioja, Consorcio, Jhon...)"
+                              placeholder="Buscar entidad (ej: Rioja, Consorcio...)"
                               value={collabSearchQuery}
                               onChange={(e) => setCollabSearchQuery(e.target.value)}
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1040,8 +1125,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                                 return (
                                   sess.companyName.toLowerCase().includes(q) ||
                                   sess.userName.toLowerCase().includes(q) ||
-                                  sess.ruc.includes(q) ||
-                                  sess.licenseKey.toLowerCase().includes(q)
+                                  sess.ruc.includes(q)
                                 );
                               })
                               .map((sess) => (
@@ -1103,7 +1187,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setValidatedLicense(selectedEntityForCollab);
-                                    handleMemberSelect(member);
+                                    setSelectedMember(member);
+                                    setEntityMemberPin("");
+                                    setEntityMemberPinError(null);
                                   }}
                                   className="w-full text-left p-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/50 transition flex items-center justify-between group cursor-pointer"
                                 >
@@ -1116,7 +1202,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                                         {member.name}
                                       </div>
                                       <div className="text-[10px] text-slate-500 truncate">
-                                        {member.cargoText || member.role} {member.cip ? `• ${member.cip}` : ""}
+                                        {member.email || member.cargoText || member.role}
                                       </div>
                                     </div>
                                   </div>
@@ -1138,171 +1224,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   )}
 
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 leading-relaxed">
-                    💡 <strong>Aislamiento de Trabajo:</strong> Cada colaborador ingresa a su propia mesa de trabajo con sus permisos técnicos específicos (Residente, Supervisor, Especialista en Costos o Asistente).
+                    💡 <strong>Aislamiento de Trabajo:</strong> Cada colaborador ingresa a su propia mesa de trabajo limpia con sus permisos técnicos específicos (Residente, Supervisor, Especialista en Costos o Asistente).
                   </div>
                 </div>
-              ) : reqSuccess ? (
-                /* Request Success Screen - Pending approval */
-                <div className="space-y-4 py-2 animate-in fade-in zoom-in-95">
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-3">
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                      <CheckCircle2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-emerald-900">
-                        ¡Solicitud Enviada con Éxito!
-                      </h3>
-                      <p className="text-xs text-emerald-700 mt-1">
-                        Estado: <span className="font-bold uppercase tracking-wider bg-emerald-200/80 px-2 py-0.5 rounded text-[10px]">Pendiente de Aprobación</span>
-                      </p>
-                    </div>
-                    <div className="text-left bg-white p-3 rounded-xl border border-emerald-100 text-[11px] text-slate-600 space-y-1">
-                      <div><span className="font-semibold text-slate-800">Titular:</span> {reqName}</div>
-                      <div><span className="font-semibold text-slate-800">Correo:</span> {reqEmail}</div>
-                      <div><span className="font-semibold text-slate-800">Empresa:</span> {reqCompany} (RUC: {reqRuc})</div>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed text-left">
-                      El Administrador Principal (<strong>{ADMIN_MASTER_EMAIL}</strong>) ha recibido su solicitud en su Panel de Control. Una vez aprobada, le entregará su <strong>Clave de Licencia oficial</strong> para que pueda ingresar y registrar a su equipo de trabajo.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleResetRequestForm}
-                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Volver a la Pantalla de Ingreso
-                  </button>
-                </div>
-              ) : (
-                /* Request new license form */
-                <form onSubmit={handleSendRequest} className="space-y-3.5">
-                  <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <span>Solicitud de Registro de Licencia</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Complete los datos para que el Administrador ({ADMIN_MASTER_EMAIL}) revise y apruebe su licencia:
-                  </p>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Nombre del Ingeniero / Responsable *
-                    </label>
-                    <div className="relative">
-                      <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej: Ing. Jorge Ramirez"
-                        value={reqName}
-                        onChange={(e) => setReqName(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Correo Electrónico *
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                      <input
-                        type="email"
-                        required
-                        placeholder="correo@constructora.pe"
-                        value={reqEmail}
-                        onChange={(e) => setReqEmail(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Razón Social *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Constructora S.A.C."
-                        value={reqCompany}
-                        onChange={(e) => setReqCompany(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        RUC (11 dígitos) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={11}
-                        placeholder="2060..."
-                        value={reqRuc}
-                        onChange={(e) => setReqRuc(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Teléfono / WhatsApp
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                        <input
-                          type="tel"
-                          placeholder="999 888 777"
-                          value={reqPhone}
-                          onChange={(e) => setReqPhone(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        Uso Estimado
-                      </label>
-                      <select
-                        value={reqIntendedUse}
-                        onChange={(e) => setReqIntendedUse(e.target.value)}
-                        className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="Armado de Ofertas Técnicas OSCE">Armado de Ofertas OSCE</option>
-                        <option value="Control de Obras y Valorizaciones">Control de Obras & Valorizaciones</option>
-                        <option value="Consultoría y Supervisión de Obras">Consultoría y Supervisión</option>
-                        <option value="Suite Completa Corporativa">Suite Completa Corporativa</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("login")}
-                      className="flex-1 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmittingReq}
-                      className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center space-x-1.5"
-                    >
-                      {isSubmittingReq ? (
-                        <span>Enviando...</span>
-                      ) : (
-                        <span>Enviar Solicitud al Admin</span>
-                      )}
-                    </button>
-                  </div>
-                </form>
               )}
             </div>
           </>

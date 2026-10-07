@@ -151,10 +151,17 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.licenseKey && parsed.status === "active") {
+        if (
+          parsed &&
+          (parsed.licenseKey || parsed.id || parsed.userEmail) &&
+          parsed.status !== "suspended" &&
+          parsed.status !== "expired"
+        ) {
           // Ensure team members from latest default sessions are merged
           const defaultMatch = INITIAL_DEFAULT_SESSIONS.find(
-            (d) => d.licenseKey.toUpperCase() === parsed.licenseKey.toUpperCase()
+            (d) =>
+              (d.licenseKey && parsed.licenseKey && d.licenseKey.toUpperCase() === parsed.licenseKey.toUpperCase()) ||
+              (d.userEmail && parsed.userEmail && d.userEmail.toLowerCase() === parsed.userEmail.toLowerCase())
           );
           if (defaultMatch && defaultMatch.teamMembers) {
             const existingMemberIds = new Set((parsed.teamMembers || []).map((m: any) => m.id));
@@ -1219,6 +1226,7 @@ export default function App() {
           {activeTab === "seguimiento-cartera" && (
             <WorksPortfolioTracker
               currentUser={currentUser}
+              obrasList={obrasList}
               onSelectObra={(partialObra) =>
                 setObra((prev) => ({
                   ...prev,
