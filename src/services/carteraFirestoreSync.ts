@@ -10,7 +10,7 @@ export interface CarteraSyncPayload {
   lastUpdated: string;
   updatedBy: string;
   updatedByEmail?: string;
-  source: "excel_upload" | "manual_edit" | "checklist_sync" | "encargado_change" | "estado_change";
+  source: "excel_upload" | "manual_edit" | "checklist_sync" | "encargado_change" | "estado_change" | "delete_obra";
 }
 
 /**
@@ -29,7 +29,7 @@ export async function saveCarteraToFirestore(
   proyectos: ProyectoCartera[],
   updatedByName: string,
   updatedByEmail?: string,
-  source: "excel_upload" | "manual_edit" | "checklist_sync" | "encargado_change" | "estado_change" = "manual_edit"
+  source: "excel_upload" | "manual_edit" | "checklist_sync" | "encargado_change" | "estado_change" | "delete_obra" = "manual_edit"
 ): Promise<boolean> {
   const cleanKey = entityId.trim().toUpperCase() || "DEFAULT_ENTITY";
   const docRef = doc(db, CARTERA_COLLECTION, cleanKey);

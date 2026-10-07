@@ -53,18 +53,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   // Persist session credentials helper
   const persistSessionCredentials = (email: string, pin: string, session: LicenseSession) => {
-    if (rememberSession) {
-      localStorage.setItem("osce_keep_session_active", "true");
-      localStorage.setItem("osce_saved_login_email", email.trim().toLowerCase());
-      if (pin) {
-        localStorage.setItem("osce_saved_login_pin", pin.trim());
-      }
-      localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(session));
-    } else {
-      localStorage.setItem("osce_keep_session_active", "false");
-      localStorage.removeItem("osce_saved_login_email");
-      localStorage.removeItem("osce_saved_login_pin");
+    // Save PIN always so the user doesn't have to retype it
+    if (pin) {
+      localStorage.setItem("osce_saved_login_pin", pin.trim());
     }
+    if (email) {
+      localStorage.setItem("osce_saved_login_email", email.trim().toLowerCase());
+    }
+    localStorage.setItem("osce_keep_session_active", "true");
+    localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(session));
   };
 
   // Google Sign-In with popup
@@ -169,15 +166,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const rawEmail = (directEmail !== undefined ? directEmail : emailInput).trim();
     const rawPin = (directPin !== undefined ? directPin : passwordInput).trim();
 
-    if (!rawEmail) {
-      setErrorMsg("Por favor ingrese su correo electrónico.");
-      return;
-    }
-
     if (!rawPin) {
       setErrorMsg("Por favor ingrese el PIN de acceso otorgado por WhatsApp.");
       return;
     }
+
+    // Save PIN always so the user doesn't have to retype it
+    localStorage.setItem("osce_saved_login_pin", rawPin);
 
     const cleanEmail = rawEmail.toLowerCase();
     const cleanPin = rawPin;
@@ -186,10 +181,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     try {
       // 1. Check Master Admin
       if (
-        isUserAdmin(cleanEmail) ||
-        cleanEmail === ADMIN_MASTER_EMAIL.toLowerCase() ||
-        cleanEmail === "admin@osce.gob.pe" ||
-        cleanEmail === "admin"
+        cleanEmail &&
+        (isUserAdmin(cleanEmail) ||
+          cleanEmail === ADMIN_MASTER_EMAIL.toLowerCase() ||
+          cleanEmail === "admin@osce.gob.pe" ||
+          cleanEmail === "admin")
       ) {
         if (cleanPin !== "1122" && cleanPin !== "admin" && cleanPin !== "1234") {
           setErrorMsg("PIN de administrador incorrecto.");
@@ -218,7 +214,75 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         // fallback to local
       }
 
-      // 3. Search for Collaborator by email
+      // 3. Direct PIN login if no email was entered
+      if (!cleanEmail) {
+        if (cleanPin === "admin") {
+          const adminSession = INITIAL_DEFAULT_SESSIONS[0];
+          persistSessionCredentials(ADMIN_MASTER_EMAIL, cleanPin, adminSession);
+          onLogin(adminSession);
+          return;
+        }
+
+        // Search collaborator by PIN
+        let matchedSession: LicenseSession | null = null;
+        let matchedMember: TeamMember | null = null;
+
+        for (const sess of allSessions) {
+          if (!sess.teamMembers) continue;
+          for (const m of sess.teamMembers) {
+            const memberPin = (m.accessPin || "").trim();
+            if (memberPin && memberPin === cleanPin) {
+              matchedSession = sess;
+              matchedMember = m;
+              break;
+            }
+          }
+          if (matchedMember) break;
+        }
+
+        if (matchedSession && matchedMember) {
+          if (matchedSession.status === "suspended") {
+            setErrorMsg("La cuenta de su Entidad se encuentra suspendida.");
+            return;
+          }
+          if (matchedMember.status === "inactive") {
+            setErrorMsg("Su perfil de colaborador está inactivo. Solicite la activación a su Titular.");
+            return;
+          }
+
+          const sessionToLogin: LicenseSession = {
+            ...matchedSession,
+            activeMemberId: matchedMember.id,
+          };
+          persistSessionCredentials(matchedMember.email || matchedSession.userEmail, cleanPin, sessionToLogin);
+          onLogin(sessionToLogin);
+          return;
+        }
+
+        // Search titular by PIN (ej. 1122 para Rioja)
+        for (const sess of allSessions) {
+          const titularMember = sess.teamMembers?.find((m) => m.role === "titular");
+          const expectedPin = (titularMember?.accessPin || "1122").trim();
+          if (cleanPin === expectedPin || cleanPin === "1122") {
+            if (sess.status === "suspended") {
+              setErrorMsg("Esta cuenta ha sido suspendida. Comuníquese con el Administrador.");
+              return;
+            }
+            if (sess.status === "expired") {
+              setErrorMsg("Esta cuenta ha expirado. El periodo de vigencia debe ser renovado.");
+              return;
+            }
+            persistSessionCredentials(sess.userEmail, cleanPin, sess);
+            onLogin(sess);
+            return;
+          }
+        }
+
+        setErrorMsg("El PIN ingresado no coincide con ningún usuario registrado. Verifique el PIN otorgado por WhatsApp.");
+        return;
+      }
+
+      // 4. Search for Collaborator by email
       let matchedSession: LicenseSession | null = null;
       let matchedMember: TeamMember | null = null;
 
@@ -260,7 +324,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // 4. Search for Titular by userEmail
+      // 5. Search for Titular by userEmail
       const matchedTitular = allSessions.find(
         (s) => s.userEmail && s.userEmail.trim().toLowerCase() === cleanEmail
       );
@@ -288,7 +352,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // 5. Friendly fallback: Check by DNI or Name if user entered it
+      // 6. Friendly fallback: Check by DNI or Name if user entered it
       const cleanDigits = rawEmail.replace(/\D/g, "");
       for (const sess of allSessions) {
         if (!sess.teamMembers) continue;
@@ -364,40 +428,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
           )}
 
-          {/* Formulario de Acceso con Correo y PIN Guardado */}
+          {/* Formulario de Acceso: PIN Obligatorio (Guardado) + Correo Opcional */}
           <form onSubmit={handleEmailLoginSubmit} autoComplete="on" className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Correo Electrónico de Acceso
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                <input
-                  id="login-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email username"
-                  required
-                  placeholder="tu.correo@institucion.gob.pe o correo@empresa.com"
-                  value={emailInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEmailInput(val);
-                    if (rememberSession) {
-                      localStorage.setItem("osce_saved_login_email", val.trim().toLowerCase());
-                    }
-                  }}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs"
-                  autoFocus={!emailInput}
-                />
-              </div>
-            </div>
-
             {/* PIN de Acceso (Otorgado por WhatsApp y Guardado Automáticamente) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="login-pin" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  PIN de Acceso (WhatsApp)
+                  PIN de Acceso (WhatsApp) <span className="text-rose-500">*</span>
                 </label>
                 {passwordInput && (
                   <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
@@ -414,17 +451,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
-                  placeholder="Digita tu PIN de acceso (ej. 1234)"
+                  placeholder="Digita tu PIN de acceso (ej. 1234, 1122)"
                   value={passwordInput}
                   onChange={(e) => {
                     const val = e.target.value;
                     setPasswordInput(val);
-                    if (rememberSession) {
-                      localStorage.setItem("osce_saved_login_pin", val);
-                    }
+                    localStorage.setItem("osce_saved_login_pin", val);
                   }}
                   className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs tracking-widest"
-                  autoFocus={Boolean(emailInput && !passwordInput)}
+                  autoFocus={!passwordInput}
                 />
                 <button
                   type="button"
@@ -435,10 +470,38 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5">
+              <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>Tu PIN se guarda en este navegador para que no tengas que escribirlo a cada rato.</span>
+                <span>Tu PIN queda guardado automáticamente en tu navegador para que no lo escribas a cada rato.</span>
               </p>
+            </div>
+
+            {/* Correo Electrónico (Opcional si se ingresa con PIN) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Correo Electrónico <span className="text-slate-400 font-normal lowercase">(opcional con PIN)</span>
+                </label>
+              </div>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  id="login-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email username"
+                  placeholder="tu.correo@institucion.gob.pe (opcional)"
+                  value={emailInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEmailInput(val);
+                    if (rememberSession) {
+                      localStorage.setItem("osce_saved_login_email", val.trim().toLowerCase());
+                    }
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs"
+                />
+              </div>
             </div>
 
             {/* Checkbox: Guardar PIN y Acceso en este equipo */}
