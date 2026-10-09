@@ -63,19 +63,22 @@ export function unmarkLicenseAsDeleted(idOrKey: string) {
 }
 
 export function isLicenseDeleted(session: { id?: string; licenseKey?: string }): boolean {
-  // Master demo and initial official licenses must never be locked or deleted
+  // Purge mock/fake entities (Chiclayo, Jhon Franklin mock) so only Municipalidad Provincial de Rioja remains
+  const mockKeys = ["LIC-MUNI-CHICLAYO-2026", "LIC-JHON-FRANKLIN-2026"];
+  const mockIds = ["lic-muni-chiclayo", "lic-postor-jhon-franklin"];
+  if (session.licenseKey && mockKeys.includes(session.licenseKey.trim().toUpperCase())) return true;
+  if (session.id && mockIds.includes(session.id.toLowerCase())) return true;
+
+  // Master and Municipalidad Provincial de Rioja must never be deleted
   const protectedKeys = [
     "ADMIN-OSCE-MASTER-2026",
     "ADMIN-OSCE-2026",
-    "LIC-JHON-FRANKLIN-2026",
     "LIC-MUNI-RIOJA-2026",
-    "LIC-MUNI-CHICLAYO-2026",
   ];
   const protectedIds = [
-    "lic-postor-jhon-franklin",
     "lic-muni-rioja",
-    "lic-muni-chiclayo",
     "admin-master-session",
+    "lic-admin-master",
   ];
   if (session.licenseKey && protectedKeys.includes(session.licenseKey.trim().toUpperCase())) return false;
   if (session.id && protectedIds.includes(session.id.toLowerCase())) return false;

@@ -72,56 +72,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : null;
 
   // Module state
-  const isObrasTab = activeTab.startsWith("obras-") && activeTab !== "obras-informe-entidad";
   const isInformesTab = activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad";
   const isCarteraTab = activeTab === "seguimiento-cartera";
 
   const [isOfertadorOpen, setIsOfertadorOpen] = useState<boolean>(
-    !isObrasTab && !isInformesTab && !isCarteraTab
+    !isInformesTab && !isCarteraTab
   );
-  const [isObrasOpen, setIsObrasOpen] = useState<boolean>(isObrasTab);
   const [isInformesOpen, setIsInformesOpen] = useState<boolean>(isInformesTab);
 
   // Auto expand the module containing the active tab
   useEffect(() => {
     if (isInformesTab) {
       setIsInformesOpen(true);
-    } else if (isObrasTab) {
-      setIsObrasOpen(true);
     } else if (activeTab !== "admin-panel" && activeTab !== "seguimiento-cartera") {
       setIsOfertadorOpen(true);
     }
-  }, [activeTab, isObrasTab, isInformesTab]);
+  }, [activeTab, isInformesTab]);
 
-  // Sub-items for Module 1: Ofertador / Postor (Concursos Públicos SEACE)
-  const ofertadorNavItems = [
-    { id: "dashboard", label: "Dashboard del Postor", icon: LayoutDashboard },
-    { id: "analyzer", label: "1. Bases & Concurso Público", icon: FileText },
-    {
-      id: "company",
-      label: company.esConsorcio ? "2. Consorcio Postor" : "2. Perfil Empresa",
-      icon: Building2,
-    },
-    { id: "experience", label: "3. Experiencia (Anexo 8)", icon: Award },
-    { id: "personnel", label: "4. Personal y Equipos", icon: Users },
-    { id: "observations", label: "5. Consultas y Asesor Legal OSCE", icon: HelpCircle },
-    { id: "builder", label: "6. Armador de Oferta Final", icon: FolderTree },
-  ];
-
-  // Sub-items for Module 2: Control de Obras
-  const obrasNavItems = [
-    { id: "obras-dashboard", label: "Panel General de Obra", icon: HardHat },
-    { id: "obras-lector", label: "1. Análisis de Contratos / O.S.", icon: FileText },
-    { id: "obras-inicio", label: "2. Procedimiento Inicio de Obra", icon: FileCheck2 },
-    { id: "obras-auditoria", label: "3. Auditoría Excel vs Escaneado", icon: ShieldAlert },
-    { id: "obras-valorizaciones", label: "4. Curva S y Valorizaciones", icon: TrendingUp },
-    { id: "obras-partidas", label: "5. Cuadro Partidas Ejecutadas", icon: ListTree },
-    { id: "obras-adicionales", label: "6. Adicionales y Plazos", icon: Scale },
-    { id: "obras-liquidacion", label: "7. Recepción y Liquidación", icon: Award },
-    { id: "obras-bim", label: "8. Experiencia BIM 3D y 4D", icon: Box },
-  ];
-
-  // Sub-items for Module 3: Informes Técnicos & Gestión Documentaria
+  // Sub-items for Module 1: Informes Técnicos & Gestión Documentaria
   const informesNavItems = [
     {
       id: "informes-locadores",
@@ -148,6 +116,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: "5. Valorizaciones de Obra",
       icon: FileCheck2,
     },
+  ];
+
+  // Sub-items for Module 2: Licitaciones & Concursos Públicos (SEACE) - ubicado antes de Panel Admin
+  const ofertadorNavItems = [
+    { id: "dashboard", label: "Dashboard del Postor", icon: LayoutDashboard },
+    { id: "analyzer", label: "1. Bases & Concurso Público", icon: FileText },
+    {
+      id: "company",
+      label: company.esConsorcio ? "2. Consorcio Postor" : "2. Perfil Empresa",
+      icon: Building2,
+    },
+    { id: "experience", label: "3. Experiencia (Anexo 8)", icon: Award },
+    { id: "personnel", label: "4. Personal y Equipos", icon: Users },
+    { id: "observations", label: "5. Consultas y Asesor Legal OSCE", icon: HelpCircle },
+    { id: "builder", label: "6. Armador de Oferta Final", icon: FolderTree },
   ];
 
   return (
@@ -291,161 +274,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* ======================================================== */}
-        {/* APARTADO 1: OFERTADOR / POSTOR (LICITACIONES SEACE)     */}
-        {/* ======================================================== */}
-        <div className="space-y-1 pt-1 border-t border-slate-800/70">
-          {isExpanded ? (
-            <button
-              onClick={() => {
-                setIsOfertadorOpen(!isOfertadorOpen);
-                if (!isOfertadorOpen && isObrasTab) {
-                  setActiveTab("dashboard");
-                }
-              }}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                !isObrasTab && !isInformesTab && activeTab !== "seguimiento-cartera" && activeTab !== "admin-panel"
-                  ? "bg-slate-900 text-amber-300 border border-amber-500/30"
-                  : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
-              }`}
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <Briefcase className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="truncate uppercase tracking-wide text-[10px] font-bold">
-                  1. Licitaciones & Concursos
-                </span>
-              </div>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
-                  isOfertadorOpen ? "rotate-0" : "-rotate-90"
-                }`}
-              />
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setActiveTab("dashboard");
-              }}
-              className={`w-full flex justify-center py-2.5 rounded-lg transition ${
-                !isObrasTab && !isInformesTab && activeTab !== "seguimiento-cartera" && activeTab !== "admin-panel"
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900"
-              }`}
-              title="Licitaciones & Concursos Públicos"
-            >
-              <Briefcase className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Desplegable de Ofertador */}
-          {(isExpanded && isOfertadorOpen) && (
-            <div className="space-y-0.5 pl-1.5">
-              {ofertadorNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-
-                return (
-                  <button
-                    key={item.id}
-                    id={`sidebar-item-${item.id}`}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-                      isActive
-                        ? "bg-amber-500 text-slate-950 font-bold shadow-xs"
-                        : "text-slate-400 hover:bg-slate-900 hover:text-white"
-                    }`}
-                  >
-                    <Icon
-                      className={`w-3.5 h-3.5 shrink-0 ${
-                        isActive ? "text-slate-950" : "text-slate-500"
-                      }`}
-                    />
-                    <span className="truncate text-[11px]">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ======================================================== */}
-        {/* APARTADO 2: ENTIDADES & CONTROL DE OBRAS               */}
-        {/* ======================================================== */}
-        <div className="space-y-1 pt-1 border-t border-slate-800/70">
-          {isExpanded ? (
-            <button
-              onClick={() => {
-                setIsObrasOpen(!isObrasOpen);
-                if (!isObrasOpen && !isObrasTab) {
-                  setActiveTab("obras-dashboard");
-                }
-              }}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                isObrasTab
-                  ? "bg-slate-900 text-amber-300 border border-amber-500/30"
-                  : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
-              }`}
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <HardHat className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="truncate uppercase tracking-wide text-[10px] font-bold">
-                  2. Control de Obras
-                </span>
-              </div>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
-                  isObrasOpen ? "rotate-0" : "-rotate-90"
-                }`}
-              />
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setActiveTab("obras-dashboard");
-              }}
-              className={`w-full flex justify-center py-2.5 rounded-lg transition ${
-                isObrasTab
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900"
-              }`}
-              title="Control de Obras"
-            >
-              <HardHat className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Desplegable de Control de Obras */}
-          {(isExpanded && isObrasOpen) && (
-            <div className="space-y-0.5 pl-1.5">
-              {obrasNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-
-                return (
-                  <button
-                    key={item.id}
-                    id={`sidebar-item-${item.id}`}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-                      isActive
-                        ? "bg-amber-500 text-slate-950 font-bold shadow-xs"
-                        : "text-slate-400 hover:bg-slate-900 hover:text-white"
-                    }`}
-                  >
-                    <Icon
-                      className={`w-3.5 h-3.5 shrink-0 ${
-                        isActive ? "text-slate-950" : "text-slate-500"
-                      }`}
-                    />
-                    <span className="truncate text-[11px]">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ======================================================== */}
-        {/* APARTADO 3: INFORMES TÉCNICOS & GESTIÓN DOCUMENTARIA    */}
+        {/* APARTADO 1: INFORMES TÉCNICOS & GESTIÓN DOCUMENTARIA    */}
         {/* ======================================================== */}
         <div className="space-y-1 pt-1 border-t border-slate-800/70">
           {isExpanded ? (
@@ -465,7 +294,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center space-x-2 truncate">
                 <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="truncate uppercase tracking-wide text-[10px] font-bold">
-                  3. Informes Técnicos
+                  1. Informes Técnicos
                 </span>
               </div>
               <ChevronDown
@@ -494,6 +323,83 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {(isExpanded && isInformesOpen) && (
             <div className="space-y-0.5 pl-1.5">
               {informesNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    id={`sidebar-item-${item.id}`}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
+                      isActive
+                        ? "bg-amber-500 text-slate-950 font-bold shadow-xs"
+                        : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                    }`}
+                  >
+                    <Icon
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        isActive ? "text-slate-950" : "text-slate-500"
+                      }`}
+                    />
+                    <span className="truncate text-[11px]">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ======================================================== */}
+        {/* APARTADO 2: OFERTADOR / POSTOR (LICITACIONES SEACE)     */}
+        {/* ======================================================== */}
+        <div className="space-y-1 pt-1 border-t border-slate-800/70">
+          {isExpanded ? (
+            <button
+              onClick={() => {
+                setIsOfertadorOpen(!isOfertadorOpen);
+                if (!isOfertadorOpen && !isInformesTab) {
+                  setActiveTab("dashboard");
+                }
+              }}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                !isInformesTab && activeTab !== "seguimiento-cartera" && activeTab !== "admin-panel"
+                  ? "bg-slate-900 text-amber-300 border border-amber-500/30"
+                  : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
+              }`}
+            >
+              <div className="flex items-center space-x-2 truncate">
+                <Briefcase className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate uppercase tracking-wide text-[10px] font-bold">
+                  2. Licitaciones & Concursos
+                </span>
+              </div>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
+                  isOfertadorOpen ? "rotate-0" : "-rotate-90"
+                }`}
+              />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveTab("dashboard");
+              }}
+              className={`w-full flex justify-center py-2.5 rounded-lg transition ${
+                !isInformesTab && activeTab !== "seguimiento-cartera" && activeTab !== "admin-panel"
+                  ? "bg-amber-500/20 text-amber-400"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900"
+              }`}
+              title="Licitaciones & Concursos Públicos"
+            >
+              <Briefcase className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Desplegable de Ofertador */}
+          {(isExpanded && isOfertadorOpen) && (
+            <div className="space-y-0.5 pl-1.5">
+              {ofertadorNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
 
@@ -585,10 +491,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-3.5 py-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 bg-slate-950 flex items-center justify-between">
           <div className="truncate min-w-0 pr-2">
             <div className="font-semibold text-slate-200 truncate">
-              {isObrasTab ? obra?.contratista || company.razonSocial : company.razonSocial}
+              {currentUser?.companyName || company.razonSocial}
             </div>
             <div className="text-[10px] text-slate-500 font-mono">
-              RUC: {isObrasTab ? obra?.rucContratista || company.ruc : company.ruc}
+              RUC: {currentUser?.ruc || company.ruc}
             </div>
           </div>
           <button

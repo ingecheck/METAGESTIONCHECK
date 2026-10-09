@@ -18,12 +18,6 @@ import { ThemeSelectorModal, ThemeOption, THEMES } from "./components/ThemeSelec
 import { DashboardOverview } from "./components/DashboardOverview";
 import { AdminPanel } from "./components/AdminPanel";
 import { LoginModal } from "./components/LoginModal";
-import { WorksDashboard } from "./components/works/WorksDashboard";
-import { WorksCommencementProcedure } from "./components/works/WorksCommencementProcedure";
-import { WorksValuations } from "./components/works/WorksValuations";
-import { WorksModificationsManager } from "./components/works/WorksModificationsManager";
-import { WorksSettlementManager } from "./components/works/WorksSettlementManager";
-import { WorksBimViewer } from "./components/works/WorksBimViewer";
 import { WorksPortfolioTracker } from "./components/works/WorksPortfolioTracker";
 
 import {
@@ -60,9 +54,6 @@ import {
   EMPTY_LIQUIDACION,
 } from "./data/sampleObras";
 import { INITIAL_AUDITORIAS_OBRA } from "./data/sampleIncongruencias";
-import { WorksItemsExecutedTable } from "./components/works/WorksItemsExecutedTable";
-import { WorksValuationAuditor } from "./components/works/WorksValuationAuditor";
-import { ContractDocumentUploader } from "./components/works/ContractDocumentUploader";
 import { EntityValuationReportsManager } from "./components/works/EntityValuationReportsManager";
 import {
   generateAnexo1Docx,
@@ -104,6 +95,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("seguimiento-cartera");
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
+  // Redirigir cualquier pestaña residual de Control de Obras directamente a Seguimiento de Obras
+  useEffect(() => {
+    if (activeTab === "obras-lector" || (activeTab.startsWith("obras-") && activeTab !== "obras-informe-entidad")) {
+      setActiveTab("seguimiento-cartera");
+    }
+  }, [activeTab]);
+
   // License Sessions & Authentication State - 100% Local & Free
   const [sessions, setSessions] = useState<LicenseSession[]>(() => {
     const saved = localStorage.getItem(SESSIONS_STORAGE_KEY);
@@ -120,7 +118,12 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           parsed.forEach((s: LicenseSession) => {
-            if (!isLicenseDeleted(s)) {
+            if (
+              !isLicenseDeleted(s) &&
+              !s.licenseKey?.toUpperCase().includes("CHICLAYO") &&
+              !s.id?.toLowerCase().includes("chiclayo") &&
+              !s.licenseKey?.toUpperCase().includes("JHON-FRANKLIN")
+            ) {
               // Ensure default members (e.g. for Rioja) are merged into cached sessions
               const defaultMatch = INITIAL_DEFAULT_SESSIONS.find(
                 (d) => d.licenseKey.toUpperCase() === s.licenseKey.toUpperCase()
@@ -1091,133 +1094,7 @@ export default function App() {
           )}
 
           {/* ======================================================== */}
-          {/* APARTADO 2: CONTROL DE OBRAS Y SUPERVISIÓN (LEY N° 30225)*/}
-          {/* ======================================================== */}
-          {activeTab === "obras-dashboard" && (
-            <WorksDashboard
-              obra={obra}
-              setObra={setObra}
-              valorizaciones={valorizaciones}
-              asientos={asientos}
-              modificaciones={modificaciones}
-              onNavigateSubtab={setActiveTab}
-              obrasList={obrasList}
-              activeObraId={activeObraId}
-              onSelectObra={handleSelectObra}
-              onSaveObra={handleSaveObra}
-              onDeleteObra={handleDeleteObra}
-              onDuplicateObra={handleDuplicateObra}
-            />
-          )}
-
-          {activeTab === "obras-bim" && (
-            <WorksBimViewer
-              obra={obra}
-              setObra={setObra}
-              valorizaciones={valorizaciones}
-              partidas={partidas}
-              currentUser={currentUser}
-            />
-          )}
-
-          {activeTab === "obras-lector" && (
-            <ContractDocumentUploader
-              currentObra={obra}
-              obrasList={obrasList}
-              activeObraId={activeObraId}
-              onSelectObra={handleSelectObra}
-              onSaveProject={(updatedObraData, completePkg, targetObraId) => {
-                if (completePkg) {
-                  handleSaveObra(completePkg);
-                } else {
-                  handleSaveObraFromAnalysis(updatedObraData, undefined, targetObraId);
-                }
-              }}
-              onApplyToActiveObra={(updated, targetObraId) => {
-                handleSaveObraFromAnalysis(updated, undefined, targetObraId);
-              }}
-              onCreateNewObra={(newPkg) => {
-                handleSaveObra(newPkg);
-              }}
-              onNavigateToDashboard={() => setActiveTab("obras-dashboard")}
-            />
-          )}
-
-          {activeTab === "obras-inicio" && (
-            <WorksCommencementProcedure
-              obra={obra}
-              onUpdateObra={(updatedObra) => {
-                setObra(updatedObra);
-                // Also update in obrasList and local storage
-                setObrasList((prev) =>
-                  prev.map((pkg) =>
-                    pkg.id === activeObraId || pkg.obra.id === updatedObra.id
-                      ? {
-                          ...pkg,
-                          obra: updatedObra,
-                          updatedAt: new Date().toISOString(),
-                        }
-                      : pkg
-                  )
-                );
-              }}
-              onNavigateSubtab={setActiveTab}
-            />
-          )}
-
-          {activeTab === "obras-valorizaciones" && (
-            <WorksValuations
-              obra={obra}
-              valorizaciones={valorizaciones}
-              setValorizaciones={setValorizaciones}
-              partidas={partidas}
-              setPartidas={setPartidas}
-              auditorias={auditorias}
-              setAuditorias={setAuditorias}
-              initialSubTab="curva-s"
-            />
-          )}
-
-          {activeTab === "obras-partidas" && (
-            <WorksItemsExecutedTable
-              obra={obra}
-              partidas={partidas}
-              setPartidas={setPartidas}
-              mesSeleccionado="Mes 5 - Mayo 2025"
-            />
-          )}
-
-          {activeTab === "obras-auditoria" && (
-            <WorksValuationAuditor
-              obra={obra}
-              valorizaciones={valorizaciones}
-              setValorizaciones={setValorizaciones}
-              partidas={partidas}
-              setPartidas={setPartidas}
-              auditorias={auditorias}
-              onSaveAuditorias={(newAudits) => setAuditorias(newAudits)}
-              onNavigateToTab={(tab) => setActiveTab(tab)}
-            />
-          )}
-
-          {activeTab === "obras-adicionales" && (
-            <WorksModificationsManager
-              obra={obra}
-              modificaciones={modificaciones}
-              setModificaciones={setModificaciones}
-            />
-          )}
-
-          {activeTab === "obras-liquidacion" && (
-            <WorksSettlementManager
-              obra={obra}
-              liquidacion={liquidacion}
-              setLiquidacion={setLiquidacion}
-            />
-          )}
-
-          {/* ======================================================== */}
-          {/* APARTADO 3: GESTIÓN DOCUMENTARIA & INFORMES OFICIALES (OEI / GERENCIA / RIOJA) */}
+          {/* INFORMES OFICIALES & GESTIÓN DOCUMENTARIA (OEI / RIOJA) */}
           {/* ======================================================== */}
           {(activeTab.startsWith("informes-") || activeTab === "obras-informe-entidad") && (
             <EntityValuationReportsManager

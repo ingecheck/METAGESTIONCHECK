@@ -45,6 +45,7 @@ import {
   FileUp,
   FileCheck,
   User,
+  FileSearch,
 } from "lucide-react";
 import {
   ProyectoCartera,
@@ -70,6 +71,7 @@ import { WorksValorizacionesIntegratedModal } from "./WorksValorizacionesIntegra
 import { WorksValorizacionesView } from "./WorksValorizacionesView";
 import { NewCarteraObraModal } from "./NewCarteraObraModal";
 import { QuickContratosObraModal } from "./QuickContratosObraModal";
+import { ContractScannerCarteraModal } from "./ContractScannerCarteraModal";
 import {
   saveCarteraToFirestore,
   subscribeToCartera,
@@ -85,6 +87,41 @@ interface WorksPortfolioTrackerProps {
 }
 
 const LOCAL_STORAGE_KEY_BASE = "mgc_cartera_rioja_proyectos_v4";
+
+// Sanitize obsolete or dummy mock encargados and deduplicate so projects don't accumulate duplicates
+const sanitizeProyectosEncargados = (list: ProyectoCartera[]): ProyectoCartera[] => {
+  if (!list || !Array.isArray(list)) return [];
+  const cleaned = list.map((p) => {
+    if (
+      p.encargado &&
+      ["PICO", "CARLOS", "MARIELA", "EDSON"].includes(p.encargado.trim().toUpperCase())
+    ) {
+      return { ...p, encargado: "-" };
+    }
+    return p;
+  });
+
+  // Deduplicate by CUI and normalized project title so duplicates never accumulate
+  const seenCuis = new Set<string>();
+  const seenNames = new Set<string>();
+  const uniqueList: ProyectoCartera[] = [];
+
+  for (const proj of cleaned) {
+    const cleanCui = (proj.cui || "").replace(/\D/g, "");
+    const cleanName = (proj.proyecto || "").trim().toUpperCase();
+
+    if (cleanCui.length >= 6) {
+      if (seenCuis.has(cleanCui)) continue;
+      seenCuis.add(cleanCui);
+    } else if (cleanName.length > 8) {
+      if (seenNames.has(cleanName)) continue;
+      seenNames.add(cleanName);
+    }
+    uniqueList.push(proj);
+  }
+
+  return uniqueList.map((p, idx) => ({ ...p, id: idx + 1 }));
+};
 
 export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   onSelectObra,
@@ -118,29 +155,17 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       (currentUser?.userName || "").toUpperCase().includes(n)
     );
 
-  // Selected entity key (Master Admin can switch between entities; municipality users are locked to their own)
-  const [selectedEntityKey, setSelectedEntityKey] = useState<string>(() => {
-    if (userIsRioja) return "RIOJA";
-    return currentUser?.licenseKey || "CUSTOM_ENTITY";
-  });
-
-  const activeStorageKey =
-    selectedEntityKey === "RIOJA"
-      ? "mgc_cartera_rioja_proyectos_v4"
-      : `mgc_cartera_${selectedEntityKey}_proyectos_v1`;
-
-  const entityDisplayName = useMemo(() => {
-    if (selectedEntityKey === "RIOJA") return "Municipalidad Provincial de Rioja (OEI)";
-    if (currentUser?.companyName) return currentUser.companyName;
-    return `Entidad ${selectedEntityKey}`;
-  }, [selectedEntityKey, currentUser]);
+  // Selected entity is Municipalidad Provincial de Rioja exclusively (única entidad real y activa)
+  const selectedEntityKey = "RIOJA";
+  const activeStorageKey = "mgc_cartera_rioja_proyectos_v4";
+  const entityDisplayName = "Municipalidad Provincial de Rioja (OEI)";
 
   // Active member / user details for multi-user audit and attribution
   const activeMember =
     currentUser?.activeMemberId && currentUser?.teamMembers
       ? currentUser.teamMembers.find((m) => m.id === currentUser.activeMemberId)
       : null;
-  const currentMemberName = activeMember?.name || currentUser?.userName || "Usuario Municipal";
+  const currentMemberName = activeMember?.name || currentUser?.userName || "Colaborador Municipal (Rioja)";
   const currentMemberEmail = activeMember?.email || currentUser?.userEmail || "";
 
   const [lastSyncInfo, setLastSyncInfo] = useState<{
@@ -153,71 +178,62 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [importNotice, setImportNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // Load projects from localStorage or seed
+  // Load projects from localStorage or official seed for Municipalidad Provincial de Rioja
   const [proyectos, setProyectos] = useState<ProyectoCartera[]>(() => {
     try {
       const saved =
-        localStorage.getItem(activeStorageKey) ||
-        (selectedEntityKey === "RIOJA" ? localStorage.getItem("mgc_cartera_rioja_proyectos_v3") : null);
+        localStorage.getItem("mgc_cartera_rioja_proyectos_v4") ||
+        localStorage.getItem("mgc_cartera_rioja_proyectos_v3");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return sanitizeProyectosEncargados(parsed);
         }
       }
     } catch (e) {
       console.error("Error loading cartera from localStorage:", e);
     }
-    return selectedEntityKey === "RIOJA" ? PROYECTOS_RIOJA_SEED : [];
+    return PROYECTOS_RIOJA_SEED;
   });
-
-  // Sanitize obsolete or dummy mock encargados (e.g. Pico, Carlos, Mariela, Edson)
-  const sanitizeProyectosEncargados = (list: ProyectoCartera[]): ProyectoCartera[] => {
-    return list.map((p) => {
-      if (
-        p.encargado &&
-        ["PICO", "CARLOS", "MARIELA", "EDSON"].includes(p.encargado.trim().toUpperCase())
-      ) {
-        return { ...p, encargado: "-" };
-      }
-      return p;
-    });
-  };
 
   // Real-time Firestore Multi-tenant Synchronization
   useEffect(() => {
     let isCancelled = false;
 
-    // Initial check from Cloud Firestore
-    loadCarteraFromFirestore(selectedEntityKey).then((cloudData) => {
+    // Carga inicial desde Cloud Firestore para la Municipalidad Provincial de Rioja
+    loadCarteraFromFirestore("RIOJA").then((cloudData) => {
       if (!isCancelled && cloudData && Array.isArray(cloudData.proyectos) && cloudData.proyectos.length > 0) {
-        setProyectos(sanitizeProyectosEncargados(cloudData.proyectos));
+        const sanitized = sanitizeProyectosEncargados(cloudData.proyectos);
+        setProyectos(sanitized);
         setLastSyncInfo({
           lastUpdated: cloudData.lastUpdated,
           updatedBy: cloudData.updatedBy,
           source: cloudData.source,
         });
+        localStorage.setItem("mgc_cartera_rioja_proyectos_v4", JSON.stringify(sanitized));
       }
     });
 
-    // Real-time subscription: when ANY member of this municipality updates or uploads an Excel,
-    // all other members of this municipality receive the update instantly.
+    // Suscripción en tiempo real: cuando Pilco, Luis, Jhon o cualquier colaborador actualice en Rioja,
+    // todos los demás miembros de la municipalidad reciben el cambio al instante.
     const unsubscribe = subscribeToCartera(
-      selectedEntityKey,
+      "RIOJA",
       (remotePayload) => {
         if (isCancelled) return;
-        if (remotePayload && Array.isArray(remotePayload.proyectos)) {
-          setProyectos(sanitizeProyectosEncargados(remotePayload.proyectos));
+        if (remotePayload && Array.isArray(remotePayload.proyectos) && remotePayload.proyectos.length > 0) {
+          const sanitized = sanitizeProyectosEncargados(remotePayload.proyectos);
+          setProyectos(sanitized);
           setLastSyncInfo({
             lastUpdated: remotePayload.lastUpdated,
             updatedBy: remotePayload.updatedBy,
             source: remotePayload.source,
           });
+          localStorage.setItem("mgc_cartera_rioja_proyectos_v4", JSON.stringify(sanitized));
 
-          // If the update was made by another colleague in this municipality, notify on screen
+          // Notificación visual de sincronización en tiempo real
           if (remotePayload.updatedBy && remotePayload.updatedBy !== currentMemberName) {
             setImportNotice({
-              message: `🔄 Sincronización en Tiempo Real: ${remotePayload.updatedBy} acaba de actualizar la cartera de obras (${new Date(remotePayload.lastUpdated).toLocaleTimeString("es-PE")}).`,
+              message: `🔄 Sincronización en Tiempo Real: ${remotePayload.updatedBy} actualizó la matriz de obras (${new Date(remotePayload.lastUpdated).toLocaleTimeString("es-PE")}).`,
               type: "success",
             });
             setTimeout(() => setImportNotice(null), 8000);
@@ -233,33 +249,18 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       isCancelled = true;
       unsubscribe();
     };
-  }, [selectedEntityKey, entityDisplayName, currentMemberName]);
+  }, [currentMemberName]);
 
-  // Reload projects when switching entities (multi-tenant isolation)
+  // Guardado permanente en localStorage para que nunca se pierda ni se restablezca
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(activeStorageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setProyectos(sanitizeProyectosEncargados(parsed));
-          return;
-        }
+    if (proyectos && proyectos.length > 0) {
+      try {
+        localStorage.setItem("mgc_cartera_rioja_proyectos_v4", JSON.stringify(proyectos));
+      } catch (e) {
+        console.error("Error saving cartera:", e);
       }
-      setProyectos(selectedEntityKey === "RIOJA" ? PROYECTOS_RIOJA_SEED : []);
-    } catch (e) {
-      setProyectos(selectedEntityKey === "RIOJA" ? PROYECTOS_RIOJA_SEED : []);
     }
-  }, [selectedEntityKey, activeStorageKey]);
-
-  // Save to active storage key on change (local caching)
-  useEffect(() => {
-    try {
-      localStorage.setItem(activeStorageKey, JSON.stringify(proyectos));
-    } catch (e) {
-      console.error("Error saving cartera:", e);
-    }
-  }, [proyectos, activeStorageKey]);
+  }, [proyectos]);
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState("");
@@ -284,6 +285,10 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   const [isNewCarteraModalOpen, setIsNewCarteraModalOpen] = useState(false);
   const [isQuickContratosModalOpen, setIsQuickContratosModalOpen] = useState(false);
   const [editingCarteraObra, setEditingCarteraObra] = useState<ProyectoCartera | null>(null);
+
+  // Contract PDF Scanner Modal State (Extracción de Contrato de Obra y Supervisión)
+  const [isContractScannerModalOpen, setIsContractScannerModalOpen] = useState(false);
+  const [contractScannerPreselectedObra, setContractScannerPreselectedObra] = useState<ProyectoCartera | null>(null);
 
   // Delete Obra Confirmation State
   const [obraToDelete, setObraToDelete] = useState<ProyectoCartera | null>(null);
@@ -505,6 +510,58 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       return;
     }
 
+    // Comprobar si ya existe una obra con el mismo CUI o denominación para evitar que se acumulen duplicados
+    const cleanFormCui = form.cui.trim().replace(/\D/g, "");
+    const cleanFormTitle = form.proyecto.trim().toUpperCase();
+    const existingIndex = proyectos.findIndex((p) => {
+      const pCui = (p.cui || "").replace(/\D/g, "");
+      if (cleanFormCui.length >= 6 && pCui.length >= 6 && cleanFormCui === pCui) return true;
+      if (cleanFormTitle.length > 10 && p.proyecto && p.proyecto.trim().toUpperCase() === cleanFormTitle) return true;
+      return false;
+    });
+
+    if (existingIndex >= 0) {
+      const existingObra = proyectos[existingIndex];
+      const updatedExisting: ProyectoCartera = {
+        ...existingObra,
+        proyecto: form.proyecto.toUpperCase().trim(),
+        cui: form.cui.trim() || existingObra.cui,
+        encargado: form.encargado || existingObra.encargado,
+        estado: form.estado,
+        contratoEjecucionNumero: form.contratoEjecucionNumero.trim() || existingObra.contratoEjecucionNumero,
+        contratoEjecucionMonto: form.contratoEjecucionMonto || existingObra.contratoEjecucionMonto,
+        contratoEjecucionEmpresa: form.contratoEjecucionEmpresa.trim() || existingObra.contratoEjecucionEmpresa,
+        residenteNombre: form.residenteNombre.trim() || existingObra.residenteNombre,
+        contratoSupervisionNumero: form.contratoSupervisionNumero.trim() || existingObra.contratoSupervisionNumero,
+        contratoSupervisionMonto: form.contratoSupervisionMonto || existingObra.contratoSupervisionMonto,
+        contratoSupervisionEmpresa: form.contratoSupervisionEmpresa.trim() || existingObra.contratoSupervisionEmpresa,
+        supervisorNombre: form.supervisorNombre.trim() || existingObra.supervisorNombre,
+        entregaTerrenoFecha: form.entregaTerrenoFecha.trim() || existingObra.entregaTerrenoFecha,
+        inicioObraFecha: form.inicioObraFecha.trim() || existingObra.inicioObraFecha,
+        plazoDias: form.plazoDias || existingObra.plazoDias,
+        fechaTerminoActualizado: form.fechaTerminoActualizado.trim() || existingObra.fechaTerminoActualizado,
+        observaciones: form.observaciones.trim() || existingObra.observaciones,
+      };
+
+      const nextList = proyectos.map((p, idx) => (idx === existingIndex ? updatedExisting : p));
+      setProyectos(nextList);
+      if (selectedProject && selectedProject.id === existingObra.id) {
+        setSelectedProject(updatedExisting);
+      }
+      saveCarteraToFirestore(selectedEntityKey, nextList, currentMemberName, currentMemberEmail, "manual_edit");
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextList));
+      } catch (e) {}
+
+      setIsNewCarteraModalOpen(false);
+      setImportNotice({
+        message: `¡Actualizado! La obra (CUI: ${updatedExisting.cui}) ya existía y sus datos se actualizaron sin duplicar registros en la matriz.`,
+        type: "success",
+      });
+      setTimeout(() => setImportNotice(null), 6000);
+      return;
+    }
+
     const nextId = proyectos.length > 0 ? Math.max(...proyectos.map((p) => p.id)) + 1 : 1;
     const newCui = form.cui.trim() || `2${Math.floor(Math.random() * 900000 + 100000)}`;
 
@@ -574,6 +631,172 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       type: "success",
     });
     setTimeout(() => setImportNotice(null), 6000);
+  };
+
+  // Callback to register or update obra directly from scanned contract PDF
+  const handleSaveObraFromContractScan = (
+    obraData: Partial<ProyectoCartera>,
+    isNew: boolean,
+    targetObraId?: number
+  ) => {
+    if (isNew) {
+      // Check if CUI or exact title already exists to prevent duplicate accumulation
+      const cleanCui = (obraData.cui || "").replace(/\D/g, "");
+      const cleanTitle = (obraData.proyecto || "").trim().toUpperCase();
+      const existingIdx = proyectos.findIndex((p) => {
+        const pCui = (p.cui || "").replace(/\D/g, "");
+        if (cleanCui.length >= 6 && pCui.length >= 6 && cleanCui === pCui) return true;
+        if (cleanTitle.length > 10 && p.proyecto && p.proyecto.trim().toUpperCase() === cleanTitle) return true;
+        return false;
+      });
+
+      if (existingIdx >= 0) {
+        const existing = proyectos[existingIdx];
+        const updated: ProyectoCartera = {
+          ...existing,
+          ...obraData,
+          id: existing.id,
+          hitos: existing.hitos.map((h) => {
+            if (h.id === "hito-contrato-obra" && obraData.contratoEjecucionNumero) {
+              return {
+                ...h,
+                cumplido: true,
+                fecha: obraData.contratoEjecucionFechaFirma || h.fecha,
+                documentoSustento: obraData.contratoEjecucionNumero,
+              };
+            }
+            if (h.id === "hito-contrato-sup" && obraData.contratoSupervisionNumero) {
+              return {
+                ...h,
+                cumplido: true,
+                fecha: obraData.contratoSupervisionFechaFirma || h.fecha,
+                documentoSustento: obraData.contratoSupervisionNumero,
+              };
+            }
+            return h;
+          }),
+        };
+        const nextList = proyectos.map((p, idx) => (idx === existingIdx ? updated : p));
+        setProyectos(nextList);
+        saveCarteraToFirestore(selectedEntityKey, nextList, currentMemberName, currentMemberEmail, "manual_edit");
+        try {
+          localStorage.setItem(activeStorageKey, JSON.stringify(nextList));
+        } catch (e) {}
+        setImportNotice({
+          message: `¡Contrato escaneado! La obra (CUI: ${updated.cui}) fue actualizada con los datos contractuales sin duplicar registros.`,
+          type: "success",
+        });
+        setTimeout(() => setImportNotice(null), 7000);
+        return;
+      }
+
+      const nextId = proyectos.length > 0 ? Math.max(...proyectos.map((p) => p.id)) + 1 : 1;
+      const defaultHitos = createDefaultHitos({
+        "hito-contrato-obra": obraData.contratoEjecucionNumero
+          ? { cumplido: true, fecha: obraData.contratoEjecucionFechaFirma }
+          : false,
+        "hito-contrato-sup": obraData.contratoSupervisionNumero
+          ? { cumplido: true, fecha: obraData.contratoSupervisionFechaFirma }
+          : false,
+        "hito-notif-sup": obraData.contratoSupervisionNumero
+          ? { cumplido: true, fecha: obraData.contratoSupervisionFechaFirma }
+          : false,
+      });
+
+      const newObra: ProyectoCartera = {
+        id: nextId,
+        encargado: obraData.encargado || "-",
+        proyecto: obraData.proyecto || `OBRA SEGÚN CONTRATO #${nextId}`,
+        cui: obraData.cui || `2${Math.floor(Math.random() * 900000 + 100000)}`,
+        contratoEjecucionNumero: obraData.contratoEjecucionNumero || "",
+        contratoEjecucionFechaFirma: obraData.contratoEjecucionFechaFirma,
+        contratoEjecucionMonto: obraData.contratoEjecucionMonto || 0,
+        contratoEjecucionEmpresa: obraData.contratoEjecucionEmpresa || "",
+        residenteNombre: obraData.residenteNombre,
+        residenteCip: obraData.residenteCip,
+        contratoSupervisionNumero: obraData.contratoSupervisionNumero || "",
+        contratoSupervisionFechaFirma: obraData.contratoSupervisionFechaFirma,
+        contratoSupervisionMonto: obraData.contratoSupervisionMonto || 0,
+        contratoSupervisionEmpresa: obraData.contratoSupervisionEmpresa || "",
+        supervisorNombre: obraData.supervisorNombre,
+        supervisorCip: obraData.supervisorCip,
+        plazoDias: obraData.plazoDias,
+        observaciones: obraData.observaciones || "Obra registrada mediante escaneo de contrato PDF.",
+        estado: obraData.contratoEjecucionNumero ? "PENDIENTE_INICIO_CONDICIONES" : "ACTOS_PREPARATORIOS",
+        hitos: defaultHitos,
+        valorizaciones: [],
+        expedientes: [],
+        ampliacionesPlazo: [],
+      };
+
+      const nextList = [newObra, ...proyectos];
+      setProyectos(nextList);
+      saveCarteraToFirestore(selectedEntityKey, nextList, currentMemberName, currentMemberEmail, "manual_edit");
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextList));
+      } catch (e) {}
+      setImportNotice({
+        message: `¡Éxito! Nueva obra registrada en la matriz desde el escaneo del contrato (CUI: ${newObra.cui}).`,
+        type: "success",
+      });
+      setTimeout(() => setImportNotice(null), 7000);
+    } else if (targetObraId) {
+      const existing = proyectos.find((p) => p.id === targetObraId);
+      if (!existing) return;
+      const updated: ProyectoCartera = {
+        ...existing,
+        ...obraData,
+        proyecto: obraData.proyecto || existing.proyecto,
+        cui: obraData.cui || existing.cui,
+        contratoEjecucionNumero: obraData.contratoEjecucionNumero || existing.contratoEjecucionNumero,
+        contratoEjecucionFechaFirma: obraData.contratoEjecucionFechaFirma || existing.contratoEjecucionFechaFirma,
+        contratoEjecucionMonto: obraData.contratoEjecucionMonto ?? existing.contratoEjecucionMonto,
+        contratoEjecucionEmpresa: obraData.contratoEjecucionEmpresa || existing.contratoEjecucionEmpresa,
+        residenteNombre: obraData.residenteNombre || existing.residenteNombre,
+        residenteCip: obraData.residenteCip || existing.residenteCip,
+        contratoSupervisionNumero: obraData.contratoSupervisionNumero || existing.contratoSupervisionNumero,
+        contratoSupervisionFechaFirma: obraData.contratoSupervisionFechaFirma || existing.contratoSupervisionFechaFirma,
+        contratoSupervisionMonto: obraData.contratoSupervisionMonto ?? existing.contratoSupervisionMonto,
+        contratoSupervisionEmpresa: obraData.contratoSupervisionEmpresa || existing.contratoSupervisionEmpresa,
+        supervisorNombre: obraData.supervisorNombre || existing.supervisorNombre,
+        supervisorCip: obraData.supervisorCip || existing.supervisorCip,
+        plazoDias: obraData.plazoDias || existing.plazoDias,
+        observaciones: obraData.observaciones || existing.observaciones,
+        hitos: existing.hitos.map((h) => {
+          if (h.id === "hito-contrato-obra" && obraData.contratoEjecucionNumero) {
+            return {
+              ...h,
+              cumplido: true,
+              fecha: obraData.contratoEjecucionFechaFirma || h.fecha,
+              documentoSustento: obraData.contratoEjecucionNumero,
+            };
+          }
+          if (h.id === "hito-contrato-sup" && obraData.contratoSupervisionNumero) {
+            return {
+              ...h,
+              cumplido: true,
+              fecha: obraData.contratoSupervisionFechaFirma || h.fecha,
+              documentoSustento: obraData.contratoSupervisionNumero,
+            };
+          }
+          return h;
+        }),
+      };
+      const nextList = proyectos.map((p) => (p.id === targetObraId ? updated : p));
+      setProyectos(nextList);
+      if (selectedProject?.id === targetObraId) {
+        setSelectedProject(updated);
+      }
+      saveCarteraToFirestore(selectedEntityKey, nextList, currentMemberName, currentMemberEmail, "manual_edit");
+      try {
+        localStorage.setItem(activeStorageKey, JSON.stringify(nextList));
+      } catch (e) {}
+      setImportNotice({
+        message: `¡Éxito! Datos contractuales asignados a la obra "${updated.proyecto.substring(0, 45)}...".`,
+        type: "success",
+      });
+      setTimeout(() => setImportNotice(null), 7000);
+    }
   };
 
   // Callback to update project from valorizaciones modal
@@ -1066,6 +1289,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           return isNaN(num) ? undefined : num;
         };
 
+        const matchedExistingIds = new Set<number>();
+
         rows.forEach((row: any[], index: number) => {
           if (!row || row.length === 0 || row.every((c) => !c)) return;
 
@@ -1091,8 +1316,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           const parsedEmpresaSup = empresaSupIdx >= 0 && row[empresaSupIdx] ? String(row[empresaSupIdx]).trim() : undefined;
           const parsedSup = supIdx >= 0 && row[supIdx] ? String(row[supIdx]).trim() : undefined;
 
-          // Match with existing to retain hitos, valorizaciones, expedientes and ampliaciones
-          const existingProj = proyectos.find((p) => p.id === projId || p.cui === cuiCode);
+          // Coincidencia precisa con obras existentes (por CUI numérico o nombre exacto)
+          const cleanRowCui = cuiCode.replace(/\D/g, "");
+          const cleanRowTitle = proyName.toUpperCase().trim();
+          const existingProj = proyectos.find((p) => {
+            const pCui = (p.cui || "").replace(/\D/g, "");
+            if (cleanRowCui.length >= 6 && pCui.length >= 6 && cleanRowCui === pCui) return true;
+            if (cleanRowTitle.length > 10 && p.proyecto && p.proyecto.toUpperCase().trim() === cleanRowTitle) return true;
+            return false;
+          });
+
+          if (existingProj) {
+            matchedExistingIds.add(existingProj.id);
+          }
 
           let estado: EstadoCartera = existingProj?.estado || "ACTOS_PREPARATORIOS";
           if (observaciones.toUpperCase().includes("FINALIZ") || observaciones.toUpperCase().includes("RECEPCION")) {
@@ -1104,8 +1340,8 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           }
 
           importedList.push({
-            id: projId,
-            encargado: encargado || existingProj?.encargado || "-",
+            id: existingProj ? existingProj.id : projId,
+            encargado: (encargado && encargado !== "-") ? encargado : (existingProj?.encargado || "-"),
             proyecto: proyName,
             cui: cuiCode,
             contratoEjecucionNumero: rawContratoObra || existingProj?.contratoEjecucionNumero || "",
@@ -1126,6 +1362,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             fechaTerminoActualizado: fechaTerm ?? existingProj?.fechaTerminoActualizado,
             observaciones: observaciones || existingProj?.observaciones || "",
             estado: estado,
+            // Rescatar hitos, valorizaciones, expedientes y ampliaciones que pudieron añadir los usuarios
             hitos: existingProj?.hitos || PROYECTOS_RIOJA_SEED[0]?.hitos || [],
             valorizaciones: existingProj?.valorizaciones || [],
             expedientes: existingProj?.expedientes || [],
@@ -1133,12 +1370,43 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
           });
         });
 
-        if (importedList.length > 0) {
-          setProyectos(importedList);
+        // 1. Rescatar proyectos que los usuarios añadieron en el sistema y no estaban en este archivo Excel
+        const rescuedExistingProjects = proyectos.filter((p) => !matchedExistingIds.has(p.id));
+
+        // 2. Combinar los actualizados del Excel con los rescatados del sistema
+        const combinedList = [...importedList, ...rescuedExistingProjects];
+
+        // 3. Deduplicar estrictamente para evitar que se acumulen proyectos repetidos en la matriz
+        const seenCuis = new Set<string>();
+        const seenNames = new Set<string>();
+        const deduplicatedList: ProyectoCartera[] = [];
+
+        for (const proj of combinedList) {
+          const cleanCui = (proj.cui || "").replace(/\D/g, "");
+          const cleanName = (proj.proyecto || "").trim().toUpperCase();
+
+          if (cleanCui.length >= 6) {
+            if (seenCuis.has(cleanCui)) continue; // evitar acumulación duplicada
+            seenCuis.add(cleanCui);
+          } else if (cleanName.length > 10) {
+            if (seenNames.has(cleanName)) continue; // evitar acumulación duplicada
+            seenNames.add(cleanName);
+          }
+          deduplicatedList.push(proj);
+        }
+
+        // 4. Reasignar numeración ID secuencial ordenada
+        const finalList = deduplicatedList.map((p, idx) => ({
+          ...p,
+          id: idx + 1,
+        }));
+
+        if (finalList.length > 0) {
+          setProyectos(finalList);
           // Save to Firestore in real time: triggers onSnapshot for ALL team members of this municipality
           saveCarteraToFirestore(
             selectedEntityKey,
-            importedList,
+            finalList,
             currentMemberName,
             currentMemberEmail,
             "excel_upload"
@@ -1148,8 +1416,9 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             updatedBy: currentMemberName,
             source: "excel_upload",
           });
+          const rescuedCount = rescuedExistingProjects.length;
           setImportNotice({
-            message: `¡Éxito! Se han importado ${importedList.length} obras y se han sincronizado en tiempo real para todos los integrantes de ${entityDisplayName}.`,
+            message: `¡Éxito! Se actualizaron ${importedList.length} obras desde el archivo${rescuedCount > 0 ? ` y se rescataron ${rescuedCount} obras añadidas en el sistema` : ""}. No hay obras acumuladas duplicadas.`,
             type: "success",
           });
           setTimeout(() => setImportNotice(null), 8000);
@@ -1539,39 +1808,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             </div>
 
             {/* Multi-tenant Isolation Badge */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            {/* Active Municipality Badge & Real-Time Sync */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+                <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>
-                  {selectedEntityKey === "RIOJA"
-                    ? "Espacio Privado: Municipalidad Provincial de Rioja (Acceso Exclusivo OEI • Pilco, Luis, Jhon)"
-                    : `Espacio Privado: ${entityDisplayName} (Aislamiento de Datos Activo)`}
+                  🏛️ Municipalidad Provincial de Rioja (OEI) • Matriz Activa Sincronizada
                 </span>
               </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Acceso Colaboradores: Pilco, Luis, Jhon, Vanessa, Wilson, Jennifer, Jezer
+              </span>
             </div>
-
-            {/* Entity Switcher for Master Admin only */}
-            {isMasterAdmin && (
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-slate-400 font-bold flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5 text-amber-400" />
-                  Cambiar Entidad:
-                </span>
-                <select
-                  value={selectedEntityKey}
-                  onChange={(e) => setSelectedEntityKey(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold focus:border-amber-400 focus:outline-none"
-                >
-                  <option value="RIOJA">🏛️ Municipalidad Provincial de Rioja</option>
-                  <option value="LIC-MUNI-CHICLAYO-2026">🏛️ Municipalidad Provincial de Chiclayo</option>
-                  {currentUser?.licenseKey && currentUser.licenseKey !== "ADMIN-OSCE-MASTER-2026" && (
-                    <option value={currentUser.licenseKey}>
-                      🏢 {currentUser.companyName || currentUser.licenseKey}
-                    </option>
-                  )}
-                </select>
-              </div>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
@@ -1586,6 +1835,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             >
               <Plus className="w-4 h-4 text-slate-950" />
               <span>Nueva Obra</span>
+            </button>
+
+            {/* Intelligent Contract PDF Scanner Button */}
+            <button
+              onClick={() => {
+                setContractScannerPreselectedObra(null);
+                setIsContractScannerModalOpen(true);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+              title="Escanear y extraer datos de Contratos de Obra o Supervisión (PDF) directamente al Seguimiento de Obras"
+            >
+              <FileSearch className="w-4 h-4 text-white" />
+              <span>Escanear Contrato (PDF)</span>
             </button>
 
             {/* Direct Contract Registration Button */}
@@ -1629,12 +1891,35 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             </button>
 
             <button
-              onClick={handleResetSeed}
+              onClick={() => {
+                loadCarteraFromFirestore("RIOJA").then((cloudData) => {
+                  if (cloudData && Array.isArray(cloudData.proyectos) && cloudData.proyectos.length > 0) {
+                    const sanitized = sanitizeProyectosEncargados(cloudData.proyectos);
+                    setProyectos(sanitized);
+                    setLastSyncInfo({
+                      lastUpdated: cloudData.lastUpdated,
+                      updatedBy: cloudData.updatedBy,
+                      source: cloudData.source,
+                    });
+                    setImportNotice({
+                      message: `✅ Matriz sincronizada con la nube (${sanitized.length} proyectos activos).`,
+                      type: "success",
+                    });
+                    setTimeout(() => setImportNotice(null), 5000);
+                  } else {
+                    setImportNotice({
+                      message: `✅ Matriz sincronizada. ${proyectos.length} proyectos activos en el sistema.`,
+                      type: "success",
+                    });
+                    setTimeout(() => setImportNotice(null), 5000);
+                  }
+                });
+              }}
               className="bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Restaurar lista oficial predeterminada de la entidad"
+              title="Sincronizar y verificar estado de la matriz en tiempo real con Firestore"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              <span>Restaurar</span>
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Sincronizar Nube</span>
             </button>
           </div>
         </div>
@@ -2012,7 +2297,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             <table className="min-w-[1780px] w-full text-left border-collapse text-xs">
               <thead className="bg-slate-900 text-white sticky top-0 z-20 font-bold text-[11px]">
                 <tr>
-                  <th className="p-2.5 border-r border-slate-800 text-center w-32">ACCIONES</th>
+                  <th className="p-2.5 border-r border-slate-800 text-center w-44">ACCIONES</th>
                   <th className="p-2.5 border-r border-slate-800 w-32">ENCARGADO (OEI)</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[220px]">PROYECTO & CUI</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[220px]">
@@ -2113,19 +2398,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                         onClick={() => setSelectedProject(p)}
                         className="hover:bg-blue-50/60 transition cursor-pointer group"
                       >
-                        {/* Botones Acciones: Editar y Eliminar Obra */}
+                        {/* Botones Acciones: Editar, Contrato (Escanear PDF) y Eliminar Obra */}
                         <td
                           className="p-2 font-bold text-center text-slate-700 bg-slate-50 group-hover:bg-blue-100/50 border-r border-slate-200"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingCarteraObra(p);
                                 setIsNewCarteraModalOpen(true);
                               }}
-                              className="px-2 py-1 rounded-md text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs flex items-center gap-1"
+                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
                               title="Modificar todos los datos de esta obra (contratos, montos, plazos, personal)"
                             >
                               <Edit2 className="w-3 h-3 text-blue-600" />
@@ -2133,8 +2418,20 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                             </button>
                             <button
                               type="button"
+                              onClick={() => {
+                                setContractScannerPreselectedObra(p);
+                                setIsContractScannerModalOpen(true);
+                              }}
+                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
+                              title="Escanear Contrato de Obra o Supervisión en PDF para actualizar esta obra"
+                            >
+                              <FileSearch className="w-3 h-3 text-indigo-600" />
+                              <span>Contrato</span>
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setObraToDelete(p)}
-                              className="px-2 py-1 rounded-md text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer shadow-2xs flex items-center gap-1"
+                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
                               title="Eliminar esta obra de la cartera de inversiones"
                             >
                               <Trash2 className="w-3 h-3 text-rose-600" />
@@ -3887,6 +4184,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setContractScannerPreselectedObra(selectedProject);
+                    setIsContractScannerModalOpen(true);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Escanear contrato de obra o supervisión en PDF para actualizar esta obra"
+                >
+                  <FileSearch className="w-3.5 h-3.5" />
+                  <span>Escanear Contrato PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
                     handleOpenInObraSuite(selectedProject);
                     setSelectedProject(null);
                   }}
@@ -4027,6 +4337,19 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
         onSaveObra={handleCreateNewObra}
         entityDisplayName={entityDisplayName}
         availableObras={obrasList.map((o) => o.obra).filter(Boolean)}
+      />
+
+      {/* Modal Inteligente de Escaneo de Contratos de Obra & Supervisión (PDF) */}
+      <ContractScannerCarteraModal
+        isOpen={isContractScannerModalOpen}
+        onClose={() => {
+          setIsContractScannerModalOpen(false);
+          setContractScannerPreselectedObra(null);
+        }}
+        proyectos={proyectos}
+        preselectedObra={contractScannerPreselectedObra}
+        onSaveObraFromScan={handleSaveObraFromContractScan}
+        entityDisplayName={entityDisplayName}
       />
 
       {/* Modal de Confirmación para Eliminar Obra de la Matriz */}

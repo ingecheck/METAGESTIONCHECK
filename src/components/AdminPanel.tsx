@@ -444,6 +444,13 @@ Como Titular, puede registrar a su Ingeniero Residente, Supervisor de Obra y Esp
   };
 
   const filteredSessions = sessions.filter((s) => {
+    // Filtrar entidades de prueba o ficticias para mantener solo las reales y vigentes (Muni Rioja y cuentas activas)
+    if (s.licenseKey?.toUpperCase().includes("CHICLAYO") || s.id?.toLowerCase().includes("chiclayo")) {
+      return false;
+    }
+    if (s.licenseKey?.toUpperCase().includes("JHON-FRANKLIN") || s.id?.toLowerCase().includes("jhon-franklin")) {
+      return false;
+    }
     if (entityFilter !== "all") {
       const matchEntity = s.entityType === entityFilter;
       if (!matchEntity) return false;
