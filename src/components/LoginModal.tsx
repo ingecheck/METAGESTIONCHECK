@@ -428,9 +428,38 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
           )}
 
-          {/* Formulario de Acceso: PIN Obligatorio (Guardado) + Correo Opcional */}
+          {/* Formulario de Acceso: Correo Primero y PIN de Acceso */}
           <form onSubmit={handleEmailLoginSubmit} autoComplete="on" className="space-y-4">
-            {/* PIN de Acceso (Otorgado por WhatsApp y Guardado Automáticamente) */}
+            {/* 1. Correo Electrónico */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Correo Electrónico <span className="text-slate-400 font-normal lowercase">(opcional con PIN)</span>
+                </label>
+              </div>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  id="login-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email username"
+                  placeholder="tu.correo@institucion.gob.pe (opcional)"
+                  value={emailInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEmailInput(val);
+                    if (rememberSession) {
+                      localStorage.setItem("osce_saved_login_email", val.trim().toLowerCase());
+                    }
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs"
+                  autoFocus={!emailInput}
+                />
+              </div>
+            </div>
+
+            {/* 2. PIN de Acceso (WhatsApp) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="login-pin" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -459,7 +488,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     localStorage.setItem("osce_saved_login_pin", val);
                   }}
                   className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs tracking-widest"
-                  autoFocus={!passwordInput}
+                  autoFocus={Boolean(emailInput && !passwordInput)}
                 />
                 <button
                   type="button"
@@ -474,34 +503,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 <span>Tu PIN queda guardado automáticamente en tu navegador para que no lo escribas a cada rato.</span>
               </p>
-            </div>
-
-            {/* Correo Electrónico (Opcional si se ingresa con PIN) */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="login-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Correo Electrónico <span className="text-slate-400 font-normal lowercase">(opcional con PIN)</span>
-                </label>
-              </div>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                <input
-                  id="login-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email username"
-                  placeholder="tu.correo@institucion.gob.pe (opcional)"
-                  value={emailInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEmailInput(val);
-                    if (rememberSession) {
-                      localStorage.setItem("osce_saved_login_email", val.trim().toLowerCase());
-                    }
-                  }}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-2xs"
-                />
-              </div>
             </div>
 
             {/* Checkbox: Guardar PIN y Acceso en este equipo */}

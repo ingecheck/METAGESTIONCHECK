@@ -123,6 +123,61 @@ const sanitizeProyectosEncargados = (list: ProyectoCartera[]): ProyectoCartera[]
   return uniqueList.map((p, idx) => ({ ...p, id: idx + 1 }));
 };
 
+// Theme helper to give table rows and status badges vibrant official colors (Verde, Azul, Rojo bajo, Amarillo bajo)
+const getRowStatusTheme = (estado: EstadoCartera) => {
+  switch (estado) {
+    case "EN_EJECUCION":
+      return {
+        rowBg: "bg-emerald-50/75 hover:bg-emerald-100/90 border-b border-emerald-200",
+        borderAccent: "border-l-4 border-l-emerald-600",
+        badgeBg: "bg-emerald-600 text-white border-emerald-700 shadow-xs font-black",
+        label: "🟢 En Ejecución",
+        dotColor: "bg-emerald-500",
+      };
+    case "EN_SELECCION_SEACE":
+      return {
+        rowBg: "bg-blue-50/75 hover:bg-blue-100/90 border-b border-blue-200",
+        borderAccent: "border-l-4 border-l-blue-600",
+        badgeBg: "bg-blue-600 text-white border-blue-700 shadow-xs font-black",
+        label: "🔵 En Selección SEACE",
+        dotColor: "bg-blue-500",
+      };
+    case "ACTOS_PREPARATORIOS":
+      return {
+        rowBg: "bg-indigo-50/75 hover:bg-indigo-100/90 border-b border-indigo-200",
+        borderAccent: "border-l-4 border-l-indigo-600",
+        badgeBg: "bg-indigo-600 text-white border-indigo-700 shadow-xs font-black",
+        label: "📋 Actos Preparatorios",
+        dotColor: "bg-indigo-500",
+      };
+    case "RECEPCIONADA":
+      return {
+        rowBg: "bg-rose-50/75 hover:bg-rose-100/90 border-b border-rose-200",
+        borderAccent: "border-l-4 border-l-rose-600",
+        badgeBg: "bg-rose-600 text-white border-rose-700 shadow-xs font-black",
+        label: "🔴 Culminó la Obra",
+        dotColor: "bg-rose-500",
+      };
+    case "FINALIZADA_LIQUIDADA":
+      return {
+        rowBg: "bg-amber-50/75 hover:bg-amber-100/90 border-b border-amber-200",
+        borderAccent: "border-l-4 border-l-amber-600",
+        badgeBg: "bg-amber-500 text-slate-950 border-amber-600 shadow-xs font-black",
+        label: "🟡 En Liquidación",
+        dotColor: "bg-amber-500",
+      };
+    case "PENDIENTE_INICIO_CONDICIONES":
+    default:
+      return {
+        rowBg: "bg-sky-50/75 hover:bg-sky-100/90 border-b border-sky-200",
+        borderAccent: "border-l-4 border-l-sky-600",
+        badgeBg: "bg-sky-600 text-white border-sky-700 shadow-xs font-black",
+        label: "⏳ Pendiente Inicio",
+        dotColor: "bg-sky-500",
+      };
+  }
+};
+
 export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
   onSelectObra,
   onNavigateToTab,
@@ -1796,29 +1851,23 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       {/* Top Header Toolbar - Minimal & Ultra-rápido */}
       <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                <FolderKanban className="w-5 h-5 text-amber-400" />
-                <span>Seguimiento de Obras & Control Normativo</span>
-              </h1>
-              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[11px] font-bold">
-                {stats.total} Obras
-              </span>
-            </div>
+          <div className="space-y-1.5">
+            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
+              <FolderKanban className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>Seguimiento de Obras & Control Normativo</span>
+            </h1>
 
-            {/* Multi-tenant Isolation Badge */}
-            {/* Active Municipality Badge & Real-Time Sync */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            {/* Active Municipality Badge & Obras Counter */}
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
                 <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>
                   🏛️ Municipalidad Provincial de Rioja (OEI) • Matriz Activa Sincronizada
                 </span>
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Acceso Colaboradores: Pilco, Luis, Jhon, Vanessa, Wilson, Jennifer, Jezer
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>{stats.total} Obras Registradas</span>
               </span>
             </div>
           </div>
@@ -1868,58 +1917,6 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             >
               <Upload className="w-3.5 h-3.5 text-amber-400" />
               <span>Subir Excel (.xlsx)</span>
-            </button>
-
-            {/* Template Download Button */}
-            <button
-              onClick={handleDownloadTemplateXLSX}
-              className="bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Descargar plantilla Excel modelo pre-formateada"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-400" />
-              <span>Plantilla Excel</span>
-            </button>
-
-            {/* Excel Export Button */}
-            <button
-              onClick={handleExportXLSX}
-              className="bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Descargar matriz completa en formato Excel nativo (.xlsx)"
-            >
-              <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span>Exportar Excel</span>
-            </button>
-
-            <button
-              onClick={() => {
-                loadCarteraFromFirestore("RIOJA").then((cloudData) => {
-                  if (cloudData && Array.isArray(cloudData.proyectos) && cloudData.proyectos.length > 0) {
-                    const sanitized = sanitizeProyectosEncargados(cloudData.proyectos);
-                    setProyectos(sanitized);
-                    setLastSyncInfo({
-                      lastUpdated: cloudData.lastUpdated,
-                      updatedBy: cloudData.updatedBy,
-                      source: cloudData.source,
-                    });
-                    setImportNotice({
-                      message: `✅ Matriz sincronizada con la nube (${sanitized.length} proyectos activos).`,
-                      type: "success",
-                    });
-                    setTimeout(() => setImportNotice(null), 5000);
-                  } else {
-                    setImportNotice({
-                      message: `✅ Matriz sincronizada. ${proyectos.length} proyectos activos en el sistema.`,
-                      type: "success",
-                    });
-                    setTimeout(() => setImportNotice(null), 5000);
-                  }
-                });
-              }}
-              className="bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Sincronizar y verificar estado de la matriz en tiempo real con Firestore"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Sincronizar Nube</span>
             </button>
           </div>
         </div>
@@ -2120,18 +2117,6 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <option value="ACTOS_PREPARATORIOS">📋 Actos Preparatorios / SEACE</option>
               <option value="PENDIENTE_INICIO_CONDICIONES">⏳ Pendiente Inicio (Art. 176)</option>
             </select>
-
-            <button
-              onClick={() => setFilterSoloAlertas(!filterSoloAlertas)}
-              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1 cursor-pointer ${
-                filterSoloAlertas
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
-              }`}
-            >
-              <AlertTriangle className="w-3 h-3" />
-              Solo con Alertas Normativas
-            </button>
           </div>
 
           {/* Barra de Tipologías de Proyectos (Pistas, Coberturas, FONDES, Puentes, Otros) */}
@@ -2211,38 +2196,10 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
       {/* ======================================================== */}
       {activeView === "matriz" && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-blue-600" />
               <span>Matriz Oficial de Obras e Inversiones ({sortedAndGroupedProjects.length} Registros Agrupados por Tipología)</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingCarteraObra(null);
-                  setIsNewCarteraModalOpen(true);
-                }}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Registrar una nueva obra en la matriz de seguimiento"
-              >
-                <Plus className="w-3.5 h-3.5 text-slate-950" />
-                <span>Agregar Obra a Matriz</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsQuickContratosModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Agregar directamente la información necesaria con los contratos de obra tanto de supervisión como de contratista"
-              >
-                <FileText className="w-3.5 h-3.5 text-white" />
-                <span>Agregar con Contratos (Obra & Supervisión)</span>
-              </button>
-
-              <div className="text-[11px] text-slate-500 font-medium hidden lg:block">
-                💡 Haz clic en cualquier casilla o fila para abrir y actualizar datos al instante.
-              </div>
             </div>
           </div>
 
@@ -2297,7 +2254,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
             <table className="min-w-[1780px] w-full text-left border-collapse text-xs">
               <thead className="bg-slate-900 text-white sticky top-0 z-20 font-bold text-[11px]">
                 <tr>
-                  <th className="p-2.5 border-r border-slate-800 text-center w-44">ACCIONES</th>
+                  <th className="p-2 border-r border-slate-800 text-center w-20">ACCIONES</th>
                   <th className="p-2.5 border-r border-slate-800 w-32">ENCARGADO (OEI)</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[220px]">PROYECTO & CUI</th>
                   <th className="p-2.5 border-r border-slate-800 min-w-[220px]">
@@ -2327,6 +2284,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
               <tbody className="divide-y divide-slate-200 font-sans">
                 {sortedAndGroupedProjects.map((p, pIdx) => {
                   const estadoInfo = getEstadoLabel(p.estado);
+                  const statusTheme = getRowStatusTheme(p.estado);
                   const alertas = getAlertasNormativas(p);
                   const pct = getProgresoPorcentaje(p.hitos);
                   const avanceFisico = getAvanceFisicoObra(p);
@@ -2396,45 +2354,33 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
                       <tr
                         onClick={() => setSelectedProject(p)}
-                        className="hover:bg-blue-50/60 transition cursor-pointer group"
+                        className={`transition cursor-pointer group ${statusTheme.rowBg} ${statusTheme.borderAccent}`}
                       >
-                        {/* Botones Acciones: Editar, Contrato (Escanear PDF) y Eliminar Obra */}
+                        {/* Botones Acciones: Editar (arriba) y Eliminar (abajo) - Compacto y ultra-eficiente */}
                         <td
-                          className="p-2 font-bold text-center text-slate-700 bg-slate-50 group-hover:bg-blue-100/50 border-r border-slate-200"
+                          className="p-1.5 font-bold text-center text-slate-700 bg-white/40 group-hover:bg-white/70 border-r border-slate-200 w-20"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex flex-col items-stretch gap-1 w-full max-w-[66px] mx-auto">
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingCarteraObra(p);
                                 setIsNewCarteraModalOpen(true);
                               }}
-                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
+                              className="w-full px-1.5 py-0.5 rounded text-[10px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs flex items-center justify-center gap-1"
                               title="Modificar todos los datos de esta obra (contratos, montos, plazos, personal)"
                             >
-                              <Edit2 className="w-3 h-3 text-blue-600" />
+                              <Edit2 className="w-2.5 h-2.5 text-blue-600 shrink-0" />
                               <span>Editar</span>
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                setContractScannerPreselectedObra(p);
-                                setIsContractScannerModalOpen(true);
-                              }}
-                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
-                              title="Escanear Contrato de Obra o Supervisión en PDF para actualizar esta obra"
-                            >
-                              <FileSearch className="w-3 h-3 text-indigo-600" />
-                              <span>Contrato</span>
-                            </button>
-                            <button
-                              type="button"
                               onClick={() => setObraToDelete(p)}
-                              className="px-1.5 py-1 rounded-md text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer shadow-2xs flex items-center gap-0.5"
+                              className="w-full px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-700 bg-rose-50/90 hover:bg-rose-100 border border-rose-200 transition cursor-pointer shadow-2xs flex items-center justify-center gap-1"
                               title="Eliminar esta obra de la cartera de inversiones"
                             >
-                              <Trash2 className="w-3 h-3 text-rose-600" />
+                              <Trash2 className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                               <span>Eliminar</span>
                             </button>
                           </div>
@@ -2534,33 +2480,35 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
                         )}
                       </td>
 
-                      {/* PROYECTO & CUI & ESTADO (Editable directamente) */}
+                      {/* PROYECTO & CUI & ESTADO (Editable directamente con colores oficiales de estado) */}
                       <td className="p-2.5 border-r border-slate-200">
                         <div className="font-extrabold text-slate-900 leading-tight">
                           {p.proyecto}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
+                          <span className="text-[10px] font-mono font-bold bg-white/90 text-slate-700 px-1.5 py-0.2 rounded border border-slate-300">
                             CUI: {p.cui || "S/C"}
                           </span>
                           <span className="text-[9px] font-bold bg-amber-50 text-amber-900 px-1.5 py-0.2 rounded border border-amber-200 flex items-center gap-1 shadow-2xs">
                             <span>{currentCat.icon}</span>
                             <span>{currentCat.shortLabel}</span>
                           </span>
-                          <select
-                            value={p.estado}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => handleUpdateEstado(p.id, e.target.value as EstadoCartera)}
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${estadoInfo.bg} ${estadoInfo.color} ${estadoInfo.border}`}
-                            title="Cambiar estado situacional de la obra"
-                          >
-                            <option value="ACTOS_PREPARATORIOS">Actos Preparatorios</option>
-                            <option value="EN_SELECCION_SEACE">En Selección (SEACE)</option>
-                            <option value="PENDIENTE_INICIO_CONDICIONES">Pendiente Inicio (Art. 176)</option>
-                            <option value="EN_EJECUCION">En Ejecución de Obra</option>
-                            <option value="RECEPCIONADA">Recepcionada</option>
-                            <option value="FINALIZADA_LIQUIDADA">Liquidada / Finalizada</option>
-                          </select>
+                          <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={p.estado}
+                              onChange={(e) => handleUpdateEstado(p.id, e.target.value as EstadoCartera)}
+                              className={`text-[9.5px] font-black px-2 py-0.5 rounded-lg border cursor-pointer focus:outline-none transition appearance-none pr-5.5 shadow-2xs ${statusTheme.badgeBg}`}
+                              title="Cambiar estado situacional de la obra (cambia automáticamente el color de toda la fila)"
+                            >
+                              <option value="EN_EJECUCION" className="bg-white text-slate-900 font-bold">🟢 En Ejecución de Obra</option>
+                              <option value="EN_SELECCION_SEACE" className="bg-white text-slate-900 font-bold">🔵 En Selección (SEACE)</option>
+                              <option value="RECEPCIONADA" className="bg-white text-slate-900 font-bold">🔴 Culminó la Obra (Recepcionada)</option>
+                              <option value="FINALIZADA_LIQUIDADA" className="bg-white text-slate-900 font-bold">🟡 En Liquidación / Finalizada</option>
+                              <option value="ACTOS_PREPARATORIOS" className="bg-white text-slate-900 font-bold">📋 Actos Preparatorios</option>
+                              <option value="PENDIENTE_INICIO_CONDICIONES" className="bg-white text-slate-900 font-bold">⏳ Pendiente Inicio (Art. 176)</option>
+                            </select>
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] opacity-90 font-bold">▼</span>
+                          </div>
                         </div>
                       </td>
 
@@ -2684,7 +2632,7 @@ export const WorksPortfolioTracker: React.FC<WorksPortfolioTrackerProps> = ({
 
                       {/* CHECKLIST, VALORIZACIONES & EXPEDIENTES INTEGRADO */}
                       <td
-                        className="p-2.5 bg-slate-50/80 group-hover:bg-blue-50/40 transition"
+                        className="p-2.5 bg-white/40 group-hover:bg-white/60 transition"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenValoModal(p, "valorizacion");
